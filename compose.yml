@@ -1,0 +1,15 @@
+services:
+  vitrine-postgres:
+    image: pgvector/pgvector:pg17
+    container_name: vitrine-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: vitrine
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - vitrine-postgres:/var/lib/postgresql/data
+
+volumes:
+  vitrine-postgres:
