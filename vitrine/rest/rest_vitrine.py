@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from unidecode import unidecode
 import numpy as np
 import psycopg2
 from flask import Blueprint, jsonify, request
@@ -163,6 +164,8 @@ def insertPatrimonio():
     else:
         return "Formato de arquivo não suportado", 400
     df = df.replace({np.nan: None})
+
+    return jsonify([])
     for _, patrimonio in df.iterrows():
         dados_patrimonio = patrimonio.to_dict()
         values = str()
@@ -438,6 +441,134 @@ def _searchByBemNumAtm(bem_num_atm):
 def searchByBemNumAtm():
     bem_num_atm = request.args.get("bem_num_atm")
     return _searchByBemNumAtm(bem_num_atm)
+
+
+def build_query_terms(sanitized_terms, column):
+    terms_dict = {}
+    query_parts = []
+    term_counter = 1
+
+    for term in sanitized_terms:
+        if term in {"AND", "OR", "AND NOT", "(", ")"}:
+            query_parts.append(term)
+        else:
+            placeholder = f"term{term_counter}"
+            terms_dict[placeholder] = term
+            SCRIPT_SQL = f"""
+                ts_rank(
+                to_tsvector(
+                translate(
+                unaccent(
+                LOWER({column})), '-\\.:;''',' ')),
+                websearch_to_tsquery(%({placeholder})s)) > 0.04
+                """
+            query_parts.append(SCRIPT_SQL)
+            term_counter += 1
+
+    return " ".join(query_parts), terms_dict
+
+
+def sanitize_terms(terms):
+    sanitized = []
+    for term in terms:
+        if term not in {"AND", "OR", "AND NOT", "(", ")"}:
+            sanitized.append(unidecode(term.lower()).replace("'", ""))
+        else:
+            sanitized.append(term)
+    return sanitized
+
+
+def parse_terms(string_of_terms: str):
+    operator_map = {";": "AND", ".": "AND NOT", "|": "OR", "(": "(", ")": ")"}
+    terms = []
+    term = ""
+
+    for char in string_of_terms:
+        if char in operator_map:
+            if term.strip():
+                terms.append(term.strip())
+                term = ""
+            terms.append(operator_map[char])
+        else:
+            term += char
+    if term.strip():
+        terms.append(term.strip())
+    return terms
+
+
+def webseatch_filter(column, string_of_terms):
+    terms = parse_terms(string_of_terms)
+    sanitized_terms = sanitize_terms(terms)
+    query_terms, terms_dict = build_query_terms(sanitized_terms, column)
+
+    filter_sql = f"AND ({query_terms})"
+    return filter_sql, terms_dict
+
+
+@rest_vitrine.route("/search_by_nom", methods=["GET"])
+def search_by_nom():
+    pes_nome = request.args.get("pes_nome")
+    bem_dsc_com = request.args.get("bem_dsc_com")
+    mat_nom = request.args.get("mat_nom")
+
+    params = {}
+
+    filter_pes_nome = str()
+    if pes_nome:
+        filter_pes_nome, terms = webseatch_filter("pes_nome", pes_nome)
+        params |= terms
+
+    filter_bem_dsc_com = str()
+    if bem_dsc_com:
+        filter_bem_dsc_com, terms = webseatch_filter("bem_dsc_com", bem_dsc_com)
+        params |= terms
+
+    filter_mat_nom = str()
+    if mat_nom:
+        filter_mat_nom, terms = webseatch_filter("mat_nom", mat_nom)
+        params |= terms
+
+    scriptSql = f"""
+    SELECT 
+        bem_cod, 
+        bem_dgv, 
+        bem_dsc_com, 
+        bem_num_atm, 
+        uge_siaf, 
+        bem_sta, 
+        uge_cod, 
+        org_cod, 
+        set_cod, 
+        loc_cod, 
+        org_nom,
+        created_at,
+        csv_cod,
+        bem_serie,
+        bem_val,
+        tre_cod,
+        uge_nom,
+        set_nom,
+        loc_nom,
+        ite_mar,
+        ite_mod,
+        tgr_cod,
+        grp_cod,
+        ele_cod,
+        sbe_cod,
+        mat_cod,
+        mat_nom,
+        pes_cod,
+        pes_nome
+        FROM 
+            patrimonio
+        WHERE  1 = 1
+            {filter_pes_nome}
+            {filter_bem_dsc_com}
+            {filter_mat_nom}
+    """
+
+    resultado = conn.select(scriptSql, params)
+    return jsonify(resultado)
 
 
 @rest_vitrine.route("/checkoutPatrimonio", methods=["GET"])
