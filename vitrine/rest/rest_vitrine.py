@@ -94,7 +94,9 @@ def insertPatrimonio_():
             "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
             "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
             "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
-            "bem_dsc_com": [bem_dsc_com] if bem_dsc_com else [],
+            "bem_dsc_com": bem_dsc_com.replace(",", " ").split(" ")
+            if bem_dsc_com
+            else [],
             "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
             "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
         }
@@ -233,13 +235,15 @@ def insertPatrimonio():
                     VALUES {values[:-1]};
                     """
             doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
-            bem_dsc_com = dados_patrimonio.get("bem_dsc_com")
+            bem_dsc_com: str = dados_patrimonio.get("bem_dsc_com")
             dados_filtrados = {
                 "bem_num_atm": str(dados_patrimonio.get("bem_num_atm", "") or ""),
                 "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
                 "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
                 "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
-                "bem_dsc_com": [bem_dsc_com] if bem_dsc_com else [],
+                "bem_dsc_com": bem_dsc_com.replace(",", " ").split(" ")
+                if bem_dsc_com
+                else [],
                 "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
                 "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
             }
