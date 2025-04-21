@@ -165,7 +165,6 @@ def insertPatrimonio():
         return "Formato de arquivo não suportado", 400
     df = df.replace({np.nan: None})
 
-    return jsonify([])
     for _, patrimonio in df.iterrows():
         dados_patrimonio = patrimonio.to_dict()
         values = str()
