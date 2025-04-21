@@ -92,6 +92,8 @@ def insertPatrimonio_():
             "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
             "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
             "bem_dsc_com": str(dados_patrimonio.get("bem_dsc_com", "") or ""),
+            "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
+            "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
         }
         print(dados_filtrados)
         collection.document(doc_id).set(dados_filtrados, merge=True)
@@ -233,6 +235,8 @@ def insertPatrimonio():
                 "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
                 "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
                 "bem_dsc_com": str(dados_patrimonio.get("bem_dsc_com", "") or ""),
+                "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
+                "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
             }
             print(dados_filtrados)
             collection.document(doc_id).set(dados_filtrados, merge=True)
