@@ -88,12 +88,13 @@ def insertPatrimonio_():
                 VALUES {values[:-1]};
                 """
         doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
+        bem_dsc_com = dados_patrimonio.get("bem_dsc_com")
         dados_filtrados = {
             "bem_num_atm": str(dados_patrimonio.get("bem_num_atm", "") or ""),
             "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
             "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
             "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
-            "bem_dsc_com": str(dados_patrimonio.get("bem_dsc_com", "") or ""),
+            "bem_dsc_com": [bem_dsc_com] if bem_dsc_com else [],
             "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
             "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
         }
@@ -232,16 +233,16 @@ def insertPatrimonio():
                     VALUES {values[:-1]};
                     """
             doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
+            bem_dsc_com = dados_patrimonio.get("bem_dsc_com")
             dados_filtrados = {
                 "bem_num_atm": str(dados_patrimonio.get("bem_num_atm", "") or ""),
                 "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
                 "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
                 "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
-                "bem_dsc_com": str(dados_patrimonio.get("bem_dsc_com", "") or ""),
+                "bem_dsc_com": [bem_dsc_com] if bem_dsc_com else [],
                 "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
                 "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
             }
-            print(dados_filtrados)
             collection.document(doc_id).set(dados_filtrados, merge=True)
             conn.exec(script_sql)
         except psycopg2.errors.UniqueViolation:
@@ -618,8 +619,18 @@ def checkoutPatrimonio():
             response += _searchByBemNumAtm(_)
         return jsonify(response)
 
-    bem_cod = request.args.get("bem_cod", str()).replace(".-", "")
-    bem_dgv = request.args.get("bem_dgv")
+    bem_cod = [request.args.get("bem_cod", str()).replace(".-", "")]
+    bem_dgv = [request.args.get("bem_dgv")]
+
+    etiqueta = request.args.get("etiqueta")
+    if etiqueta:
+        filtros = []
+        for item in etiqueta.split(";"):
+            cod, dgv = item.split("-")
+            filtros.append(f"(bem_cod = '{cod}' AND bem_dgv = '{dgv}')")
+        where_clause = " OR ".join(filtros)
+    else:
+        where_clause = f"(bem_cod = '{bem_cod}' AND bem_dgv = '{bem_dgv}')"
 
     scriptSql = f"""
     SELECT 
@@ -652,11 +663,10 @@ def checkoutPatrimonio():
         mat_nom,
         pes_cod,
         pes_nome
-        FROM 
-            patrimonio
-        WHERE 
-            bem_cod = '{bem_cod}' AND 
-            bem_dgv = '{bem_dgv}'
+    FROM 
+        patrimonio
+    WHERE 
+        {where_clause}
 
     UNION 
 
@@ -693,10 +703,9 @@ def checkoutPatrimonio():
     FROM 
         PatrimonioMorto
     WHERE 
-        bem_cod = '{bem_cod}' AND 
-        bem_dgv = '{bem_dgv}'
+        {where_clause}
     """
-
+    print(scriptSql)
     resultado = conn.select(scriptSql)
 
     columns = [
