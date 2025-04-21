@@ -1,4 +1,5 @@
 from http import HTTPStatus
+import numpy as np
 import psycopg2
 from flask import Blueprint, jsonify, request
 import pandas as pd
@@ -161,7 +162,7 @@ def insertPatrimonio():
             df = pd.read_csv(f"/tmp/{file.filename}", delimiter=",")
     else:
         return "Formato de arquivo não suportado", 400
-
+    df = df.replace({np.nan: None})
     for _, patrimonio in df.iterrows():
         dados_patrimonio = patrimonio.to_dict()
         values = str()
