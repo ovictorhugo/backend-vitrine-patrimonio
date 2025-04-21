@@ -305,7 +305,6 @@ def bayesian_matching(user_input, stored_values):
 
 
 def _searchByBemNumAtm(bem_num_atm):
-    # Buscar todos os valores de bem_num_atm das tabelas Patrimonio e PatrimonioMorto
     stored_values_sql = """
     SELECT bem_num_atm FROM Patrimonio
     UNION
@@ -430,16 +429,16 @@ def _searchByBemNumAtm(bem_num_atm):
 
         dataFrame = pd.DataFrame(resultado, columns=columns)
 
-        return jsonify(dataFrame.to_dict(orient="records"))
+        return dataFrame.to_dict(orient="records")
 
-    return jsonify({"error": "No matching record found"}), 404
+    return []
 
 
 # VERIFICAR SE EXISTE PATRIMONIO PELO ATM
 @rest_vitrine.route("/searchByBemNumAtm", methods=["GET"])
 def searchByBemNumAtm():
     bem_num_atm = request.args.get("bem_num_atm")
-    return _searchByBemNumAtm(bem_num_atm)
+    return jsonify(_searchByBemNumAtm(bem_num_atm))
 
 
 def build_query_terms(sanitized_terms, column):
@@ -509,6 +508,7 @@ def search_by_nom():
     pes_nome = request.args.get("pes_nome")
     bem_dsc_com = request.args.get("bem_dsc_com")
     mat_nom = request.args.get("mat_nom")
+    loc_nom = request.args.get("loc_nom")
 
     params = {}
 
@@ -525,6 +525,11 @@ def search_by_nom():
     filter_mat_nom = str()
     if mat_nom:
         filter_mat_nom, terms = webseatch_filter("mat_nom", mat_nom)
+        params |= terms
+
+    filter_loc_nom = str()
+    if loc_nom:
+        filter_loc_nom, terms = webseatch_filter("loc_nom", loc_nom)
         params |= terms
 
     scriptSql = f"""
@@ -564,18 +569,56 @@ def search_by_nom():
             {filter_pes_nome}
             {filter_bem_dsc_com}
             {filter_mat_nom}
+            {filter_loc_nom}
     """
 
     resultado = conn.select(scriptSql, params)
-    return jsonify(resultado)
+    columns = [
+        "bem_cod",
+        "bem_dgv",
+        "bem_dsc_com",
+        "bem_num_atm",
+        "uge_siaf",
+        "bem_sta",
+        "uge_cod",
+        "org_cod",
+        "set_cod",
+        "loc_cod",
+        "org_nom",
+        "created_at",
+        "csv_cod",
+        "bem_serie",
+        "bem_val",
+        "tre_cod",
+        "uge_nom",
+        "set_nom",
+        "loc_nom",
+        "ite_mar",
+        "ite_mod",
+        "tgr_cod",
+        "grp_cod",
+        "ele_cod",
+        "sbe_cod",
+        "mat_cod",
+        "mat_nom",
+        "pes_cod",
+        "pes_nome",
+    ]
+
+    dataFrame = pd.DataFrame(resultado, columns=columns)
+    return jsonify(dataFrame.to_dict(orient="records"))
 
 
 @rest_vitrine.route("/checkoutPatrimonio", methods=["GET"])
 def checkoutPatrimonio():
     bem_num_atm = request.args.get("bem_num_atm")
     if bem_num_atm:
-        return _searchByBemNumAtm(bem_num_atm)
-    bem_cod = request.args.get("bem_cod").replace(".-", "")
+        response = []
+        for _ in bem_num_atm.split(";"):
+            response += _searchByBemNumAtm(_)
+        return jsonify(response)
+
+    bem_cod = request.args.get("bem_cod", str()).replace(".-", "")
     bem_dgv = request.args.get("bem_dgv")
 
     scriptSql = f"""
