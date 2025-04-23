@@ -1,4 +1,7 @@
 from http import HTTPStatus
+from pydantic import Field, BaseModel, EmailStr, ValidationError
+
+from typing import Optional
 from unidecode import unidecode
 import numpy as np
 import psycopg2
@@ -89,14 +92,13 @@ def insertPatrimonio_():
                 """
         doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
         bem_dsc_com = dados_patrimonio.get("bem_dsc_com")
+        bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
         dados_filtrados = {
             "bem_num_atm": str(dados_patrimonio.get("bem_num_atm", "") or ""),
             "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
             "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
             "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
-            "bem_dsc_com": bem_dsc_com.replace(",", " ").split(" ")
-            if bem_dsc_com
-            else [],
+            "bem_dsc_com": bem_dsc_com_normalizado,
             "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
             "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
         }
@@ -137,6 +139,13 @@ def insertPatrimonio_():
             """
         conn.exec(update_script)
     return jsonify([]), 201
+
+
+def normalizar_descricao(descricao):
+    if not descricao:
+        return []
+    palavras = re.sub(r"[^\w\s]", " ", descricao).lower().split()
+    return [p for p in palavras if p]
 
 
 @rest_vitrine.route("/insertPatrimonio", methods=["POST"])
@@ -236,14 +245,14 @@ def insertPatrimonio():
                     """
             doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
             bem_dsc_com: str = dados_patrimonio.get("bem_dsc_com")
+
+            bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
             dados_filtrados = {
                 "bem_num_atm": str(dados_patrimonio.get("bem_num_atm", "") or ""),
                 "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
                 "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
                 "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
-                "bem_dsc_com": bem_dsc_com.replace(",", " ").split(" ")
-                if bem_dsc_com
-                else [],
+                "bem_dsc_com": bem_dsc_com_normalizado,
                 "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
                 "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
             }
@@ -1984,3 +1993,60 @@ def delete_observacao(id_item):
     )
 
     return jsonify({"message": "Registro deletado com sucesso!"}), 204
+
+
+class FeedbackSchema(BaseModel):
+    name: str = Field(
+        ..., max_length=100, min_length=3, description="Full name of the user"
+    )
+    email: EmailStr
+    rating: int = Field(..., ge=0, le=10, description="Rating between 0 and 10")
+    description: Optional[str] = Field(
+        None, description="Optional feedback description"
+    )
+
+
+@rest_vitrine.route("/s/feedback", methods=["POST"])
+def feedback():
+    try:
+        feedback_data = FeedbackSchema(**request.json)
+
+        SCRIPT_SQL = """
+            INSERT INTO public.feedback(name, email, rating, description)
+            VALUES (%(name)s, %(email)s, %(rating)s, %(description)s);
+            """
+        conn.exec(SCRIPT_SQL, feedback_data.model_dump())
+
+        response = {
+            "message": "Feedback recebido com sucesso!",
+            "data": feedback_data.model_dump(),
+        }
+        return jsonify(response), 200
+    except ValidationError as e:
+        response = {"message": "Validation error", "errors": e.errors()}
+        return jsonify(response), 400
+
+
+@rest_vitrine.route("/s/feedback", methods=["GET"])
+def list_feedback():
+    SCRIPT_SQL = """
+        SELECT id, name,  email,  rating,  description, created_at
+        FROM public.feedback;
+        """
+    registry = conn.select(SCRIPT_SQL)
+    dataframe = pd.DataFrame(
+        registry,
+        columns=["id", "name", "email", "rating", "description", "created_at"],
+    )
+    return dataframe.to_dict(orient="records")
+
+
+@rest_vitrine.route("/s/feedback", methods=["DELETE"])
+def delete_feedback():
+    feedback_id = request.args.get("feedback_id")
+    SCRIPT_SQL = """
+        DELETE FROM public.feedback
+        WHERE id=%(feedback_id)s;
+        """
+    conn.exec(SCRIPT_SQL, {"feedback_id": feedback_id})
+    return jsonify({"message": "Feedback deleted"}), 204
