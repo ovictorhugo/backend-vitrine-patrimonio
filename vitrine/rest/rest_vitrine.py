@@ -194,7 +194,6 @@ def insertPatrimonio():
             "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
             "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
         }
-        print(dados_filtrados)
         collection.document(doc_id).set(dados_filtrados, merge=True)
         sql += f"""
             INSERT INTO public.patrimonio(
