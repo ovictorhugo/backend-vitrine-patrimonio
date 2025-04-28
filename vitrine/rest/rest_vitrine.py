@@ -177,119 +177,70 @@ def insertPatrimonio():
         return "Formato de arquivo não suportado", 400
     df = df.replace({np.nan: None})
 
+    sql = str()
     for _, patrimonio in df.iterrows():
         dados_patrimonio = patrimonio.to_dict()
-        values = str()
-        try:
-            values += f"""(
-                    '{dados_patrimonio.get("bem_cod")}',
-                    '{dados_patrimonio.get("bem_dgv")}',
-                    '{dados_patrimonio.get("bem_num_atm")}',
-                    '{dados_patrimonio.get("csv_cod")}',
-                    '{dados_patrimonio.get("bem_serie")}',
-                    '{dados_patrimonio.get("bem_sta")}',
-                    '{dados_patrimonio.get("bem_val")}',
-                    '{dados_patrimonio.get("tre_cod")}',
-                    '{dados_patrimonio.get("bem_dsc_com", "").replace("'", " ")}',
-                    '{dados_patrimonio.get("uge_cod")}',
-                    '{dados_patrimonio.get("uge_nom")}',
-                    '{dados_patrimonio.get("org_cod")}',
-                    '{dados_patrimonio.get("uge_siaf")}',
-                    '{dados_patrimonio.get("org_nom")}',
-                    '{dados_patrimonio.get("set_cod")}',
-                    '{dados_patrimonio.get("set_nom")}',
-                    '{dados_patrimonio.get("loc_cod")}',
-                    '{dados_patrimonio.get("loc_nom")}',
-                    '{dados_patrimonio.get("ite_mar")}',
-                    '{dados_patrimonio.get("ite_mod")}',
-                    '{dados_patrimonio.get("tgr_cod")}',
-                    '{dados_patrimonio.get("grp_cod")}',
-                    '{dados_patrimonio.get("ele_cod")}',
-                    '{dados_patrimonio.get("sbe_cod")}',
-                    '{dados_patrimonio.get("mat_cod")}',
-                    '{dados_patrimonio.get("mat_nom")}',
-                    '{dados_patrimonio.get("pes_cod")}',
-                    '{dados_patrimonio.get("pes_nome")}'),"""
+        sql += f"""
+            INSERT INTO public.patrimonio(
+                bem_cod, bem_dgv, bem_num_atm, csv_cod, bem_serie, bem_sta, bem_val, tre_cod, bem_dsc_com,
+                uge_cod, uge_nom, org_cod, uge_siaf, org_nom, set_cod, set_nom, loc_cod, loc_nom,
+                ite_mar, ite_mod, tgr_cod, grp_cod, ele_cod, sbe_cod, mat_cod, mat_nom, pes_cod, pes_nome)
+            VALUES (
+                {dados_patrimonio['bem_cod']}, {dados_patrimonio['bem_dgv']}, {dados_patrimonio['bem_num_atm']}, 
+                {dados_patrimonio['csv_cod']}, {dados_patrimonio['bem_serie']}, {dados_patrimonio['bem_sta']}, 
+                {dados_patrimonio['bem_val']}, {dados_patrimonio['tre_cod']}, {dados_patrimonio['bem_dsc_com']}, 
+                {dados_patrimonio['uge_cod']}, {dados_patrimonio['uge_nom']}, {dados_patrimonio['org_cod']}, 
+                {dados_patrimonio['uge_siaf']}, {dados_patrimonio['org_nom']}, {dados_patrimonio['set_cod']}, 
+                {dados_patrimonio['set_nom']}, {dados_patrimonio['loc_cod']}, {dados_patrimonio['loc_nom']}, 
+                {dados_patrimonio['ite_mar']}, {dados_patrimonio['ite_mod']}, {dados_patrimonio['tgr_cod']}, 
+                {dados_patrimonio['grp_cod']}, {dados_patrimonio['ele_cod']}, {dados_patrimonio['sbe_cod']}, 
+                {dados_patrimonio['mat_cod']}, {dados_patrimonio['mat_nom']}, {dados_patrimonio['pes_cod']}, 
+                {dados_patrimonio['pes_nome']}
+            )
+            ON CONFLICT (bem_cod, bem_dgv)
+            DO UPDATE SET 
+                bem_num_atm = {dados_patrimonio['bem_num_atm']},
+                csv_cod = {dados_patrimonio['csv_cod']},
+                bem_serie = {dados_patrimonio['bem_serie']},
+                bem_sta = {dados_patrimonio['bem_sta']},
+                bem_val = {dados_patrimonio['bem_val']},
+                tre_cod = {dados_patrimonio['tre_cod']},
+                bem_dsc_com = {dados_patrimonio['bem_dsc_com']},
+                uge_cod = {dados_patrimonio['uge_cod']},
+                uge_nom = {dados_patrimonio['uge_nom']},
+                org_cod = {dados_patrimonio['org_cod']},
+                uge_siaf = {dados_patrimonio['uge_siaf']},
+                org_nom = {dados_patrimonio['org_nom']},
+                set_cod = {dados_patrimonio['set_cod']},
+                set_nom = {dados_patrimonio['set_nom']},
+                loc_cod = {dados_patrimonio['loc_cod']},
+                loc_nom = {dados_patrimonio['loc_nom']},
+                ite_mar = {dados_patrimonio['ite_mar']},
+                ite_mod = {dados_patrimonio['ite_mod']},
+                tgr_cod = {dados_patrimonio['tgr_cod']},
+                grp_cod = {dados_patrimonio['grp_cod']},
+                ele_cod = {dados_patrimonio['ele_cod']},
+                sbe_cod = {dados_patrimonio['sbe_cod']},
+                mat_cod = {dados_patrimonio['mat_cod']},
+                mat_nom = {dados_patrimonio['mat_nom']},
+                pes_cod = {dados_patrimonio['pes_cod']},
+                pes_nome = {dados_patrimonio['pes_nome']};
+        """
 
-            script_sql = f"""
-                INSERT INTO public.patrimonio(
-                    bem_cod,
-                    bem_dgv,
-                    bem_num_atm,
-                    csv_cod,
-                    bem_serie,
-                    bem_sta,
-                    bem_val,
-                    tre_cod,
-                    bem_dsc_com,
-                    uge_cod,
-                    uge_nom,
-                    org_cod,
-                    uge_siaf,
-                    org_nom,
-                    set_cod,
-                    set_nom,
-                    loc_cod,
-                    loc_nom,
-                    ite_mar,
-                    ite_mod,
-                    tgr_cod,
-                    grp_cod,
-                    ele_cod,
-                    sbe_cod,
-                    mat_cod,
-                    mat_nom,
-                    pes_cod,
-                    pes_nome)
-                    VALUES {values[:-1]};
-                    """
-            doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
-            bem_dsc_com: str = dados_patrimonio.get("bem_dsc_com")
-
-            bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
-            dados_filtrados = {
-                "bem_num_atm": str(dados_patrimonio.get("bem_num_atm", "") or ""),
-                "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
-                "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
-                "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
-                "bem_dsc_com": bem_dsc_com_normalizado,
-                "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
-                "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
-            }
-            collection.document(doc_id).set(dados_filtrados, merge=True)
-            conn.exec(script_sql)
-        except psycopg2.errors.UniqueViolation:
-            update_script = f"""
-                UPDATE patrimonio SET
-                bem_num_atm='{dados_patrimonio.get("bem_num_atm")}',
-                csv_cod='{dados_patrimonio.get("csv_cod")}',
-                bem_serie='{dados_patrimonio.get("bem_serie")}',
-                bem_sta='{dados_patrimonio.get("bem_sta")}',
-                bem_val='{dados_patrimonio.get("bem_val")}',
-                tre_cod='{dados_patrimonio.get("tre_cod")}',
-                bem_dsc_com='{dados_patrimonio.get("bem_dsc_com", "").replace("'", " ")}',
-                uge_cod='{dados_patrimonio.get("uge_cod")}',
-                uge_nom='{dados_patrimonio.get("uge_nom")}',
-                org_cod='{dados_patrimonio.get("org_cod")}',
-                uge_siaf='{dados_patrimonio.get("uge_siaf")}',
-                org_nom='{dados_patrimonio.get("org_nom")}',
-                set_cod='{dados_patrimonio.get("set_cod")}',
-                set_nom='{dados_patrimonio.get("set_nom")}',
-                loc_cod='{dados_patrimonio.get("loc_cod")}',
-                loc_nom='{dados_patrimonio.get("loc_nom")}',
-                ite_mar='{dados_patrimonio.get("ite_mar")}',
-                ite_mod='{dados_patrimonio.get("ite_mod")}',
-                tgr_cod='{dados_patrimonio.get("tgr_cod")}',
-                grp_cod='{dados_patrimonio.get("grp_cod")}',
-                ele_cod='{dados_patrimonio.get("ele_cod")}',
-                sbe_cod='{dados_patrimonio.get("sbe_cod")}',
-                mat_cod='{dados_patrimonio.get("mat_cod")}',
-                mat_nom='{dados_patrimonio.get("mat_nom")}',
-                pes_cod='{dados_patrimonio.get("pes_cod")}',
-                pes_nome='{dados_patrimonio.get("pes_nome")}'
-                WHERE bem_cod = '{dados_patrimonio.get("bem_cod")}' AND bem_dgv = '{dados_patrimonio.get("bem_dgv")}'
-                """
-            conn.exec(update_script)
+        doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
+        bem_dsc_com: str = dados_patrimonio.get("bem_dsc_com")
+        bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
+        dados_filtrados = {
+            "bem_num_atm": str(dados_patrimonio.get("bem_num_atm", "") or ""),
+            "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
+            "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
+            "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
+            "bem_dsc_com": bem_dsc_com_normalizado,
+            "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
+            "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
+        }
+        collection.document(doc_id).set(dados_filtrados, merge=True)
+    conn.exec(sql)
     return jsonify([]), 201
 
 
