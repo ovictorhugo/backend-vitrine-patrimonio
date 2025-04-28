@@ -182,6 +182,20 @@ def insertPatrimonio():
 
     for _, patrimonio in df.iterrows():
         dados_patrimonio = patrimonio.to_dict()
+        doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
+        bem_dsc_com = dados_patrimonio.get("bem_dsc_com")
+        bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
+        dados_filtrados = {
+            "bem_num_atm": str(dados_patrimonio.get("bem_num_atm", "") or ""),
+            "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
+            "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
+            "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
+            "bem_dsc_com": bem_dsc_com_normalizado,
+            "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
+            "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
+        }
+        print(dados_filtrados)
+        collection.document(doc_id).set(dados_filtrados, merge=True)
         sql += f"""
             INSERT INTO public.patrimonio(
                 bem_cod, bem_dgv, bem_num_atm, csv_cod, bem_serie, bem_sta, bem_val, tre_cod, bem_dsc_com,
