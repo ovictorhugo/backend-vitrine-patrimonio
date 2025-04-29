@@ -158,99 +158,117 @@ def insertPatrimonio():
     if file is None or file.filename == "":
         return "Nenhum arquivo selecionado", 400
 
-    file.save(f"/tmp/{file.filename}")
+    file_path = f"/tmp/{file.filename}"
+    file.save(file_path)
 
     file_extension = file.filename.split(".")[-1].lower()
 
     if file_extension == "xls":
         engine = "xlrd"
-        df = pd.read_excel(f"/tmp/{file.filename}", engine=engine)
+        df = pd.read_excel(file_path, engine=engine)
     elif file_extension == "xlsx":
         engine = "calamine"
-        df = pd.read_excel(f"/tmp/{file.filename}", engine=engine)
+        df = pd.read_excel(file_path, engine=engine)
     elif file_extension == "csv":
         try:
-            df = pd.read_csv(f"/tmp/{file.filename}", delimiter=";")
+            df = pd.read_csv(file_path, delimiter=";")
         except Exception:
-            df = pd.read_csv(f"/tmp/{file.filename}", delimiter=",")
+            df = pd.read_csv(file_path, delimiter=",")
     else:
         return "Formato de arquivo não suportado", 400
+
     df = df.replace({np.nan: None})
 
-    sql = str()
+    insert_sql = """
+        INSERT INTO public.patrimonio(
+            bem_cod, bem_dgv, bem_num_atm, csv_cod, bem_serie, bem_sta, bem_val, tre_cod, bem_dsc_com,
+            uge_cod, uge_nom, org_cod, uge_siaf, org_nom, set_cod, set_nom, loc_cod, loc_nom,
+            ite_mar, ite_mod, tgr_cod, grp_cod, ele_cod, sbe_cod, mat_cod, mat_nom, pes_cod, pes_nome)
+        VALUES (
+            %(bem_cod)s, %(bem_dgv)s, %(bem_num_atm)s, %(csv_cod)s, %(bem_serie)s, %(bem_sta)s, %(bem_val)s, 
+            %(tre_cod)s, %(bem_dsc_com)s, %(uge_cod)s, %(uge_nom)s, %(org_cod)s, %(uge_siaf)s, %(org_nom)s, 
+            %(set_cod)s, %(set_nom)s, %(loc_cod)s, %(loc_nom)s, %(ite_mar)s, %(ite_mod)s, %(tgr_cod)s, 
+            %(grp_cod)s, %(ele_cod)s, %(sbe_cod)s, %(mat_cod)s, %(mat_nom)s, %(pes_cod)s, %(pes_nome)s
+        )
+        ON CONFLICT (bem_cod, bem_dgv)
+        DO UPDATE SET 
+            bem_num_atm = EXCLUDED.bem_num_atm,
+            csv_cod = EXCLUDED.csv_cod,
+            bem_serie = EXCLUDED.bem_serie,
+            bem_sta = EXCLUDED.bem_sta,
+            bem_val = EXCLUDED.bem_val,
+            tre_cod = EXCLUDED.tre_cod,
+            bem_dsc_com = EXCLUDED.bem_dsc_com,
+            uge_cod = EXCLUDED.uge_cod,
+            uge_nom = EXCLUDED.uge_nom,
+            org_cod = EXCLUDED.org_cod,
+            uge_siaf = EXCLUDED.uge_siaf,
+            org_nom = EXCLUDED.org_nom,
+            set_cod = EXCLUDED.set_cod,
+            set_nom = EXCLUDED.set_nom,
+            loc_cod = EXCLUDED.loc_cod,
+            loc_nom = EXCLUDED.loc_nom,
+            ite_mar = EXCLUDED.ite_mar,
+            ite_mod = EXCLUDED.ite_mod,
+            tgr_cod = EXCLUDED.tgr_cod,
+            grp_cod = EXCLUDED.grp_cod,
+            ele_cod = EXCLUDED.ele_cod,
+            sbe_cod = EXCLUDED.sbe_cod,
+            mat_cod = EXCLUDED.mat_cod,
+            mat_nom = EXCLUDED.mat_nom,
+            pes_cod = EXCLUDED.pes_cod,
+            pes_nome = EXCLUDED.pes_nome;
+    """
+
+    params_batch = []
     counter = 0
 
     for _, patrimonio in df.iterrows():
-        dados_patrimonio = patrimonio.to_dict()
-        doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
-        bem_dsc_com = dados_patrimonio.get("bem_dsc_com")
+        dados = patrimonio.to_dict()
+        bem_dsc_com = dados.get("bem_dsc_com")
         bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
-        dados_filtrados = {
-            "bem_num_atm": str(dados_patrimonio.get("bem_num_atm", "") or ""),
-            "bem_cod": str(dados_patrimonio.get("bem_cod", "") or ""),
-            "bem_dgv": str(dados_patrimonio.get("bem_dgv", "") or ""),
-            "mat_nom": str(dados_patrimonio.get("mat_nom", "") or ""),
-            "bem_dsc_com": bem_dsc_com_normalizado,
-            "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
-            "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
-        }
-        collection.document(doc_id).set(dados_filtrados, merge=True)
-        sql += f"""
-            INSERT INTO public.patrimonio(
-                bem_cod, bem_dgv, bem_num_atm, csv_cod, bem_serie, bem_sta, bem_val, tre_cod, bem_dsc_com,
-                uge_cod, uge_nom, org_cod, uge_siaf, org_nom, set_cod, set_nom, loc_cod, loc_nom,
-                ite_mar, ite_mod, tgr_cod, grp_cod, ele_cod, sbe_cod, mat_cod, mat_nom, pes_cod, pes_nome)
-            VALUES (
-                $${dados_patrimonio.get("bem_cod")}$$, $${dados_patrimonio.get("bem_dgv")}$$, $${dados_patrimonio.get("bem_num_atm")}$$, 
-                $${dados_patrimonio.get("csv_cod")}$$, $${dados_patrimonio.get("bem_serie")}$$, $${dados_patrimonio.get("bem_sta")}$$, 
-                $${dados_patrimonio.get("bem_val")}$$, $${dados_patrimonio.get("tre_cod")}$$, $${dados_patrimonio.get("bem_dsc_com")}$$, 
-                $${dados_patrimonio.get("uge_cod")}$$, $${dados_patrimonio.get("uge_nom")}$$, $${dados_patrimonio.get("org_cod")}$$, 
-                $${dados_patrimonio.get("uge_siaf")}$$, $${dados_patrimonio.get("org_nom")}$$, $${dados_patrimonio.get("set_cod")}$$, 
-                $${dados_patrimonio.get("set_nom")}$$, $${dados_patrimonio.get("loc_cod")}$$, $${dados_patrimonio.get("loc_nom")}$$, 
-                $${dados_patrimonio.get("ite_mar")}$$, $${dados_patrimonio.get("ite_mod")}$$, $${dados_patrimonio.get("tgr_cod")}$$, 
-                $${dados_patrimonio.get("grp_cod")}$$, $${dados_patrimonio.get("ele_cod")}$$, $${dados_patrimonio.get("sbe_cod")}$$, 
-                $${dados_patrimonio.get("mat_cod")}$$, $${dados_patrimonio.get("mat_nom")}$$, $${dados_patrimonio.get("pes_cod")}$$, 
-                $${dados_patrimonio.get("pes_nome")}$$
-            )
-            ON CONFLICT (bem_cod, bem_dgv)
-            DO UPDATE SET 
-                bem_num_atm = $${dados_patrimonio.get("bem_num_atm")}$$,
-                csv_cod = $${dados_patrimonio.get("csv_cod")}$$,
-                bem_serie = $${dados_patrimonio.get("bem_serie")}$$,
-                bem_sta = $${dados_patrimonio.get("bem_sta")}$$,
-                bem_val = $${dados_patrimonio.get("bem_val")}$$,
-                tre_cod = $${dados_patrimonio.get("tre_cod")}$$,
-                bem_dsc_com = $${dados_patrimonio.get("bem_dsc_com")}$$,
-                uge_cod = $${dados_patrimonio.get("uge_cod")}$$,
-                uge_nom = $${dados_patrimonio.get("uge_nom")}$$,
-                org_cod = $${dados_patrimonio.get("org_cod")}$$,
-                uge_siaf = $${dados_patrimonio.get("uge_siaf")}$$,
-                org_nom = $${dados_patrimonio.get("org_nom")}$$,
-                set_cod = $${dados_patrimonio.get("set_cod")}$$,
-                set_nom = $${dados_patrimonio.get("set_nom")}$$,
-                loc_cod = $${dados_patrimonio.get("loc_cod")}$$,
-                loc_nom = $${dados_patrimonio.get("loc_nom")}$$,
-                ite_mar = $${dados_patrimonio.get("ite_mar")}$$,
-                ite_mod = $${dados_patrimonio.get("ite_mod")}$$,
-                tgr_cod = $${dados_patrimonio.get("tgr_cod")}$$,
-                grp_cod = $${dados_patrimonio.get("grp_cod")}$$,
-                ele_cod = $${dados_patrimonio.get("ele_cod")}$$,
-                sbe_cod = $${dados_patrimonio.get("sbe_cod")}$$,
-                mat_cod = $${dados_patrimonio.get("mat_cod")}$$,
-                mat_nom = $${dados_patrimonio.get("mat_nom")}$$,
-                pes_cod = $${dados_patrimonio.get("pes_cod")}$$,
-                pes_nome = $${dados_patrimonio.get("pes_nome")}$$;
-        """
+        dados["bem_dsc_com"] = bem_dsc_com_normalizado
 
+        params = {
+            "bem_cod": str(dados.get("bem_cod") or ""),
+            "bem_dgv": str(dados.get("bem_dgv") or ""),
+            "bem_num_atm": str(dados.get("bem_num_atm") or ""),
+            "csv_cod": dados.get("csv_cod"),
+            "bem_serie": dados.get("bem_serie"),
+            "bem_sta": dados.get("bem_sta"),
+            "bem_val": dados.get("bem_val"),
+            "tre_cod": dados.get("tre_cod"),
+            "bem_dsc_com": bem_dsc_com_normalizado,
+            "uge_cod": dados.get("uge_cod"),
+            "uge_nom": dados.get("uge_nom"),
+            "org_cod": dados.get("org_cod"),
+            "uge_siaf": dados.get("uge_siaf"),
+            "org_nom": dados.get("org_nom"),
+            "set_cod": dados.get("set_cod"),
+            "set_nom": dados.get("set_nom"),
+            "loc_cod": dados.get("loc_cod"),
+            "loc_nom": dados.get("loc_nom"),
+            "ite_mar": dados.get("ite_mar"),
+            "ite_mod": dados.get("ite_mod"),
+            "tgr_cod": dados.get("tgr_cod"),
+            "grp_cod": dados.get("grp_cod"),
+            "ele_cod": dados.get("ele_cod"),
+            "sbe_cod": dados.get("sbe_cod"),
+            "mat_cod": dados.get("mat_cod"),
+            "mat_nom": str(dados.get("mat_nom") or ""),
+            "pes_cod": dados.get("pes_cod"),
+            "pes_nome": str(dados.get("pes_nome") or ""),
+        }
+
+        params_batch.append(params)
         counter += 1
 
         if counter % 100 == 0:
-            print("INSERINDO BATCH", counter)
-            conn.exec(sql)
-            sql = str()
+            conn.execmany(insert_sql, params_batch)
+            params_batch = []
 
-    if sql:
-        conn.exec(sql)
+    if params_batch:
+        conn.execmany(insert_sql, params_batch)
 
     return jsonify([]), 201
 
