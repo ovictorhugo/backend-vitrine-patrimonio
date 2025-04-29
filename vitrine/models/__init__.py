@@ -9,4 +9,6 @@ class UserModel(BaseModel):
     uid: str = None
     photoURL: Optional[HttpUrl] = None
     provider: Optional[str] = None
-    phone: Optional[str] = None
+    matricula: Optional[str] = None
+    telephone: Optional[str] = None
+    ramal: Optional[str] = None

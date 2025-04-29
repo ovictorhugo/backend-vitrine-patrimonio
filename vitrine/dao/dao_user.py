@@ -102,8 +102,8 @@ def get_photo_url(user_id):
 
 def create_user(User: UserModel):
     SCRIPT_SQL = """
-        INSERT INTO users (display_name, email, uid, photo_url, provider, phone)
-        VALUES (%s, %s, %s, %s, %s, %s);
+        INSERT INTO users (display_name, email, uid, photo_url, provider, matricula, telephone, ramal)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
         """
     conn.exec(
         SCRIPT_SQL,
@@ -113,7 +113,9 @@ def create_user(User: UserModel):
             User.uid,
             str(User.photoURL) or str(),
             User.provider or str(),
-            User.phone or str(),
+            User.matricula or str(),
+            User.telephone or str(),
+            User.ramal or str(),
         ],
     )
 
@@ -121,11 +123,14 @@ def create_user(User: UserModel):
 def select_user(uid):
     print(uid)
     SCRIPT_SQL = """
-        SELECT u.user_id, display_name, email, uid, photo_url, provider, phone, qtd_de_favorito
+        SELECT 
+            u.user_id, display_name, email, uid, photo_url, lattes_id, institution_id,
+            provider, linkedin, verify, phone, matricula, telephone, ramal, qtd_de_favorito
         FROM users u
-        LEFT JOIN (SELECT COUNT(*) AS qtd_de_favorito, user_id FROM favoritos GROUP BY user_id) f ON  f.user_id = u.user_id
+        LEFT JOIN (SELECT COUNT(*) AS qtd_de_favorito, user_id FROM favoritos GROUP BY user_id) f 
+        ON f.user_id = u.user_id
         WHERE uid = %s;
-        """
+    """
     registry = conn.select(SCRIPT_SQL, [uid])
 
     data_frame = pd.DataFrame(
@@ -136,8 +141,15 @@ def select_user(uid):
             "email",
             "uid",
             "photo_url",
+            "lattes_id",
+            "institution_id",
             "provider",
+            "linkedin",
+            "verify",
             "phone",
+            "matricula",
+            "telephone",
+            "ramal",
             "qtd_de_favorito",
         ],
     )
@@ -159,10 +171,12 @@ def list_all_users():
             provider,
             u.lattes_id,
             u.institution_id,
-            rr.name
+            rr.name AS researcher_name
         FROM users u
         LEFT JOIN researcher rr ON rr.lattes_id = u.lattes_id
-        GROUP BY u.user_id, display_name, email, uid, photo_url, u.institution_id, rr.name;
+        GROUP BY 
+            u.user_id, display_name, email, uid, photo_url, linkedin, provider, 
+            u.lattes_id, u.institution_id, rr.name;
         """
     registry = conn.select(SCRIPT_SQL)
 
@@ -178,7 +192,7 @@ def list_all_users():
             "provider",
             "lattes_id",
             "institution_id",
-            "researcger_name",
+            "researcher_name",
         ],
     )
 
@@ -191,22 +205,51 @@ def list_all_users():
 
 
 def update_user(user):
-    SCRIPT_SQL = """
+    fields_to_update = []
+    values = []
+
+    if "linkedin" in user:
+        fields_to_update.append("linkedin = %s")
+        values.append(user["linkedin"])
+    if "lattes_id" in user:
+        fields_to_update.append("lattes_id = %s")
+        values.append(user["lattes_id"])
+    if "displayName" in user:
+        fields_to_update.append("display_name = %s")
+        values.append(user["displayName"])
+    if "email" in user:
+        fields_to_update.append("email = %s")
+        values.append(user["email"])
+    if "photoURL" in user:
+        fields_to_update.append("photo_url = %s")
+        values.append(user["photoURL"])
+    if "provider" in user:
+        fields_to_update.append("provider = %s")
+        values.append(user["provider"])
+    if "phone" in user:
+        fields_to_update.append("phone = %s")
+        values.append(user["phone"])
+    if "matricula" in user:
+        fields_to_update.append("matricula = %s")
+        values.append(user["matricula"])
+    if "telephone" in user:
+        fields_to_update.append("telephone = %s")
+        values.append(user["telephone"])
+    if "ramal" in user:
+        fields_to_update.append("ramal = %s")
+        values.append(user["ramal"])
+
+    if not fields_to_update:
+        print("Nenhum campo fornecido para atualizar.")
+        return
+
+    SCRIPT_SQL = f"""
     UPDATE users
-    SET linkedin = %s,
-        lattes_id = %s,
-        display_name = %s
+    SET {", ".join(fields_to_update)}
     WHERE uid = %s
     """
-    conn.exec(
-        SCRIPT_SQL,
-        [
-            user["linkedin"],
-            user["lattes_id"],
-            user["display_name"],
-            user["uid"],
-        ],
-    )
+    values.append(user["uid"])
+    conn.exec(SCRIPT_SQL, values)
 
 
 def list_users():
