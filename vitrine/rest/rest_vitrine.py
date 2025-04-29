@@ -201,51 +201,53 @@ def insertPatrimonio():
                 uge_cod, uge_nom, org_cod, uge_siaf, org_nom, set_cod, set_nom, loc_cod, loc_nom,
                 ite_mar, ite_mod, tgr_cod, grp_cod, ele_cod, sbe_cod, mat_cod, mat_nom, pes_cod, pes_nome)
             VALUES (
-                $${dados_patrimonio['bem_cod']}$$, $${dados_patrimonio['bem_dgv']}$$, $${dados_patrimonio['bem_num_atm']}$$, 
-                $${dados_patrimonio['csv_cod']}$$, $${dados_patrimonio['bem_serie']}$$, $${dados_patrimonio['bem_sta']}$$, 
-                $${dados_patrimonio['bem_val']}$$, $${dados_patrimonio['tre_cod']}$$, $${dados_patrimonio['bem_dsc_com']}$$, 
-                $${dados_patrimonio['uge_cod']}$$, $${dados_patrimonio['uge_nom']}$$, $${dados_patrimonio['org_cod']}$$, 
-                $${dados_patrimonio['uge_siaf']}$$, $${dados_patrimonio['org_nom']}$$, $${dados_patrimonio['set_cod']}$$, 
-                $${dados_patrimonio['set_nom']}$$, $${dados_patrimonio['loc_cod']}$$, $${dados_patrimonio['loc_nom']}$$, 
-                $${dados_patrimonio['ite_mar']}$$, $${dados_patrimonio['ite_mod']}$$, $${dados_patrimonio['tgr_cod']}$$, 
-                $${dados_patrimonio['grp_cod']}$$, $${dados_patrimonio['ele_cod']}$$, $${dados_patrimonio['sbe_cod']}$$, 
-                $${dados_patrimonio['mat_cod']}$$, $${dados_patrimonio['mat_nom']}$$, $${dados_patrimonio['pes_cod']}$$, 
-                $${dados_patrimonio['pes_nome']}$$
+                $${dados_patrimonio.get("bem_cod")}$$, $${dados_patrimonio.get("bem_dgv")}$$, $${dados_patrimonio.get("bem_num_atm")}$$, 
+                $${dados_patrimonio.get("csv_cod")}$$, $${dados_patrimonio.get("bem_serie")}$$, $${dados_patrimonio.get("bem_sta")}$$, 
+                $${dados_patrimonio.get("bem_val")}$$, $${dados_patrimonio.get("tre_cod")}$$, $${dados_patrimonio.get("bem_dsc_com")}$$, 
+                $${dados_patrimonio.get("uge_cod")}$$, $${dados_patrimonio.get("uge_nom")}$$, $${dados_patrimonio.get("org_cod")}$$, 
+                $${dados_patrimonio.get("uge_siaf")}$$, $${dados_patrimonio.get("org_nom")}$$, $${dados_patrimonio.get("set_cod")}$$, 
+                $${dados_patrimonio.get("set_nom")}$$, $${dados_patrimonio.get("loc_cod")}$$, $${dados_patrimonio.get("loc_nom")}$$, 
+                $${dados_patrimonio.get("ite_mar")}$$, $${dados_patrimonio.get("ite_mod")}$$, $${dados_patrimonio.get("tgr_cod")}$$, 
+                $${dados_patrimonio.get("grp_cod")}$$, $${dados_patrimonio.get("ele_cod")}$$, $${dados_patrimonio.get("sbe_cod")}$$, 
+                $${dados_patrimonio.get("mat_cod")}$$, $${dados_patrimonio.get("mat_nom")}$$, $${dados_patrimonio.get("pes_cod")}$$, 
+                $${dados_patrimonio.get("pes_nome")}$$
             )
             ON CONFLICT (bem_cod, bem_dgv)
             DO UPDATE SET 
-                bem_num_atm = $${dados_patrimonio['bem_num_atm']}$$,
-                csv_cod = $${dados_patrimonio['csv_cod']}$$,
-                bem_serie = $${dados_patrimonio['bem_serie']}$$,
-                bem_sta = $${dados_patrimonio['bem_sta']}$$,
-                bem_val = $${dados_patrimonio['bem_val']}$$,
-                tre_cod = $${dados_patrimonio['tre_cod']}$$,
-                bem_dsc_com = $${dados_patrimonio['bem_dsc_com']}$$,
-                uge_cod = $${dados_patrimonio['uge_cod']}$$,
-                uge_nom = $${dados_patrimonio['uge_nom']}$$,
-                org_cod = $${dados_patrimonio['org_cod']}$$,
-                uge_siaf = $${dados_patrimonio['uge_siaf']}$$,
-                org_nom = $${dados_patrimonio['org_nom']}$$,
-                set_cod = $${dados_patrimonio['set_cod']}$$,
-                set_nom = $${dados_patrimonio['set_nom']}$$,
-                loc_cod = $${dados_patrimonio['loc_cod']}$$,
-                loc_nom = $${dados_patrimonio['loc_nom']}$$,
-                ite_mar = $${dados_patrimonio['ite_mar']}$$,
-                ite_mod = $${dados_patrimonio['ite_mod']}$$,
-                tgr_cod = $${dados_patrimonio['tgr_cod']}$$,
-                grp_cod = $${dados_patrimonio['grp_cod']}$$,
-                ele_cod = $${dados_patrimonio['ele_cod']}$$,
-                sbe_cod = $${dados_patrimonio['sbe_cod']}$$,
-                mat_cod = $${dados_patrimonio['mat_cod']}$$,
-                mat_nom = $${dados_patrimonio['mat_nom']}$$,
-                pes_cod = $${dados_patrimonio['pes_cod']}$$,
-                pes_nome = $${dados_patrimonio['pes_nome']}$$;
+                bem_num_atm = $${dados_patrimonio.get("bem_num_atm")}$$,
+                csv_cod = $${dados_patrimonio.get("csv_cod")}$$,
+                bem_serie = $${dados_patrimonio.get("bem_serie")}$$,
+                bem_sta = $${dados_patrimonio.get("bem_sta")}$$,
+                bem_val = $${dados_patrimonio.get("bem_val")}$$,
+                tre_cod = $${dados_patrimonio.get("tre_cod")}$$,
+                bem_dsc_com = $${dados_patrimonio.get("bem_dsc_com")}$$,
+                uge_cod = $${dados_patrimonio.get("uge_cod")}$$,
+                uge_nom = $${dados_patrimonio.get("uge_nom")}$$,
+                org_cod = $${dados_patrimonio.get("org_cod")}$$,
+                uge_siaf = $${dados_patrimonio.get("uge_siaf")}$$,
+                org_nom = $${dados_patrimonio.get("org_nom")}$$,
+                set_cod = $${dados_patrimonio.get("set_cod")}$$,
+                set_nom = $${dados_patrimonio.get("set_nom")}$$,
+                loc_cod = $${dados_patrimonio.get("loc_cod")}$$,
+                loc_nom = $${dados_patrimonio.get("loc_nom")}$$,
+                ite_mar = $${dados_patrimonio.get("ite_mar")}$$,
+                ite_mod = $${dados_patrimonio.get("ite_mod")}$$,
+                tgr_cod = $${dados_patrimonio.get("tgr_cod")}$$,
+                grp_cod = $${dados_patrimonio.get("grp_cod")}$$,
+                ele_cod = $${dados_patrimonio.get("ele_cod")}$$,
+                sbe_cod = $${dados_patrimonio.get("sbe_cod")}$$,
+                mat_cod = $${dados_patrimonio.get("mat_cod")}$$,
+                mat_nom = $${dados_patrimonio.get("mat_nom")}$$,
+                pes_cod = $${dados_patrimonio.get("pes_cod")}$$,
+                pes_nome = $${dados_patrimonio.get("pes_nome")}$$;
         """
-        
-        counter += 1  
-        if counter % 100 == 0:  
-            conn.exec(sql)  
-            sql = str()  
+
+        counter += 1
+
+        if counter % 100 == 0:
+            print("INSERINDO BATCH", counter)
+            conn.exec(sql)
+            sql = str()
 
     if sql:
         conn.exec(sql)
