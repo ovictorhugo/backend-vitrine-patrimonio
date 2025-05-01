@@ -12,4 +12,4 @@ RUN pip install poetry && \
 
 EXPOSE 8080
 
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "vitrine:create_app()", "--reload", "--log-level", "info", "--access-logfile", "access.log", "--error-logfile", "error.log", "--workers", "4" "--timeout" "6000"]
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "vitrine:create_app()", "--reload", "--log-level", "info", "--access-logfile", "access.log", "--error-logfile", "error.log", "--workers", "4", "--timeout", "6000"]
