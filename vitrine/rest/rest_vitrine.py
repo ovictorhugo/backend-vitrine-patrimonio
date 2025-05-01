@@ -454,7 +454,7 @@ def build_query_terms(sanitized_terms, column):
                 translate(
                 unaccent(
                 LOWER({column})), '-\\.:;''',' ')),
-                websearch_to_tsquery(%({placeholder})s)) > 0.04
+                websearch_to_tsquery(%({placeholder})s)) > 0.01
                 """
             query_parts.append(SCRIPT_SQL)
             term_counter += 1
@@ -499,6 +499,37 @@ def webseatch_filter(column, string_of_terms):
     return filter_sql, terms_dict
 
 
+def build_query_names(sanitized_names, column):
+    names_dict = {}
+    query_parts = []
+    name_counter = 1
+
+    for name in sanitized_names:
+        if name in {"AND", "OR", "AND NOT", "(", ")"}:
+            query_parts.append(name)
+        else:
+            placeholder = f"term{name_counter}"
+            names_dict[placeholder] = "%" + name.lower() + "%"
+            SCRIPT_SQL = f"""
+                LOWER(
+                translate(
+                unaccent({column}), '-\\.:´;''',' ')) ILIKE %({placeholder})s
+                """
+            query_parts.append(SCRIPT_SQL)
+            name_counter += 1
+
+    return " ".join(query_parts), names_dict
+
+
+def names_filter(column, names: str):
+    names = parse_terms(names)
+    sanitized_names = sanitize_terms(names)
+    query_names, names_dict = build_query_names(sanitized_names, column)
+
+    filter_sql = f"AND ({query_names})"
+    return filter_sql, names_dict
+
+
 @rest_vitrine.route("/search_by_nom", methods=["GET"])
 def search_by_nom():
     pes_nome = request.args.get("pes_nome")
@@ -510,7 +541,7 @@ def search_by_nom():
 
     filter_pes_nome = str()
     if pes_nome:
-        filter_pes_nome, terms = webseatch_filter("pes_nome", pes_nome)
+        filter_pes_nome, terms = names_filter("pes_nome", pes_nome)
         params |= terms
 
     filter_bem_dsc_com = str()
@@ -567,7 +598,7 @@ def search_by_nom():
             {filter_mat_nom}
             {filter_loc_nom}
     """
-
+    print(scriptSql, params)
     resultado = conn.select(scriptSql, params)
     columns = [
         "bem_cod",
