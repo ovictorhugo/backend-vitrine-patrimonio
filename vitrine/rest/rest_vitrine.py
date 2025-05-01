@@ -2066,3 +2066,33 @@ def delete_feedback():
         """
     conn.exec(SCRIPT_SQL, {"feedback_id": feedback_id})
     return jsonify({"message": "Feedback deleted"}), 204
+
+
+@rest_vitrine.route("/patrimonio_imagens", methods=["GET"])
+def list_patrimonio_imagens():
+    num_patrimonio = request.args.get("bem_dgv")
+    bem_cod = request.args.get("bem_cod")
+
+    filter_num_patrimonio = str()
+    if num_patrimonio:
+        filter_num_patrimonio = f"AND TRIM(p.bem_dgv) = TRIM('{num_patrimonio}')"
+
+    filter_bem_cod = str()
+    if bem_cod:
+        filter_bem_cod = f"AND TRIM(p.bem_cod) = TRIM('{bem_cod}')"
+
+    SCRIPT_SQL = f"""
+        SELECT imagens, fp.num_patrimonio
+        FROM formulario_patrimonio fp
+        WHERE fp.num_patrimonio IN (
+            SELECT DISTINCT bem_cod
+            FROM patrimonio p
+            WHERE 1 = 1
+                {filter_num_patrimonio}
+                {filter_bem_cod}
+        );
+    """
+    print(SCRIPT_SQL)
+    result = conn.select(SCRIPT_SQL)
+    dataframe = pd.DataFrame(result, columns=["imagens", "num_patrimonio"])
+    return dataframe.to_dict(orient="records")
