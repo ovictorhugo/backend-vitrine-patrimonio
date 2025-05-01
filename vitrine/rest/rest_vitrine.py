@@ -177,6 +177,10 @@ def insertPatrimonio():
     else:
         return "Formato de arquivo não suportado", 400
 
+    df.columns = [
+        unidecode(col).strip().lower().replace(" ", "_") for col in df.columns
+    ]
+
     df = df.replace({np.nan: None})
 
     insert_sql = """
