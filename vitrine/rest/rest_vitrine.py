@@ -525,6 +525,7 @@ def search_by_nom():
     mat_nom = request.args.get("mat_nom")
     loc_nom = request.args.get("loc_nom")
     org_nom = request.args.get("org_nom")
+    uge_nom = request.args.get("uge_nom")
 
     params = {}
 
@@ -551,6 +552,11 @@ def search_by_nom():
     filter_org_nom = str()
     if org_nom:
         filter_org_nom, terms = webseatch_filter("org_nom", org_nom)
+        params |= terms
+
+    filter_uge_nom = str()
+    if uge_nom:
+        filter_uge_nom, terms = webseatch_filter("uge_nom", uge_nom)
         params |= terms
 
     scriptSql = f"""
@@ -592,6 +598,7 @@ def search_by_nom():
             {filter_org_nom}
             {filter_mat_nom}
             {filter_loc_nom}
+            {filter_uge_nom}
     """
     resultado = conn.select(scriptSql, params)
     columns = [
