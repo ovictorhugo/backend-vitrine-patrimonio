@@ -22,7 +22,7 @@ def get_patrimonio(codigo, id_item):
                     'uid', u.uid,
                     'photo_url', u.photo_url,
                     'lattes_id', u.lattes_id,
-                    'institution_id', u.institution_id,
+                    'institution', u.institution,
                     'provider', u.provider,
                     'linkedin', u.linkedin,
                     'verify', u.verify
@@ -56,7 +56,7 @@ def get_patrimonio(codigo, id_item):
                     'uid', u.uid,
                     'photo_url', u.photo_url,
                     'lattes_id', u.lattes_id,
-                    'institution_id', u.institution_id,
+                    'institution', u.institution,
                     'provider', u.provider,
                     'linkedin', u.linkedin,
                     'verify', u.verify
