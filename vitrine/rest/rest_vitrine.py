@@ -524,6 +524,7 @@ def search_by_nom():
     bem_dsc_com = request.args.get("bem_dsc_com")
     mat_nom = request.args.get("mat_nom")
     loc_nom = request.args.get("loc_nom")
+    org_nom = request.args.get("org_nom")
 
     params = {}
 
@@ -545,6 +546,11 @@ def search_by_nom():
     filter_loc_nom = str()
     if loc_nom:
         filter_loc_nom, terms = webseatch_filter("loc_nom", loc_nom)
+        params |= terms
+
+    filter_org_nom = str()
+    if org_nom:
+        filter_org_nom, terms = webseatch_filter("org_nom", org_nom)
         params |= terms
 
     scriptSql = f"""
@@ -583,10 +589,10 @@ def search_by_nom():
         WHERE  1 = 1
             {filter_pes_nome}
             {filter_bem_dsc_com}
+            {filter_org_nom}
             {filter_mat_nom}
             {filter_loc_nom}
     """
-    print(scriptSql, params)
     resultado = conn.select(scriptSql, params)
     columns = [
         "bem_cod",
