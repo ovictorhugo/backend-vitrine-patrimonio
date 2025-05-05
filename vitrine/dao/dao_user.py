@@ -124,7 +124,7 @@ def select_user(uid):
     print(uid)
     SCRIPT_SQL = """
         SELECT 
-            u.user_id, display_name, email, uid, photo_url, lattes_id, institution,
+            u.user_id, display_name, email, uid, photo_url, lattes_id, institution_id,
             provider, linkedin, verify, phone, matricula, telephone, ramal, qtd_de_favorito
         FROM users u
         LEFT JOIN (SELECT COUNT(*) AS qtd_de_favorito, user_id FROM favoritos GROUP BY user_id) f 
@@ -142,7 +142,7 @@ def select_user(uid):
             "uid",
             "photo_url",
             "lattes_id",
-            "institution",
+            "institution_id",
             "provider",
             "linkedin",
             "verify",
@@ -170,13 +170,13 @@ def list_all_users():
             linkedin,
             provider,
             u.lattes_id,
-            u.institution,
+            u.institution_id,
             rr.name AS researcher_name
         FROM users u
         LEFT JOIN researcher rr ON rr.lattes_id = u.lattes_id
         GROUP BY 
             u.user_id, display_name, email, uid, photo_url, linkedin, provider, 
-            u.lattes_id, u.institution, rr.name;
+            u.lattes_id, u.institution_id, rr.name;
         """
     registry = conn.select(SCRIPT_SQL)
 
@@ -191,7 +191,7 @@ def list_all_users():
             "linkedin",
             "provider",
             "lattes_id",
-            "institution",
+            "institution_id",
             "researcher_name",
         ],
     )
@@ -349,7 +349,7 @@ def delete_permission(permission):
 def assign_user(user):
     SCRIPT_SQL = """
         UPDATE users SET
-        institution = %s
+        institution_id = %s
         WHERE user_id = %s;
 
         INSERT INTO users_roles (role_id, user_id)
@@ -358,7 +358,7 @@ def assign_user(user):
     conn.exec(
         SCRIPT_SQL,
         [
-            user[0]["institution"],
+            user[0]["institution_id"],
             user[0]["user_id"],
             user[0]["role_id"],
             user[0]["user_id"],
