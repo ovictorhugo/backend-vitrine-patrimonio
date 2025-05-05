@@ -90,7 +90,7 @@ def insertPatrimonio_():
                 pes_nome)
                 VALUES {values[:-1]};
                 """
-        doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
+
         bem_dsc_com = dados_patrimonio.get("bem_dsc_com")
         bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
         dados_filtrados = {
@@ -102,7 +102,7 @@ def insertPatrimonio_():
             "pes_nome": str(dados_patrimonio.get("pes_nome", "") or ""),
             "loc_nom": str(dados_patrimonio.get("loc_nom", "") or ""),
         }
-        print(dados_filtrados)
+        doc_id = f"{dados_patrimonio['bem_cod']}_{dados_patrimonio['bem_dgv']}"
         collection.document(doc_id).set(dados_filtrados, merge=True)
         conn.exec(script_sql)
 
@@ -196,32 +196,13 @@ def insertPatrimonio():
         )
         ON CONFLICT (bem_cod, bem_dgv)
         DO UPDATE SET 
-            bem_num_atm = EXCLUDED.bem_num_atm,
-            csv_cod = EXCLUDED.csv_cod,
-            bem_serie = EXCLUDED.bem_serie,
-            bem_sta = EXCLUDED.bem_sta,
-            bem_val = EXCLUDED.bem_val,
-            tre_cod = EXCLUDED.tre_cod,
-            bem_dsc_com = EXCLUDED.bem_dsc_com,
-            uge_cod = EXCLUDED.uge_cod,
-            uge_nom = EXCLUDED.uge_nom,
-            org_cod = EXCLUDED.org_cod,
-            uge_siaf = EXCLUDED.uge_siaf,
-            org_nom = EXCLUDED.org_nom,
-            set_cod = EXCLUDED.set_cod,
-            set_nom = EXCLUDED.set_nom,
-            loc_cod = EXCLUDED.loc_cod,
-            loc_nom = EXCLUDED.loc_nom,
-            ite_mar = EXCLUDED.ite_mar,
-            ite_mod = EXCLUDED.ite_mod,
-            tgr_cod = EXCLUDED.tgr_cod,
-            grp_cod = EXCLUDED.grp_cod,
-            ele_cod = EXCLUDED.ele_cod,
-            sbe_cod = EXCLUDED.sbe_cod,
-            mat_cod = EXCLUDED.mat_cod,
-            mat_nom = EXCLUDED.mat_nom,
-            pes_cod = EXCLUDED.pes_cod,
-            pes_nome = EXCLUDED.pes_nome;
+            bem_num_atm = EXCLUDED.bem_num_atm, csv_cod = EXCLUDED.csv_cod, bem_serie = EXCLUDED.bem_serie, bem_sta = EXCLUDED.bem_sta,
+            bem_val = EXCLUDED.bem_val, tre_cod = EXCLUDED.tre_cod, bem_dsc_com = EXCLUDED.bem_dsc_com, uge_cod = EXCLUDED.uge_cod,
+            uge_nom = EXCLUDED.uge_nom, org_cod = EXCLUDED.org_cod, uge_siaf = EXCLUDED.uge_siaf, org_nom = EXCLUDED.org_nom,
+            set_cod = EXCLUDED.set_cod, set_nom = EXCLUDED.set_nom, loc_cod = EXCLUDED.loc_cod, loc_nom = EXCLUDED.loc_nom,
+            ite_mar = EXCLUDED.ite_mar, ite_mod = EXCLUDED.ite_mod, tgr_cod = EXCLUDED.tgr_cod, grp_cod = EXCLUDED.grp_cod,
+            ele_cod = EXCLUDED.ele_cod, sbe_cod = EXCLUDED.sbe_cod, mat_cod = EXCLUDED.mat_cod, mat_nom = EXCLUDED.mat_nom,
+            pes_cod = EXCLUDED.pes_cod, pes_nome = EXCLUDED.pes_nome;
     """
 
     params_batch = []
@@ -230,10 +211,11 @@ def insertPatrimonio():
     for _, patrimonio in df.iterrows():
         dados = patrimonio.to_dict()
         bem_dsc_com = dados.get("bem_dsc_com")
+        bem_dsc_com
         bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
         dados["bem_dsc_com"] = bem_dsc_com_normalizado
 
-        params = {
+        params_firebase = {
             "bem_cod": str(dados.get("bem_cod") or ""),
             "bem_dgv": str(dados.get("bem_dgv") or ""),
             "bem_num_atm": str(dados.get("bem_num_atm") or ""),
@@ -264,8 +246,11 @@ def insertPatrimonio():
             "pes_nome": str(dados.get("pes_nome") or ""),
         }
 
-        params_batch.append(params)
+        params_batch.append(params_firebase)
         counter += 1
+
+        doc_id = f"{params_firebase['bem_cod']}_{params_firebase['bem_dgv']}"
+        collection.document(doc_id).set(params_firebase, merge=True)
 
         if counter % 500 == 0:
             print("BATCH", counter)
@@ -2092,7 +2077,6 @@ def list_patrimonio_imagens():
                 {filter_bem_cod}
         );
     """
-    print(SCRIPT_SQL)
     result = conn.select(SCRIPT_SQL)
     dataframe = pd.DataFrame(result, columns=["imagens", "num_patrimonio"])
     return dataframe.to_dict(orient="records")
