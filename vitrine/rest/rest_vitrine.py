@@ -210,10 +210,6 @@ def insertPatrimonio():
 
     for _, patrimonio in df.iterrows():
         dados = patrimonio.to_dict()
-        bem_dsc_com = dados.get("bem_dsc_com")
-        bem_dsc_com
-        bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
-        dados["bem_dsc_com"] = bem_dsc_com_normalizado
 
         params_firebase = {
             "bem_cod": str(dados.get("bem_cod") or ""),
@@ -224,7 +220,7 @@ def insertPatrimonio():
             "bem_sta": dados.get("bem_sta"),
             "bem_val": dados.get("bem_val"),
             "tre_cod": dados.get("tre_cod"),
-            "bem_dsc_com": bem_dsc_com_normalizado,
+            "bem_dsc_com": dados.get("bem_dsc_com"),
             "uge_cod": dados.get("uge_cod"),
             "uge_nom": dados.get("uge_nom"),
             "org_cod": dados.get("org_cod"),
@@ -245,17 +241,20 @@ def insertPatrimonio():
             "pes_cod": dados.get("pes_cod"),
             "pes_nome": str(dados.get("pes_nome") or ""),
         }
-
         params_batch.append(params_firebase)
         counter += 1
-
-        doc_id = f"{params_firebase['bem_cod']}_{params_firebase['bem_dgv']}"
-        collection.document(doc_id).set(params_firebase, merge=True)
 
         if counter % 500 == 0:
             print("BATCH", counter)
             conn.execmany(insert_sql, params_batch)
             params_batch = []
+
+        bem_dsc_com = dados.get("bem_dsc_com")
+        bem_dsc_com_normalizado = normalizar_descricao(bem_dsc_com)
+        params_firebase["bem_dsc_com"] = bem_dsc_com_normalizado
+
+        doc_id = f"{params_firebase['bem_cod']}_{params_firebase['bem_dgv']}"
+        collection.document(doc_id).set(params_firebase, merge=True)
 
     if params_batch:
         conn.execmany(insert_sql, params_batch)
