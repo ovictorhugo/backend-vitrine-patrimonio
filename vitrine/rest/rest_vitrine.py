@@ -241,7 +241,7 @@ def insertPatrimonio():
             "pes_cod": dados.get("pes_cod"),
             "pes_nome": str(dados.get("pes_nome") or ""),
         }
-        params_batch.append(params_firebase)
+        params_batch.append(params_firebase.copy())
         counter += 1
 
         if counter % 500 == 0:
