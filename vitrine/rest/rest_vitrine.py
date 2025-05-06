@@ -245,7 +245,7 @@ def insertPatrimonio():
         counter += 1
 
         if counter % 500 == 0:
-            print("BATCH", counter)
+            print("[BATCH]", counter)
             conn.execmany(insert_sql, params_batch)
             params_batch = []
 
