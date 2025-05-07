@@ -5,6 +5,7 @@ conn = Connection()
 
 
 def insert_form(form):
+    print(form)
     SCRIPT_SQL = f"SELECT matricula FROM users WHERE user_id = '{form['user_id']}'"
 
     form["matricula"] = conn.select(SCRIPT_SQL, form)[0][0]
@@ -25,36 +26,35 @@ def delete_patrimonio(patrimonio_id):
 
 
 def update_patrimonio(form):
+    print(form)
     updates = []
-
-    if form.get("user_id"):
+    if "user_id" in form:
         SCRIPT_SQL = f"SELECT matricula FROM users WHERE user_id = '{form['user_id']}'"
         form["matricula"] = conn.select(SCRIPT_SQL, form)[0][0]
         updates.append("matricula = %(matricula)s")
-
-    if form.get("num_patrimonio"):
+    if "num_patrimonio" in form:
         updates.append("num_patrimonio = %(num_patrimonio)s")
-    if form.get("loc"):
+    if "loc" in form:
         updates.append("loc = %(loc)s")
-    if form.get("observacao"):
+    if "observacao" in form:
         updates.append("observacao = %(observacao)s")
-    if form.get("vitrine"):
+    if "vitrine" in form:
         updates.append("vitrine = %(vitrine)s")
-    if form.get("condicao"):
+    if "condicao" in form:
         updates.append("condicao = %(condicao)s")
-    if form.get("imagens"):
+    if "imagens" in form:
         updates.append("imagens = %(imagens)s")
-    if form.get("desfazimento"):
+    if "desfazimento" in form:
         updates.append("desfazimento = %(desfazimento)s")
-    if form.get("verificado"):
+    if "verificado" in form:
         updates.append("verificado = %(verificado)s")
-    if form.get("num_verificacao"):
+    if "num_verificacao" in form:
         updates.append("num_verificacao = %(num_verificacao)s")
-    if form.get("codigo_atm"):
+    if "codigo_atm" in form:
         updates.append("codigo_atm = %(codigo_atm)s")
-    if form.get("situacao"):
+    if "situacao" in form:
         updates.append("situacao = %(situacao)s")
-    if form.get("estado_transferencia"):
+    if "estado_transferencia" in form:
         updates.append("estado_transferencia = %(estado_transferencia)s")
 
     set_clause = ", ".join(updates)
@@ -64,7 +64,6 @@ def update_patrimonio(form):
         SET {set_clause}
         WHERE patrimonio_id = %(patrimonio_id)s
         """
-
     conn.exec(SCRIPT_SQL, form)
 
 
