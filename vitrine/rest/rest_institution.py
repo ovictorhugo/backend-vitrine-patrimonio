@@ -27,9 +27,9 @@ def insert():
 
 @rest_institution.route("/institution", methods=["GET"])
 def get_all():
-    SCRIPT_SQL = "SELECT id, uge_nom, uge_code FROM institution;"
+    SCRIPT_SQL = "SELECT id, uge_nom, uge_cod FROM institution;"
     result = Connection().select(SCRIPT_SQL)
-    result = pd.DataFrame(result, columns=["id", "uge_nom", "uge_code"])
+    result = pd.DataFrame(result, columns=["id", "uge_nom", "uge_cod"])
     return jsonify(result.to_dict(orient="records")), 200
 
 
