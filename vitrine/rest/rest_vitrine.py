@@ -525,6 +525,7 @@ def search_by_nom():
     loc_nom = request.args.get("loc_nom")
     org_nom = request.args.get("org_nom")
     uge_nom = request.args.get("uge_nom")
+    institution_id = request.args.get("institution_id")
 
     params = {}
 
@@ -558,45 +559,56 @@ def search_by_nom():
         filter_uge_nom, terms = webseatch_filter("uge_nom", uge_nom)
         params |= terms
 
+    join_institution_id = str()
+    filter_institution_id = str()
+    if institution_id:
+        join_institution_id = (
+            "JOIN public.institution i ON patrimonio.uge_nom = i.uge_nom"
+        )
+        filter_institution_id = "AND i.id = %(institution_id)s"
+        params["institution_id"] = institution_id
+
     scriptSql = f"""
     SELECT 
-        bem_cod, 
-        bem_dgv, 
-        bem_dsc_com, 
-        bem_num_atm, 
-        uge_siaf, 
-        bem_sta, 
-        uge_cod, 
-        org_cod, 
-        set_cod, 
-        loc_cod, 
-        org_nom,
-        created_at,
-        csv_cod,
-        bem_serie,
-        bem_val,
-        tre_cod,
-        uge_nom,
-        set_nom,
-        loc_nom,
-        ite_mar,
-        ite_mod,
-        tgr_cod,
-        grp_cod,
-        ele_cod,
-        sbe_cod,
-        mat_cod,
-        mat_nom,
-        pes_cod,
-        pes_nome
+        patrimonio.bem_cod, 
+        patrimonio.bem_dgv, 
+        patrimonio.bem_dsc_com, 
+        patrimonio.bem_num_atm, 
+        patrimonio.uge_siaf, 
+        patrimonio.bem_sta, 
+        patrimonio.uge_cod, 
+        patrimonio.org_cod, 
+        patrimonio.set_cod, 
+        patrimonio.loc_cod, 
+        patrimonio.org_nom,
+        patrimonio.created_at,
+        patrimonio.csv_cod,
+        patrimonio.bem_serie,
+        patrimonio.bem_val,
+        patrimonio.tre_cod,
+        patrimonio.uge_nom,
+        patrimonio.set_nom,
+        patrimonio.loc_nom,
+        patrimonio.ite_mar,
+        patrimonio.ite_mod,
+        patrimonio.tgr_cod,
+        patrimonio.grp_cod,
+        patrimonio.ele_cod,
+        patrimonio.sbe_cod,
+        patrimonio.mat_cod,
+        patrimonio.mat_nom,
+        patrimonio.pes_cod,
+        patrimonio.pes_nome
         FROM 
             patrimonio
+            {join_institution_id}
         WHERE  1 = 1
             {filter_pes_nome}
             {filter_bem_dsc_com}
             {filter_org_nom}
             {filter_mat_nom}
             {filter_loc_nom}
+            {filter_institution_id}
             {filter_uge_nom}
     """
     resultado = conn.select(scriptSql, params)
