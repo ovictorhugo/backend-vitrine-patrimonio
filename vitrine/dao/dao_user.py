@@ -102,8 +102,8 @@ def get_photo_url(user_id):
 
 def create_user(User: UserModel):
     SCRIPT_SQL = """
-        INSERT INTO users (display_name, email, uid, photo_url, provider, matricula, telephone, ramal)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+        INSERT INTO users (display_name, email, uid, photo_url, provider, matricula, telephone, ramal, uge_nom)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
         """
     conn.exec(
         SCRIPT_SQL,
@@ -116,19 +116,21 @@ def create_user(User: UserModel):
             User.matricula or str(),
             User.telephone or str(),
             User.ramal or str(),
+            User.uge_nom or str(),
         ],
     )
 
 
 def select_user(uid):
-    print(uid)
     SCRIPT_SQL = """
         SELECT 
             u.user_id, display_name, email, uid, photo_url, lattes_id, institution_id,
-            provider, linkedin, verify, phone, matricula, telephone, ramal, qtd_de_favorito
+            provider, linkedin, verify, phone, matricula, telephone, ramal, qtd_de_favorito,
+            uge_nom
         FROM users u
         LEFT JOIN (SELECT COUNT(*) AS qtd_de_favorito, user_id FROM favoritos GROUP BY user_id) f 
         ON f.user_id = u.user_id
+        LEFT JOIN institution i ON i.id = u.institution_id
         WHERE uid = %s;
     """
     registry = conn.select(SCRIPT_SQL, [uid])
@@ -151,6 +153,7 @@ def select_user(uid):
             "telephone",
             "ramal",
             "qtd_de_favorito",
+            "uge_nom",
         ],
     )
 
@@ -238,6 +241,9 @@ def update_user(user):
     if "ramal" in user:
         fields_to_update.append("ramal = %s")
         values.append(user["ramal"])
+    if "uge_nom" in user:
+        fields_to_update.append("uge_nom = %s")
+        values.append(user["uge_nom"])
 
     if not fields_to_update:
         print("Nenhum campo fornecido para atualizar.")
@@ -254,22 +260,20 @@ def update_user(user):
 
 def list_users():
     SCRIPT_SQL = """
-        SELECT * FROM
-        """
-    SCRIPT_SQL = """
         SELECT
             u.user_id, display_name, email,
             jsonb_agg(jsonb_build_object('role', rl.role, 'role_id', rl.id)) AS roles,
-            photo_url
+            photo_url, MAX(uge_nom) AS uge_nom
         FROM users u
         LEFT JOIN users_roles ur ON u.user_id = ur.user_id
         LEFT JOIN roles rl ON rl.id = ur.role_id
+        LEFT JOIN institution i ON i.id = u.institution_id
         GROUP BY u.user_id;
         """
     registry = conn.select(SCRIPT_SQL)
     data_frame = pd.DataFrame(
         registry,
-        columns=["user_id", "display_name", "email", "roles", "photo_url"],
+        columns=["user_id", "display_name", "email", "roles", "photo_url", "uge_nom"],
     )
 
     return data_frame.to_dict(orient="records")

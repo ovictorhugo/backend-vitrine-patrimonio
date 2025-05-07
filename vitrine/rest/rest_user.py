@@ -134,12 +134,6 @@ def list_users():
     return jsonify(user), HTTPStatus.OK
 
 
-@rest_user.route("/s/user/entrys", methods=["GET"])
-def list_all_users():
-    user = dao_user.list_all_users()
-    return jsonify(user), HTTPStatus.OK
-
-
 @rest_user.route("/s/user", methods=["PUT"])
 def update_user():
     user = request.get_json()

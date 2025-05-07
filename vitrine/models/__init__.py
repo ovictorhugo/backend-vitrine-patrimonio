@@ -12,3 +12,4 @@ class UserModel(BaseModel):
     matricula: Optional[str] = None
     telephone: Optional[str] = None
     ramal: Optional[str] = None
+    uge_nom: Optional[str] = None
