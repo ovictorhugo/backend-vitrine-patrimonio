@@ -101,6 +101,7 @@ def get_photo_url(user_id):
 
 
 def create_user(User: UserModel):
+    print(User)
     SCRIPT_SQL = """
         INSERT INTO users (display_name, email, uid, photo_url, provider, matricula, telephone, ramal, institution_id)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
