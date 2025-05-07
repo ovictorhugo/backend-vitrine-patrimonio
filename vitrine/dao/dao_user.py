@@ -132,10 +132,9 @@ def select_user(uid):
         LEFT JOIN (SELECT COUNT(*) AS qtd_de_favorito, user_id FROM favoritos GROUP BY user_id) f 
         ON f.user_id = u.user_id
         LEFT JOIN institution i ON i.id = u.institution_id
-        WHERE uid = %s;
+        WHERE uid = %(uid)s;
     """
-    registry = conn.select(SCRIPT_SQL, [uid])
-
+    registry = conn.select(SCRIPT_SQL, {"uid": uid})
     data_frame = pd.DataFrame(
         registry,
         columns=[
@@ -157,7 +156,7 @@ def select_user(uid):
             "uge_nom",
         ],
     )
-
+    print(data_frame)
     data_frame = data_frame.merge(users_roles(), on="user_id", how="left")
 
     return data_frame.to_dict(orient="records")
