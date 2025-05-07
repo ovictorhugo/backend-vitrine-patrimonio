@@ -9,18 +9,16 @@ rest_institution = Blueprint("rest_institution", __name__)
 def insert():
     institution = request.get_json()
     uge_nom = institution.get("uge_nom")
-    uge_code = institution.get("uge_code")
+    uge_cod = institution.get("uge_cod")
 
-    if not uge_nom or not uge_code:
-        return jsonify(
-            {"message": "Os campos uge_nom e uge_code são obrigatórios"}
-        ), 400
+    if not uge_nom or not uge_cod:
+        return jsonify({"message": "Os campos uge_nom e uge_cod são obrigatórios"}), 400
 
     SCRIPT_SQL = """
-    INSERT INTO institution (uge_nom, uge_code) VALUES (%s, %s);
+    INSERT INTO institution (uge_nom, uge_cod) VALUES (%s, %s);
     """
 
-    Connection().exec(SCRIPT_SQL, (uge_nom, uge_code))
+    Connection().exec(SCRIPT_SQL, (uge_nom, uge_cod))
 
     return jsonify({"message": "Formulário inserido com sucesso"}), 201
 
@@ -37,20 +35,18 @@ def get_all():
 def update(id):
     data = request.get_json()
     uge_nom = data.get("uge_nom")
-    uge_code = data.get("uge_code")
+    uge_cod = data.get("uge_cod")
 
-    if not uge_nom or not uge_code:
-        return jsonify(
-            {"message": "Os campos uge_nom e uge_code são obrigatórios"}
-        ), 400
+    if not uge_nom or not uge_cod:
+        return jsonify({"message": "Os campos uge_nom e uge_cod são obrigatórios"}), 400
 
     SCRIPT_SQL = """
     UPDATE institution
-    SET uge_nom = %s, uge_code = %s
+    SET uge_nom = %s, uge_cod = %s
     WHERE id = %s;
     """
 
-    Connection().exec(SCRIPT_SQL, (uge_nom, uge_code, str(id)))
+    Connection().exec(SCRIPT_SQL, (uge_nom, uge_cod, str(id)))
     return jsonify({"message": "Instituição atualizada com sucesso"}), 200
 
 

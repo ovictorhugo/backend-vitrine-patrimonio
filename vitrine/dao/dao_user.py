@@ -102,8 +102,8 @@ def get_photo_url(user_id):
 
 def create_user(User: UserModel):
     SCRIPT_SQL = """
-        INSERT INTO users (display_name, email, uid, photo_url, provider, matricula, telephone, ramal)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+        INSERT INTO users (display_name, email, uid, photo_url, provider, matricula, telephone, ramal, institution_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
         """
     conn.exec(
         SCRIPT_SQL,
@@ -116,6 +116,7 @@ def create_user(User: UserModel):
             User.matricula or str(),
             User.telephone or str(),
             User.ramal or str(),
+            User.institution_id or str(),
         ],
     )
 
