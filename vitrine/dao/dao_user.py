@@ -475,7 +475,7 @@ def consultar_favoritos(tipo, user_id):
         filtro_user = "AND f.user_id = %(user_id)s"
 
     SCRIPT_SQL = f"""
-        SELECT fp.patrimonio_id, fp.num_patrimonio, fp.loc, fp.observacao, 
+        SELECT DISTINCT fp.patrimonio_id, fp.num_patrimonio, fp.loc, fp.observacao, 
             fp.matricula, fp.user_id, fp.vitrine, fp.condicao, fp.imagens, 
             fp.desfazimento, fp.verificado, fp.num_verificacao, fp.codigo_atm, 
             fp.situacao, fp.material, COALESCE(ff.qtd_de_favorito, 0), fp.created_at,

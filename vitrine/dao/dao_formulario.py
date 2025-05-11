@@ -26,7 +26,6 @@ def delete_patrimonio(patrimonio_id):
 
 
 def update_patrimonio(form):
-    print(form)
     updates = []
     if "user_id" in form:
         SCRIPT_SQL = f"SELECT matricula FROM users WHERE user_id = '{form['user_id']}'"
@@ -129,7 +128,17 @@ def buscar_patrimonio(
             """
 
     SCRIPT_SQL = f"""
-        SELECT fp.patrimonio_id, fp.num_patrimonio, fp.loc, fp.observacao, fp.user_id, fp.vitrine, fp.condicao, fp.imagens, fp.desfazimento, fp.verificado, fp.num_verificacao, fp.codigo_atm, fp.situacao, fp.material, p.bem_cod, p.bem_dgv, p.bem_num_atm, p.csv_cod, p.bem_serie, p.bem_sta, p.bem_val, p.tre_cod, p.bem_dsc_com, p.uge_cod, p.uge_nom, p.org_cod, p.uge_siaf, p.org_nom, p.set_cod, p.set_nom, p.loc_cod, p.loc_nom, p.ite_mar, p.ite_mod, p.tgr_cod, p.grp_cod, p.ele_cod, p.sbe_cod, p.mat_cod, p.mat_nom, p.pes_cod, p.pes_nome, u.display_name, u.email, u.matricula, u.phone, f.qtd_de_favorito, fp.estado_transferencia, fp.created_at 
+        SELECT fp.patrimonio_id, fp.num_patrimonio, fp.loc, fp.observacao, 
+            fp.user_id, fp.vitrine, fp.condicao, fp.imagens, fp.desfazimento, 
+            fp.verificado, fp.num_verificacao, fp.codigo_atm, fp.situacao, 
+            fp.material, p.bem_cod, p.bem_dgv, p.bem_num_atm, p.csv_cod, 
+            p.bem_serie, p.bem_sta, p.bem_val, p.tre_cod, p.bem_dsc_com, 
+            p.uge_cod, p.uge_nom, p.org_cod, p.uge_siaf, p.org_nom, p.set_cod, 
+            p.set_nom, p.loc_cod, p.loc_nom, p.ite_mar, p.ite_mod, p.tgr_cod, 
+            p.grp_cod, p.ele_cod, p.sbe_cod, p.mat_cod, p.mat_nom, p.pes_cod, 
+            p.pes_nome, u.display_name, u.email, u.matricula, u.phone, 
+            f.qtd_de_favorito, fp.estado_transferencia, fp.created_at,
+            u.ramal, u.matricula, u.telephone
         FROM public.formulario_patrimonio AS fp 
         LEFT JOIN users u ON u.user_id = fp.user_id 
         LEFT JOIN patrimonio p ON fp.num_patrimonio = p.bem_cod 
@@ -143,7 +152,6 @@ def buscar_patrimonio(
             {filter_desfazimento}
             {filter_verificado};
             """
-    print(SCRIPT_SQL)
     result = conn.select(SCRIPT_SQL, params)
     dataframe = pd.DataFrame(
         result,
@@ -197,6 +205,9 @@ def buscar_patrimonio(
             "qtd_de_favorito",
             "estado_transferencia",
             "created_at",
+            "ramal",
+            "matricula",
+            "telephone",
         ],
     )
     columns_to_clean = [
