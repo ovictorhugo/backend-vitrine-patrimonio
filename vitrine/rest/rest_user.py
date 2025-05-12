@@ -156,8 +156,11 @@ def view_roles():
 
 @rest_user.route("/s/role", methods=["PUT"])
 def update_role():
-    role = request.get_json()
-    dao_user.update_role(role)
+    try:
+        role = request.get_json()
+        dao_user.update_role(role)
+    except Exception as E:
+        return jsonify(E), HTTPStatus.BAD_REQUEST
     return jsonify("OK"), HTTPStatus.CREATED
 
 
