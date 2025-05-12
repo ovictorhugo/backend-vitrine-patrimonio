@@ -68,6 +68,7 @@ class Connection:
         except (Exception, psycopg2.DatabaseError) as e:
             connection.rollback()
             print(f"[Erro]\n\n{e}")
+            raise psycopg2.errors.UniqueViolation
         finally:
             self.__close(connection, cursor)
 
