@@ -1,0 +1,45 @@
+[project]
+name = "vitrine"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "gmcosta",email = "geu_costa@outlook.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13,<4.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 79
+extend-exclude = ['migrations']
+
+[tool.ruff.lint]
+preview = true
+select = ['I', 'F', 'E', 'W', 'PL', 'PT']
+
+[tool.ruff.format]
+preview = true
+quote-style = 'single'
+
+[tool.pytest.ini_options]
+pythonpath = "."
+addopts = '-p no:warnings'
+
+[tool.taskipy.tasks]
+format = 'ruff check --fix; ruff format'
+run = 'fastapi dev vitrine/app.py'
+test = 'pytest -s -x --cov=vitrine -vv'
+cov = 'coverage html'
+
+[tool.poetry.dependencies]
+fastapi = {extras = ["standard"], version = "^0.116.1"}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+pytest-cov = "^6.2.1"
+taskipy = "^1.14.1"
+ruff = "^0.12.5"
+
