@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from vitrine import service
 from vitrine.database import get_session
 from vitrine.models import Agency, User
 from vitrine.schemas import (
@@ -66,7 +67,8 @@ async def read_agency(
     query = select(Agency).where(Agency.deleted_at.is_(None))
 
     if filters.q:
-        ts_query = func.plainto_tsquery('portuguese', func.unaccent(filters.q))
+        tx = service.clean_search(filters.q)
+        ts_query = func.plainto_tsquery('portuguese', tx)
         query = query.where(Agency.tsv.op('@@')(ts_query))
 
     query = query.offset(filters.offset).limit(filters.limit)

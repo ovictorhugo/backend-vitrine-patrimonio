@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import polars as pl
 from fastapi import Depends, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
@@ -28,6 +28,12 @@ from vitrine.schemas import (
 )
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+def clean_search(tx):
+    return func.regexp_replace(
+        func.lower(func.unaccent(tx)), '[^a-z0-9\\s]+', ' ', 'g'
+    )
 
 
 def normalize_dataframe(dataframe: pl.DataFrame):

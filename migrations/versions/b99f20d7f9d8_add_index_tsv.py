@@ -25,7 +25,7 @@ TABLE_NAME = 'agencys'
 
 
 def create_trigger_function_sql() -> str:
-    columns_to_vector = " || ' ' || ".join([f"lower(unaccent(coalesce(NEW.{col}, '')))" for col in SEARCHABLE_COLUMNS])
+    columns_to_vector = " || ' ' || ".join([f"regexp_replace(lower(unaccent(coalesce(NEW.{col}, ''))), '[^a-z0-9\\s]+', ' ', 'g')" for col in SEARCHABLE_COLUMNS])
     return f"""
         CREATE OR REPLACE FUNCTION {TRIGGER_FUNCTION_NAME}() RETURNS trigger AS $$
         BEGIN
@@ -63,7 +63,7 @@ def upgrade() -> None:
     op.execute(create_trigger_function_sql())
     op.execute(create_trigger_sql())
 
-    columns_to_vector_update = " || ' ' || ".join([f"lower(unaccent(coalesce({col}, '')))" for col in SEARCHABLE_COLUMNS])
+    columns_to_vector_update = " || ' ' || ".join([f"regexp_replace(lower(unaccent(coalesce({col}, ''))), '[^a-z0-9\\s]+', ' ', 'g')" for col in SEARCHABLE_COLUMNS])
     op.execute(
         f"UPDATE {TABLE_NAME} SET tsv = to_tsvector('portuguese', {columns_to_vector_update});"
     )
