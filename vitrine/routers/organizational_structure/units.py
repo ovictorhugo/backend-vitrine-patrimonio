@@ -4,13 +4,13 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
 from vitrine.models import Unit, User
 from vitrine.schemas import (
-    FilterPage,
+    FilterUnit,
     Message,
     UnitList,
     UnitPublic,
@@ -60,15 +60,20 @@ async def create_unit(
 
 @router.get('/', response_model=UnitList)
 async def read_units(
-    session: Session, filter_page: Annotated[FilterPage, Depends()]
+    session: Session,
+    filters: FilterUnit = Depends(),
 ):
-    query = await session.scalars(
-        select(Unit)
-        .where(Unit.deleted_at.is_(None))
-        .offset(filter_page.offset)
-        .limit(filter_page.limit)
-    )
-    units = query.all()
+    query = select(Unit).where(Unit.deleted_at.is_(None))
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(Unit.tsv.op('@@')(ts_query))
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    units = result.all()
 
     return {'units': units}
 

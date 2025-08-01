@@ -69,3 +69,21 @@ async def test_delete_location(
     # Verifica se a localização foi realmente "deletada" (soft delete)
     response_get = client.get('/locations')
     assert response_get.json() == {'locations': []}
+
+
+@pytest.mark.asyncio
+async def test_read_locations_with_text_search(client, create_location):
+    await create_location(
+        location_name='Prateleira A-10', location_code='PA10'
+    )
+    await create_location(location_name='Galpão B-20', location_code='GB20')
+    await create_location(location_name='Armário C-30', location_code='AC30')
+
+    response = client.get('/locations')
+    assert len(response.json()['locations']) == 3
+
+    response = client.get('/locations?q=Galpão')
+    assert response.status_code == HTTPStatus.OK
+    locations = response.json()['locations']
+    assert len(locations) == 1
+    assert locations[0]['location_name'] == 'Galpão B-20'

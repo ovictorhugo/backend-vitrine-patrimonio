@@ -48,3 +48,18 @@ async def test_delete_agency(client, create_agency, create_user, create_token):
     )
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'message': 'Agency deactivated'}
+
+
+@pytest.mark.asyncio
+async def test_read_agencies_with_text_search(client, create_agency):
+    await create_agency(agency_name='Agência Central', agency_code='CENTRAL')
+    await create_agency(agency_name='Agência Norte', agency_code='NORTE')
+    await create_agency(agency_name='Agência Sul', agency_code='SUL')
+
+    response = client.get('/agencies')
+    assert len(response.json()['agencies']) == 3
+    response = client.get('/agencies?q=Central')
+    assert response.status_code == HTTPStatus.OK
+    agencies = response.json()['agencies']
+    assert len(agencies) == 1
+    assert agencies[0]['agency_name'] == 'Agência Central'

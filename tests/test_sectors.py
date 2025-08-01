@@ -61,3 +61,19 @@ async def test_delete_sector(client, create_sector, create_user, create_token):
 
     response_get = client.get('/sectors')
     assert response_get.json() == {'sectors': []}
+
+
+@pytest.mark.asyncio
+async def test_read_sectors_with_text_search(client, create_sector):
+    await create_sector(sector_name='Setor de TI', sector_code='TI01')
+    await create_sector(sector_name='Setor de RH', sector_code='RH02')
+    await create_sector(sector_name='Setor Contábil', sector_code='CONT03')
+
+    response = client.get('/sectors')
+    assert len(response.json()['sectors']) == 3
+
+    response = client.get('/sectors?q=Contábil')
+    assert response.status_code == HTTPStatus.OK
+    sectors = response.json()['sectors']
+    assert len(sectors) == 1
+    assert sectors[0]['sector_name'] == 'Setor Contábil'

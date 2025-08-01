@@ -1,18 +1,18 @@
-"""add_collumn_tsv
+"""init
 
-Revision ID: de1bd630c1b1
+Revision ID: 682a368556d5
 Revises: 
-Create Date: 2025-07-31 23:12:13.226789
+Create Date: 2025-08-01 10:19:10.908747
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+
 
 # revision identifiers, used by Alembic.
-revision: str = 'de1bd630c1b1'
+revision: str = '682a368556d5'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -51,7 +51,6 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.Column('deleted_at', sa.DateTime(), nullable=True),
-    sa.Column('tsv', postgresql.TSVECTOR(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )

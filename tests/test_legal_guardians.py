@@ -27,12 +27,11 @@ async def test_create_legal_guardian(client, create_user, create_token):
     data = response.json()
     assert data['legal_guardians_name'] == 'João da Silva'
     assert data['legal_guardians_code'] == 'JS001'
-    assert 'id' in data and uuid.UUID(data['id'])
+    assert uuid.UUID(data['id'])
 
 
 @pytest.mark.asyncio
 async def test_read_legal_guardians_empty(client):
-    """Testa a listagem quando não há responsáveis legais cadastrados."""
     response = client.get('/legal-guardians')
 
     assert response.status_code == HTTPStatus.OK
@@ -58,7 +57,6 @@ async def test_read_legal_guardians_with_guardian(
 async def test_delete_legal_guardian(
     client, create_legal_guardian, create_user, create_token
 ):
-    """Testa a desativação (soft delete) de um responsável legal."""
     user = await create_user()
     token = create_token(user)
     guardian = await create_legal_guardian()
@@ -73,6 +71,29 @@ async def test_delete_legal_guardian(
         'message': 'Legal guardian deactivated successfully'
     }
 
-    # Verifica se o responsável foi realmente "deletado" (soft delete)
     response_get = client.get('/legal-guardians')
     assert response_get.json() == {'legal_guardians': []}
+
+
+@pytest.mark.asyncio
+async def test_read_legal_guardians_with_text_search(
+    client, create_legal_guardian
+):
+    await create_legal_guardian(
+        legal_guardians_name='João da Silva', legal_guardians_code='JS001'
+    )
+    await create_legal_guardian(
+        legal_guardians_name='Maria Oliveira', legal_guardians_code='MO002'
+    )
+    await create_legal_guardian(
+        legal_guardians_name='Carlos Pereira', legal_guardians_code='CP003'
+    )
+
+    response = client.get('/legal-guardians')
+    assert len(response.json()['legal_guardians']) == 3
+
+    response = client.get('/legal-guardians?q=Maria')
+    assert response.status_code == HTTPStatus.OK
+    legal_guardians = response.json()['legal_guardians']
+    assert len(legal_guardians) == 1
+    assert legal_guardians[0]['legal_guardians_name'] == 'Maria Oliveira'

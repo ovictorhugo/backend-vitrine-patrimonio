@@ -4,13 +4,13 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
 from vitrine.models import LegalGuardian, User
 from vitrine.schemas import (
-    FilterPage,
+    FilterLegalGuardian,
     LegalGuardianList,
     LegalGuardianPublic,
     LegalGuardianSchema,
@@ -68,16 +68,19 @@ async def create_legal_guardian(
 
 @router.get('/', response_model=LegalGuardianList)
 async def read_legal_guardians(
-    session: Session, filter_page: Annotated[FilterPage, Depends()]
+    session: Session, filters: Annotated[FilterLegalGuardian, Depends()]
 ):
-    """Lista todos os responsáveis legais ativos com paginação."""
-    query = await session.scalars(
-        select(LegalGuardian)
-        .where(LegalGuardian.deleted_at.is_(None))
-        .offset(filter_page.offset)
-        .limit(filter_page.limit)
-    )
-    legal_guardians = query.all()
+    query = select(LegalGuardian).where(LegalGuardian.deleted_at.is_(None))
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(LegalGuardian.tsv.op('@@')(ts_query))
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    legal_guardians = result.all()
 
     return {'legal_guardians': legal_guardians}
 

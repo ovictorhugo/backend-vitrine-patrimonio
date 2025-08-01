@@ -3,7 +3,14 @@ from datetime import datetime
 from enum import Enum as PythonEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, ForeignKey, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    Computed,
+    ForeignKey,
+    Index,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
@@ -102,7 +109,18 @@ class Agency:
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
     )
-    tsv: Mapped[TSVECTOR] = mapped_column(TSVECTOR, init=False, nullable=True)
+
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('portuguese', coalesce(agency_name, '') || ' ' || coalesce(agency_code, ''))",  # noqa: E501
+            persisted=True,
+        ),
+        init=False,
+        index=False,
+    )
+
+    __table_args__ = (Index('ix_agencys_tsv', tsv, postgresql_using='gin'),)
 
 
 @table_registry.mapped_as_dataclass
@@ -128,6 +146,18 @@ class Unit:
         init=False, nullable=True
     )
 
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('portuguese', coalesce(unit_name, '') || ' ' || coalesce(unit_code, '') || ' ' || coalesce(unit_siaf, ''))",
+            persisted=True,
+        ),
+        init=False,
+        index=False,
+    )
+
+    __table_args__ = (Index('ix_units_tsv', tsv, postgresql_using='gin'),)
+
 
 @table_registry.mapped_as_dataclass
 class Sector:
@@ -151,6 +181,18 @@ class Sector:
         init=False, nullable=True
     )
 
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('portuguese', coalesce(sector_name, '') || ' ' || coalesce(sector_code, ''))",
+            persisted=True,
+        ),
+        init=False,
+        index=False,
+    )
+
+    __table_args__ = (Index('ix_sectors_tsv', tsv, postgresql_using='gin'),)
+
 
 @table_registry.mapped_as_dataclass
 class Location:
@@ -158,7 +200,6 @@ class Location:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-
     location_code: Mapped[str] = mapped_column(nullable=False)
     location_name: Mapped[str] = mapped_column(nullable=False)
 
@@ -175,6 +216,18 @@ class Location:
         init=False, nullable=True
     )
 
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('portuguese', coalesce(location_name, '') || ' ' || coalesce(location_code, ''))",
+            persisted=True,
+        ),
+        init=False,
+        index=False,
+    )
+
+    __table_args__ = (Index('ix_locations_tsv', tsv, postgresql_using='gin'),)
+
 
 @table_registry.mapped_as_dataclass
 class LegalGuardian:
@@ -182,7 +235,6 @@ class LegalGuardian:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-
     legal_guardians_code: Mapped[str] = mapped_column(nullable=False)
     legal_guardians_name: Mapped[str] = mapped_column(nullable=False)
 
@@ -199,6 +251,20 @@ class LegalGuardian:
         init=False, nullable=True
     )
 
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('portuguese', coalesce(legal_guardians_name, '') || ' ' || coalesce(legal_guardians_code, ''))",
+            persisted=True,
+        ),
+        init=False,
+        index=False,
+    )
+
+    __table_args__ = (
+        Index('ix_legal_guardians_tsv', tsv, postgresql_using='gin'),
+    )
+
 
 @table_registry.mapped_as_dataclass
 class Material:
@@ -206,7 +272,6 @@ class Material:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-
     material_code: Mapped[str] = mapped_column(nullable=False)
     material_name: Mapped[str] = mapped_column(nullable=False)
 
@@ -222,6 +287,18 @@ class Material:
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
     )
+
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('portuguese', coalesce(material_name, '') || ' ' || coalesce(material_code, ''))",
+            persisted=True,
+        ),
+        init=False,
+        index=False,
+    )
+
+    __table_args__ = (Index('ix_materials_tsv', tsv, postgresql_using='gin'),)
 
 
 @table_registry.mapped_as_dataclass

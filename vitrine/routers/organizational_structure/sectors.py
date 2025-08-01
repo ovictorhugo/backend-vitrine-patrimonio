@@ -4,13 +4,13 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
 from vitrine.models import Sector, User
 from vitrine.schemas import (
-    FilterPage,
+    FilterSector,
     Message,
     SectorList,
     SectorPublic,
@@ -59,15 +59,19 @@ async def create_sector(
 
 @router.get('/', response_model=SectorList)
 async def read_sectors(
-    session: Session, filter_page: Annotated[FilterPage, Depends()]
+    session: Session, filters: Annotated[FilterSector, Depends()]
 ):
-    query = await session.scalars(
-        select(Sector)
-        .where(Sector.deleted_at.is_(None))
-        .offset(filter_page.offset)
-        .limit(filter_page.limit)
-    )
-    sectors = query.all()
+    query = select(Sector).where(Sector.deleted_at.is_(None))
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(Sector.tsv.op('@@')(ts_query))
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    sectors = result.all()
 
     return {'sectors': sectors}
 

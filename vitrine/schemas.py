@@ -82,6 +82,10 @@ class UnitList(BaseModel):
     units: list[UnitPublic]
 
 
+class FilterUnit(FilterPage):
+    q: str | None = Field(default=None)
+
+
 class SectorSchema(BaseModel):
     sector_name: str = Field(..., validation_alias='set_cod')
     sector_code: str = Field(..., validation_alias='set_nom')
@@ -96,6 +100,10 @@ class SectorPublic(SectorSchema):
 
 class SectorList(BaseModel):
     sectors: list[SectorPublic]
+
+
+class FilterSector(FilterPage):
+    q: str | None = Field(default=None)
 
 
 class LocationSchema(BaseModel):
@@ -114,6 +122,10 @@ class LocationList(BaseModel):
     locations: list[LocationPublic]
 
 
+class FilterLocation(FilterPage):
+    q: str | None = Field(default=None)
+
+
 class LegalGuardianSchema(BaseModel):
     legal_guardians_code: str = Field(..., validation_alias='pes_cod')
     legal_guardians_name: str = Field(..., validation_alias='pes_nome')
@@ -130,6 +142,10 @@ class LegalGuardianList(BaseModel):
     legal_guardians: list[LegalGuardianPublic]
 
 
+class FilterLegalGuardian(FilterPage):
+    q: str | None = Field(default=None)
+
+
 class MaterialSchema(BaseModel):
     material_code: str | None = Field(..., validation_alias='mat_cod')
     material_name: str | None = Field(..., validation_alias='mat_nom')
@@ -144,6 +160,10 @@ class MaterialPublic(MaterialSchema):
 
 class MaterialList(BaseModel):
     materials: list[MaterialPublic]
+
+
+class FilterMaterial(FilterPage):
+    q: str | None = Field(default=None)
 
 
 class AssetSchema(BaseModel):

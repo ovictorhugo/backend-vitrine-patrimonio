@@ -68,3 +68,25 @@ async def test_delete_material(
 
     response_get = client.get('/materials')
     assert response_get.json() == {'materials': []}
+
+
+@pytest.mark.asyncio
+async def test_read_materials_with_text_search(client, create_material):
+    await create_material(
+        material_name='Parafuso Sextavado', material_code='PAR-SEX-01'
+    )
+    await create_material(
+        material_name='Tinta Branca', material_code='TIN-BRA-02'
+    )
+    await create_material(
+        material_name='Serra Circular', material_code='SER-CIR-03'
+    )
+
+    response = client.get('/materials')
+    assert len(response.json()['materials']) == 3
+
+    response = client.get('/materials?q=Sextavado')
+    assert response.status_code == HTTPStatus.OK
+    materials = response.json()['materials']
+    assert len(materials) == 1
+    assert materials[0]['material_name'] == 'Parafuso Sextavado'

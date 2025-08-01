@@ -4,13 +4,13 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
 from vitrine.models import Material, User
 from vitrine.schemas import (
-    FilterPage,
+    FilterMaterial,
     MaterialList,
     MaterialPublic,
     MaterialSchema,
@@ -62,16 +62,19 @@ async def create_material(
 
 @router.get('/', response_model=MaterialList)
 async def read_materials(
-    session: Session, filter_page: Annotated[FilterPage, Depends()]
+    session: Session, filters: Annotated[FilterMaterial, Depends()]
 ):
-    """Lista todos os materiais ativos com paginação."""
-    query = await session.scalars(
-        select(Material)
-        .where(Material.deleted_at.is_(None))
-        .offset(filter_page.offset)
-        .limit(filter_page.limit)
-    )
-    materials = query.all()
+    query = select(Material).where(Material.deleted_at.is_(None))
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(Material.tsv.op('@@')(ts_query))
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    materials = result.all()
 
     return {'materials': materials}
 

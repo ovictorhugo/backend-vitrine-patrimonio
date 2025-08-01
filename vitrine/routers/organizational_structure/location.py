@@ -4,13 +4,13 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
 from vitrine.models import Location, User
 from vitrine.schemas import (
-    FilterPage,
+    FilterLocation,
     LocationList,
     LocationPublic,
     LocationSchema,
@@ -61,16 +61,19 @@ async def create_location(
 
 @router.get('/', response_model=LocationList)
 async def read_locations(
-    session: Session, filter_page: Annotated[FilterPage, Depends()]
+    session: Session, filters: Annotated[FilterLocation, Depends()]
 ):
-    """Lista todas as localizações ativas com paginação."""
-    query = await session.scalars(
-        select(Location)
-        .where(Location.deleted_at.is_(None))
-        .offset(filter_page.offset)
-        .limit(filter_page.limit)
-    )
-    locations = query.all()
+    query = select(Location).where(Location.deleted_at.is_(None))
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(Location.tsv.op('@@')(ts_query))
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    locations = result.all()
 
     return {'locations': locations}
 

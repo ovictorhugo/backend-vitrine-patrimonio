@@ -66,3 +66,29 @@ async def test_delete_unit(client, create_unit, create_user, create_token):
 
     response_get = client.get('/units')
     assert response_get.json() == {'units': []}
+
+
+@pytest.mark.asyncio
+async def test_read_units_with_text_search(client, create_unit):
+    await create_unit(
+        unit_name='Unidade Almoxarifado', unit_code='ALMOX', unit_siaf='123'
+    )
+    await create_unit(
+        unit_name='Unidade Compras', unit_code='COMP', unit_siaf='456'
+    )
+    await create_unit(
+        unit_name='Unidade Financeiro', unit_code='FIN', unit_siaf='789'
+    )
+
+    response = client.get('/units')
+    assert len(response.json()['units']) == 3
+
+    response = client.get('/units?q=Almoxarifado')
+    assert response.status_code == HTTPStatus.OK
+    units = response.json()['units']
+    assert len(units) == 1
+    assert units[0]['unit_name'] == 'Unidade Almoxarifado'
+
+    response = client.get('/units?q=456')
+    assert len(response.json()['units']) == 1
+    assert response.json()['units'][0]['unit_code'] == 'COMP'
