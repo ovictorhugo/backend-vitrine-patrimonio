@@ -1,0 +1,29 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: vitrine_db
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: vitrine
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vitrine
+    entrypoint: ./entrypoint.sh
+    container_name: vitrine_api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/vitrine
+
+volumes:
+  dbdata:

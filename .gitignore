@@ -9,6 +9,9 @@ __pycache__/
 
 # C extensions
 *.so
+*.xls
+*.xlsx
+
 
 # Distribution / packaging
 .Python
@@ -177,3 +180,4 @@ pyrightconfig.json
 
 # Generated using ignr.py - github.com/Antrikshy/ignr.py
 
+database.db

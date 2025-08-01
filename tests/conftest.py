@@ -1,0 +1,370 @@
+from contextlib import contextmanager
+from datetime import datetime
+
+import pytest
+import pytest_asyncio
+from faker import Faker
+from fastapi.testclient import TestClient
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from testcontainers.postgres import PostgresContainer
+
+from tests.factories import (
+    AgencyFactory,
+    AssetFactory,
+    CatalogFactory,
+    CatalogWorkFlowFactory,
+    InventoryFactory,
+    LegalGuardiansFactory,
+    LocationFactory,
+    MaterialFactory,
+    SectorFactory,
+    UnitFactory,
+    UserFactory,
+)
+from vitrine.app import app
+from vitrine.database import get_session
+from vitrine.models import (
+    Catalog,
+    CatalogWorkFlow,
+    User,
+    table_registry,
+)
+from vitrine.security import get_password_hash
+
+fake = Faker('pt_BR')
+
+
+@pytest.fixture
+def client(session):
+    def get_session_override():
+        return session
+
+    with TestClient(app) as client:
+        app.dependency_overrides[get_session] = get_session_override
+        yield client
+
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope='session')
+def engine():
+    with PostgresContainer('postgres:16', driver='psycopg') as postgres:
+        _engine = create_async_engine(postgres.get_connection_url())
+        yield _engine
+
+
+@pytest_asyncio.fixture
+async def session(engine):
+    async with engine.begin() as conn:
+        await conn.run_sync(table_registry.metadata.create_all)
+
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        yield session
+
+    async with engine.begin() as conn:
+        await conn.run_sync(table_registry.metadata.drop_all)
+
+
+@contextmanager
+def _mock_db_time(*, model, time=datetime(2024, 1, 1)):
+    def fake_insert_time_hook(mapper, connection, target):
+        if hasattr(target, 'created_at'):
+            target.created_at = time
+        if hasattr(target, 'updated_at'):
+            target.updated_at = time
+
+    def fake_update_time_hook(mapper, connection, target):
+        if hasattr(target, 'updated_at'):
+            target.updated_at = time
+
+    def fake_delete_time_hook(mapper, connection, target):
+        if hasattr(target, 'deleted_at'):
+            target.deleted_at = time
+
+    event.listen(model, 'before_insert', fake_insert_time_hook)
+    event.listen(model, 'before_update', fake_update_time_hook)
+    event.listen(model, 'before_update', fake_delete_time_hook)
+
+    yield time
+
+    event.remove(model, 'before_insert', fake_insert_time_hook)
+    event.remove(model, 'before_update', fake_update_time_hook)
+
+
+@pytest.fixture
+def mock_db_time():
+    return _mock_db_time
+
+
+@pytest_asyncio.fixture
+def create_location(session, create_user):
+    async def _create_location(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+        location = LocationFactory.build(**kwargs)
+
+        session.add(location)
+        await session.commit()
+        await session.refresh(location)
+
+        return location
+
+    return _create_location
+
+
+@pytest_asyncio.fixture
+def create_agency(session, create_user):
+    async def _create_agency(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        agency = AgencyFactory.build(**kwargs)
+
+        session.add(agency)
+        await session.commit()
+        await session.refresh(agency)
+
+        return agency
+
+    return _create_agency
+
+
+@pytest_asyncio.fixture
+def create_unit(session, create_user):
+    async def _create_unit(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+        unit = UnitFactory.build(**kwargs)
+
+        session.add(unit)
+        await session.commit()
+        await session.refresh(unit)
+
+        return unit
+
+    return _create_unit
+
+
+@pytest_asyncio.fixture
+def create_sector(session, create_user):
+    async def _create_sector(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        sector = SectorFactory.build(**kwargs)
+
+        session.add(sector)
+        await session.commit()
+        await session.refresh(sector)
+
+        return sector
+
+    return _create_sector
+
+
+@pytest_asyncio.fixture
+def create_legal_guardian(session, create_user):
+    async def _create_legal_guardian(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        legal_guardian = LegalGuardiansFactory.build(**kwargs)
+
+        session.add(legal_guardian)
+        await session.commit()
+        await session.refresh(legal_guardian)
+
+        return legal_guardian
+
+    return _create_legal_guardian
+
+
+@pytest_asyncio.fixture
+def create_material(session, create_user):
+    async def _create_material(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        material = MaterialFactory.build(**kwargs)
+
+        session.add(material)
+        await session.commit()
+        await session.refresh(material)
+
+        return material
+
+    return _create_material
+
+
+@pytest_asyncio.fixture
+def create_user(session):
+    async def _create_user(**kwargs):
+        factory_user = UserFactory.build(**kwargs)
+
+        raw_password = kwargs.get('password', 'testtest')
+        hashed_password = get_password_hash(raw_password)
+
+        user = User(
+            username=factory_user.username,
+            email=factory_user.email,
+            password=hashed_password,
+            provider=factory_user.provider,
+        )
+
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+
+        user.clean_password = raw_password
+
+        return user
+
+    return _create_user
+
+
+@pytest_asyncio.fixture
+def create_asset(
+    session,
+    create_agency,
+    create_unit,
+    create_sector,
+    create_location,
+    create_material,
+    create_legal_guardian,
+):
+    async def _create_asset(**kwargs):
+        if 'agency_id' not in kwargs:
+            agency = await create_agency()
+            kwargs['agency_id'] = agency.id
+        if 'unit_id' not in kwargs:
+            unit = await create_unit()
+            kwargs['unit_id'] = unit.id
+        if 'sector_id' not in kwargs:
+            sector = await create_sector()
+            kwargs['sector_id'] = sector.id
+        if 'location_id' not in kwargs:
+            sector = await create_location()
+            kwargs['location_id'] = sector.id
+        if 'material_id' not in kwargs:
+            sector = await create_material()
+            kwargs['material_id'] = sector.id
+        if 'legal_guardian_id' not in kwargs:
+            sector = await create_legal_guardian()
+            kwargs['legal_guardian_id'] = sector.id
+
+        asset = AssetFactory.build(**kwargs)
+
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+
+        return asset
+
+    return _create_asset
+
+
+@pytest.fixture
+def create_token(client):
+    def _create_token(user):
+        response = client.post(
+            '/auth/token',
+            data={'username': user.email, 'password': user.clean_password},
+        )
+        return response.json()['access_token']
+
+    return _create_token
+
+
+@pytest_asyncio.fixture
+async def access_header(create_token, create_user):
+    header = {'Authorization': f'Bearer {create_token(await create_user())}'}
+    return header
+
+
+@pytest_asyncio.fixture
+def create_catalog_entry(session, create_asset, create_user):
+    async def _create_catalog_entry(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        if 'asset_id' not in kwargs:
+            asset = await create_asset()
+            kwargs['asset_id'] = asset.id
+
+        factory_catalog = CatalogFactory.build(**kwargs)
+
+        catalog_entry = Catalog(
+            asset_id=factory_catalog.asset_id,
+            user_id=factory_catalog.user_id,
+            situation=factory_catalog.situation,
+            conservation_status=factory_catalog.conservation_status,
+            description=factory_catalog.description,
+        )
+
+        session.add(catalog_entry)
+        await session.commit()
+        await session.refresh(catalog_entry)
+
+        return catalog_entry
+
+    return _create_catalog_entry
+
+
+@pytest_asyncio.fixture
+def create_workflow_step(session, create_catalog_entry, create_user):
+    async def _create_workflow_step(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        if 'catalog_id' not in kwargs:
+            catalog_entry = await create_catalog_entry()
+            kwargs['catalog_id'] = catalog_entry.id
+
+        factory_workflow = CatalogWorkFlowFactory.build(**kwargs)
+
+        workflow_step = CatalogWorkFlow(
+            catalog_id=factory_workflow.catalog_id,
+            user_id=factory_workflow.user_id,
+            workflow_status=factory_workflow.workflow_status,
+            detail=factory_workflow.detail,
+        )
+
+        session.add(workflow_step)
+        await session.commit()
+        await session.refresh(workflow_step)
+
+        return workflow_step
+
+    return _create_workflow_step
+
+
+# NOVO: Fixture para criar Inventories
+@pytest_asyncio.fixture
+def create_inventory(session, create_user, create_location):
+    async def _create_inventory(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        if 'location_id' not in kwargs:
+            location = await create_location()
+            kwargs['location_id'] = location.id
+
+        inventory = InventoryFactory.build(**kwargs)
+
+        session.add(inventory)
+        await session.commit()
+        await session.refresh(inventory)
+
+        return inventory
+
+    return _create_inventory
