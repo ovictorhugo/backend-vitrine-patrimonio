@@ -95,7 +95,7 @@ class Agency:
         init=False, primary_key=True, default=uuid.uuid4
     )
     agency_name: Mapped[str] = mapped_column(nullable=False)
-    agency_code: Mapped[str] = mapped_column(nullable=False)
+    agency_code: Mapped[str] = mapped_column(nullable=False, unique=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped['User'] = relationship(init=False, lazy='joined')
@@ -156,7 +156,10 @@ class Unit:
         index=False,
     )
 
-    __table_args__ = (Index('ix_units_tsv', tsv, postgresql_using='gin'),)
+    __table_args__ = (
+        Index('ix_units_tsv', tsv, postgresql_using='gin'),
+        UniqueConstraint('unit_name', 'unit_siaf', name='uq_unit'),
+    )
 
 
 @table_registry.mapped_as_dataclass
@@ -165,7 +168,7 @@ class Sector:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-    sector_name: Mapped[str] = mapped_column(nullable=False)
+    sector_name: Mapped[str] = mapped_column(nullable=False, unique=True)
     sector_code: Mapped[str] = mapped_column(nullable=False)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
@@ -201,7 +204,7 @@ class Location:
         init=False, primary_key=True, default=uuid4
     )
     location_code: Mapped[str] = mapped_column(nullable=False)
-    location_name: Mapped[str] = mapped_column(nullable=False)
+    location_name: Mapped[str] = mapped_column(nullable=False, unique=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped[User] = relationship(init=False, lazy='joined')
@@ -236,7 +239,9 @@ class LegalGuardian:
         init=False, primary_key=True, default=uuid4
     )
     legal_guardians_code: Mapped[str] = mapped_column(nullable=False)
-    legal_guardians_name: Mapped[str] = mapped_column(nullable=False)
+    legal_guardians_name: Mapped[str] = mapped_column(
+        nullable=False, unique=True
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped[User] = relationship(init=False, lazy='joined')
@@ -273,7 +278,7 @@ class Material:
         init=False, primary_key=True, default=uuid4
     )
     material_code: Mapped[str] = mapped_column(nullable=False)
-    material_name: Mapped[str] = mapped_column(nullable=False)
+    material_name: Mapped[str] = mapped_column(nullable=False, unique=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped[User] = relationship(init=False, lazy='joined')
@@ -367,6 +372,23 @@ class Asset:
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
     )
+
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('portuguese', "
+            "coalesce(asset_code, '') || ' ' || "
+            "coalesce(serial_number, '') || ' ' || "
+            "coalesce(asset_description, '') || ' ' || "
+            "coalesce(item_brand, '') || ' ' || "
+            "coalesce(item_model, '') || ' ' || "
+            "coalesce(atm_number, ''))",
+            persisted=True,
+        ),
+        init=False,
+        index=False,
+    )
+    __table_args__ = (Index('ix_assets_tsv', tsv, postgresql_using='gin'),)
 
 
 @table_registry.mapped_as_dataclass

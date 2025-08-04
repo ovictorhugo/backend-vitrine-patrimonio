@@ -151,3 +151,240 @@ async def test_read_assets_with_assets(
         headers={'Authorization': f'Bearer {create_token(user)}'},
     )
     assert response.json() == {'assets': [asset_schema]}
+
+
+@pytest.mark.asyncio
+async def test_search_assets_by_description(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    await create_asset(asset_description='Notebook Dell de alta performance')
+    await create_asset(asset_description='Cadeira de escritório ergonômica')
+
+    response = client.get(
+        '/assets?q=Notebook',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert 'Notebook Dell' in data['assets'][0]['asset_description']
+
+
+@pytest.mark.asyncio
+async def test_search_assets_across_multiple_fields(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    await create_asset(
+        item_brand='Logitech', asset_description='Mouse sem fio'
+    )
+    await create_asset(
+        serial_number='XYZ-987-ABC', asset_description='Monitor 4K'
+    )
+    await create_asset(
+        asset_code='PAT-00123', asset_description='Teclado mecânico'
+    )
+
+    response_brand = client.get(
+        '/assets?q=Logitech', headers={'Authorization': f'Bearer {token}'}
+    )
+    assert len(response_brand.json()['assets']) == 1
+    assert response_brand.json()['assets'][0]['item_brand'] == 'Logitech'
+
+    response_serial = client.get(
+        '/assets?q=XYZ-987', headers={'Authorization': f'Bearer {token}'}
+    )
+    assert len(response_serial.json()['assets']) == 1
+    assert (
+        response_serial.json()['assets'][0]['serial_number'] == 'XYZ-987-ABC'
+    )
+
+    response_code = client.get(
+        '/assets?q=PAT-00123', headers={'Authorization': f'Bearer {token}'}
+    )
+    assert len(response_code.json()['assets']) == 1
+    assert response_code.json()['assets'][0]['asset_code'] == 'PAT-00123'
+
+
+@pytest.mark.asyncio
+async def test_search_assets_no_results(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+    await create_asset(asset_description='Mesa de reunião')
+
+    response = client.get(
+        '/assets?q=inexistente',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {'assets': []}
+
+
+@pytest.mark.asyncio
+async def test_search_assets_with_prefix(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+    await create_asset(asset_description='Notebook Dell Vostro')
+
+    response = client.get(
+        '/assets?q=Note',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert 'Notebook Dell Vostro' in data['assets'][0]['asset_description']
+
+
+@pytest.mark.asyncio
+async def test_filter_assets_by_foreign_key(
+    client, create_user, create_token, create_agency, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    agency_a = await create_agency(agency_name='Agência A')
+    agency_b = await create_agency(agency_name='Agência B')
+    await create_asset(agency_id=agency_a.id)
+    await create_asset(agency_id=agency_b.id)
+
+    response = client.get(
+        f'/assets?agency_id={agency_a.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['agency']['id'] == str(agency_a.id)
+
+
+@pytest.mark.asyncio
+async def test_search_assets_combined_with_fk_filter(
+    client, create_user, create_token, create_agency, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    agency_a = await create_agency(agency_name='TI - Matriz')
+    agency_b = await create_agency(agency_name='RH - Filial')
+
+    await create_asset(asset_description='Notebook i7', agency_id=agency_a.id)
+    await create_asset(
+        asset_description='Cadeira ergonômica', agency_id=agency_a.id
+    )
+    await create_asset(asset_description='Notebook i5', agency_id=agency_b.id)
+
+    response = client.get(
+        f'/assets?q=Notebook&agency_id={agency_a.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    asset_found = data['assets'][0]
+    assert 'Notebook i7' in asset_found['asset_description']
+    assert asset_found['agency']['id'] == str(agency_a.id)
+
+
+@pytest.mark.asyncio
+async def test_filter_assets_by_unit_id(
+    client, create_user, create_token, create_unit, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    unit_A = await create_unit(unit_name='Unidade de TI')
+    unit_B = await create_unit(unit_name='Unidade Administrativa')
+
+    await create_asset(asset_description='Servidor Blade', unit_id=unit_A.id)
+    await create_asset(
+        asset_description='Projetor Multimídia', unit_id=unit_B.id
+    )
+
+    response = client.get(
+        f'/assets?unit_id={unit_A.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['unit']['id'] == str(unit_A.id)
+    assert data['assets'][0]['asset_description'] == 'Servidor Blade'
+
+
+@pytest.mark.asyncio
+async def test_filter_assets_by_sector_id(
+    client, create_user, create_token, create_sector, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    sector_A = await create_sector(sector_name='Setor de Redes')
+    sector_B = await create_sector(sector_name='Setor de Compras')
+
+    await create_asset(
+        asset_description='Switch 24 Portas', sector_id=sector_A.id
+    )
+    await create_asset(
+        asset_description='Arquivo de Aço', sector_id=sector_B.id
+    )
+
+    response = client.get(
+        f'/assets?sector_id={sector_A.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['sector']['id'] == str(sector_A.id)
+    assert data['assets'][0]['asset_description'] == 'Switch 24 Portas'
+
+
+@pytest.mark.asyncio
+async def test_filter_assets_by_material_id(
+    client, create_user, create_token, create_material, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    material_notebook = await create_material(
+        material_name='Notebook Corporativo'
+    )
+    material_monitor = await create_material(
+        material_name='Monitor 24 polegadas'
+    )
+
+    await create_asset(
+        asset_description='Notebook Dell i7', material_id=material_notebook.id
+    )
+    await create_asset(
+        asset_description='Monitor LG Ultrawide',
+        material_id=material_monitor.id,
+    )
+
+    response = client.get(
+        f'/assets?material_id={material_notebook.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['material']['id'] == str(material_notebook.id)
+    assert data['assets'][0]['asset_description'] == 'Notebook Dell i7'

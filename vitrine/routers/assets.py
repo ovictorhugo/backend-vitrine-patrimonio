@@ -3,9 +3,9 @@ from http import HTTPStatus
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine import service
@@ -15,7 +15,7 @@ from vitrine.schemas import (
     AssetList,
     AssetPublic,
     AssetSchema,
-    FilterPage,
+    FilterAsset,
     Message,
 )
 from vitrine.security import get_current_user
@@ -68,16 +68,28 @@ async def create_assets_from_file(
 
 @router.get('/', response_model=AssetList)
 async def read_assets(
-    session: Session,
-    filter_assets: Annotated[FilterPage, Query()],
+    session: Session, filters: Annotated[FilterAsset, Depends()]
 ):
-    query = await session.scalars(
-        select(Asset)
-        .where(Asset.deleted_at.is_(None))
-        .offset(filter_assets.offset)
-        .limit(filter_assets.limit)
-    )
-    assets = query.all()
+    query = select(Asset).where(Asset.deleted_at.is_(None))
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(Asset.tsv.op('@@')(ts_query))
+
+    if filters.agency_id:
+        query = query.where(Asset.agency_id == filters.agency_id)
+    if filters.unit_id:
+        query = query.where(Asset.unit_id == filters.unit_id)
+    if filters.sector_id:
+        query = query.where(Asset.sector_id == filters.sector_id)
+    if filters.material_id:
+        query = query.where(Asset.material_id == filters.material_id)
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    assets = result.all()
+
     return {'assets': assets}
 
 

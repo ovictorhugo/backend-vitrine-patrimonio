@@ -226,6 +226,27 @@ class AssetList(BaseModel):
     assets: List[AssetPublic]
 
 
+class FilterAsset(BaseModel):
+    limit: int = 100
+    offset: int = 0
+    q: Optional[str] = Field(
+        default=None, description='Termo de busca (full-text search)'
+    )
+
+    agency_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID da Agência'
+    )
+    unit_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID da Unidade'
+    )
+    sector_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID do Setor'
+    )
+    material_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID do Material'
+    )
+
+
 class CatalogSchema(BaseModel):
     asset_id: UUID
     situation: AssetSituation
