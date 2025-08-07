@@ -4,9 +4,13 @@ from faker import Faker
 from vitrine.models import (
     Agency,
     Asset,
+    AssetSituation,
     Catalog,
     CatalogWorkFlow,
+    ConservationStatus,
     Inventory,
+    InventoryAsset,
+    InventoryStatus,
     LegalGuardian,
     Location,
     Material,
@@ -15,58 +19,8 @@ from vitrine.models import (
     User,
     WorkFlowStatus,
 )
-from vitrine.schemas import AssetSituation, ConservationStatus
 
 fake = Faker('pt_BR')
-
-
-class LocationFactory(factory.Factory):
-    class Meta:
-        model = Location
-
-    location_name = factory.LazyFunction(fake.street_address)
-    location_code = factory.Sequence(lambda n: f'LOC-{n:04}')
-
-
-class AgencyFactory(factory.Factory):
-    class Meta:
-        model = Agency
-
-    agency_name = factory.LazyFunction(fake.company)
-    agency_code = factory.Sequence(lambda n: f'AGY-{n:03}')
-
-
-class UnitFactory(factory.Factory):
-    class Meta:
-        model = Unit
-
-    unit_name = factory.LazyFunction(fake.bs)
-    unit_code = factory.Sequence(lambda n: f'UNT-{n:04}')
-    unit_siaf = factory.Sequence(lambda n: f'74{n:03}')
-
-
-class SectorFactory(factory.Factory):
-    class Meta:
-        model = Sector
-
-    sector_name = factory.LazyFunction(fake.job)
-    sector_code = factory.Sequence(lambda n: f'SEC-{n:04}')
-
-
-class LegalGuardiansFactory(factory.Factory):
-    class Meta:
-        model = LegalGuardian
-
-    legal_guardians_name = factory.LazyFunction(fake.name)
-    legal_guardians_code = factory.Sequence(lambda n: f'LG-{n:04}')
-
-
-class MaterialFactory(factory.Factory):
-    class Meta:
-        model = Material
-
-    material_name = factory.LazyFunction(fake.word)
-    material_code = factory.Sequence(lambda n: f'MAT-{n:05}')
 
 
 class UserFactory(factory.Factory):
@@ -79,17 +33,67 @@ class UserFactory(factory.Factory):
     provider = 'LOCAL'
 
 
+class AgencyFactory(factory.Factory):
+    class Meta:
+        model = Agency
+
+    agency_name = factory.Sequence(lambda n: f'Agência Teste {n}')
+    agency_code = factory.Sequence(lambda n: f'AGY-{n:03}')
+
+
+class UnitFactory(factory.Factory):
+    class Meta:
+        model = Unit
+
+    unit_name = factory.Sequence(lambda n: f'{fake.bs()} {n}')
+    unit_code = factory.Sequence(lambda n: f'UNT-{n:04}')
+    unit_siaf = factory.Sequence(lambda n: f'74{n:03}')
+
+
+class SectorFactory(factory.Factory):
+    class Meta:
+        model = Sector
+
+    sector_name = factory.Sequence(lambda n: f'{fake.job()} {n}')
+    sector_code = factory.Sequence(lambda n: f'SEC-{n:04}')
+
+
+class LocationFactory(factory.Factory):
+    class Meta:
+        model = Location
+
+    location_name = factory.Sequence(lambda n: f'{fake.street_address()} {n}')
+    location_code = factory.Sequence(lambda n: f'LOC-{n:04}')
+
+
+class LegalGuardiansFactory(factory.Factory):
+    class Meta:
+        model = LegalGuardian
+
+    legal_guardians_name = factory.Sequence(lambda n: f'{fake.name()} {n}')
+    legal_guardians_code = factory.Sequence(lambda n: f'LG-{n:04}')
+
+
+class MaterialFactory(factory.Factory):
+    class Meta:
+        model = Material
+
+    material_name = factory.Sequence(lambda n: f'{fake.word()}{n}')
+    material_code = factory.Sequence(lambda n: f'MAT-{n:05}')
+
+
 class AssetFactory(factory.Factory):
     class Meta:
         model = Asset
 
-    asset_code = factory.Sequence(lambda n: f'PAT{2024 + n:04d}')
+    asset_code = factory.Sequence(lambda n: f'PAT{20240000 + n}')
     asset_check_digit = factory.LazyAttribute(
         lambda obj: str(fake.random_digit_not_null())
     )
 
     atm_number = factory.Faker('ean', length=8)
     serial_number = factory.Faker('uuid4')
+    asset_description = factory.Faker('sentence', nb_words=6)
     asset_status = factory.Faker(
         'random_element',
         elements=('Ativo', 'Inativo', 'Manutenção', 'Baixado'),
@@ -99,13 +103,12 @@ class AssetFactory(factory.Factory):
             fake.pydecimal(left_digits=5, right_digits=2, positive=True)
         )
     )
-    asset_description = factory.Faker('sentence', nb_words=6)
     csv_code = factory.Faker('pystr', max_chars=10)
     accounting_entry_code = factory.Faker(
         'pystr_format', string_format='CONT-######'
     )
 
-    item_brand = factory.Faker('company_suffix')
+    item_brand = factory.Faker('company')
     item_model = factory.Faker('word')
 
     group_type_code = factory.Faker('numerify', text='##')
@@ -141,4 +144,13 @@ class InventoryFactory(factory.Factory):
     class Meta:
         model = Inventory
 
-    term = factory.LazyFunction(lambda: fake.date_object().strftime('%Y-%m'))
+    term = factory.Sequence(lambda n: f'2024-{(n % 12) + 1:02}')
+
+
+class InventoryAssetFactory(factory.Factory):
+    class Meta:
+        model = InventoryAsset
+
+    inventory_status = factory.Faker(
+        'random_element', elements=list(InventoryStatus)
+    )

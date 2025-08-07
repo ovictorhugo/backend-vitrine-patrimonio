@@ -94,11 +94,15 @@ class Agency:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
     )
-    agency_name: Mapped[str] = mapped_column(nullable=False)
-    agency_code: Mapped[str] = mapped_column(nullable=False, unique=True)
+    agency_name: Mapped[str] = mapped_column(nullable=False, unique=True)
+    agency_code: Mapped[str] = mapped_column(nullable=False)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped['User'] = relationship(init=False, lazy='joined')
+
+    units: Mapped[list['Unit']] = relationship(
+        init=False, back_populates='agency'
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -113,7 +117,7 @@ class Agency:
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
         Computed(
-            "to_tsvector('portuguese', coalesce(agency_name, '') || ' ' || coalesce(agency_code, ''))",  # noqa: E501
+            "to_tsvector('portuguese', coalesce(agency_name, '') || ' ' || coalesce(agency_code, ''))",
             persisted=True,
         ),
         init=False,
@@ -127,14 +131,23 @@ class Agency:
 class Unit:
     __tablename__ = 'units'
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid.uuid4
     )
-    unit_name: Mapped[str] = mapped_column(nullable=False)
+    unit_name: Mapped[str] = mapped_column(nullable=False, unique=True)
     unit_code: Mapped[str] = mapped_column(nullable=False)
     unit_siaf: Mapped[str] = mapped_column(nullable=False)
 
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('agencys.id'))
+    agency: Mapped['Agency'] = relationship(
+        init=False, lazy='joined', back_populates='units'
+    )
+
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='joined')
+    user: Mapped['User'] = relationship(init=False, lazy='joined')
+
+    sectors: Mapped[list['Sector']] = relationship(
+        init=False, back_populates='unit'
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -156,23 +169,29 @@ class Unit:
         index=False,
     )
 
-    __table_args__ = (
-        Index('ix_units_tsv', tsv, postgresql_using='gin'),
-        UniqueConstraint('unit_name', 'unit_siaf', name='uq_unit'),
-    )
+    __table_args__ = (Index('ix_units_tsv', tsv, postgresql_using='gin'),)
 
 
 @table_registry.mapped_as_dataclass
 class Sector:
     __tablename__ = 'sectors'
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid.uuid4
     )
     sector_name: Mapped[str] = mapped_column(nullable=False, unique=True)
     sector_code: Mapped[str] = mapped_column(nullable=False)
 
+    unit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('units.id'))
+    unit: Mapped['Unit'] = relationship(
+        init=False, lazy='joined', back_populates='sectors'
+    )
+
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='joined')
+    user: Mapped['User'] = relationship(init=False, lazy='joined')
+
+    locations: Mapped[list['Location']] = relationship(
+        init=False, back_populates='sector'
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -201,13 +220,18 @@ class Sector:
 class Location:
     __tablename__ = 'locations'
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid.uuid4
     )
     location_code: Mapped[str] = mapped_column(nullable=False)
     location_name: Mapped[str] = mapped_column(nullable=False, unique=True)
 
+    sector_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('sectors.id'))
+    sector: Mapped['Sector'] = relationship(
+        init=False, lazy='joined', back_populates='locations'
+    )
+
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='joined')
+    user: Mapped['User'] = relationship(init=False, lazy='joined')
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -309,7 +333,6 @@ class Material:
 @table_registry.mapped_as_dataclass
 class Asset:
     __tablename__ = 'assets'
-    __table_args__ = (UniqueConstraint('asset_code', 'asset_check_digit'),)
 
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
@@ -388,7 +411,10 @@ class Asset:
         init=False,
         index=False,
     )
-    __table_args__ = (Index('ix_assets_tsv', tsv, postgresql_using='gin'),)
+    __table_args__ = (
+        Index('ix_assets_tsv', tsv, postgresql_using='gin'),
+        UniqueConstraint('asset_code', 'asset_check_digit'),
+    )
 
 
 @table_registry.mapped_as_dataclass

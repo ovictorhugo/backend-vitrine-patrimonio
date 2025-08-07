@@ -83,10 +83,6 @@ async def test_update_asset(client, create_asset, create_user, create_token):
     asset.asset_code = '0987654321'
     asset.asset_check_digit = 'Y'
 
-    asset.unit_id = asset.unit.id
-    asset.sector_id = asset.sector.id
-    asset.agency_id = asset.agency.id
-
     asset_schema = AssetSchema.model_validate(asset).model_dump(mode='json')
 
     response = client.put(
@@ -281,11 +277,18 @@ async def test_search_assets_combined_with_fk_filter(
     agency_a = await create_agency(agency_name='TI - Matriz')
     agency_b = await create_agency(agency_name='RH - Filial')
 
-    await create_asset(asset_description='Notebook i7', agency_id=agency_a.id)
     await create_asset(
-        asset_description='Cadeira ergonômica', agency_id=agency_a.id
+        asset_description='Notebook i7',
+        agency_id=agency_a.id,
     )
-    await create_asset(asset_description='Notebook i5', agency_id=agency_b.id)
+    await create_asset(
+        asset_description='Cadeira ergonômica',
+        agency_id=agency_a.id,
+    )
+    await create_asset(
+        asset_description='Notebook i5',
+        agency_id=agency_b.id,
+    )
 
     response = client.get(
         f'/assets?q=Notebook&agency_id={agency_a.id}',
@@ -294,6 +297,7 @@ async def test_search_assets_combined_with_fk_filter(
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
+
     assert len(data['assets']) == 1
     asset_found = data['assets'][0]
     assert 'Notebook i7' in asset_found['asset_description']

@@ -98,23 +98,6 @@ def mock_db_time():
 
 
 @pytest_asyncio.fixture
-def create_location(session, create_user):
-    async def _create_location(**kwargs):
-        if 'user_id' not in kwargs:
-            user = await create_user()
-            kwargs['user_id'] = user.id
-        location = LocationFactory.build(**kwargs)
-
-        session.add(location)
-        await session.commit()
-        await session.refresh(location)
-
-        return location
-
-    return _create_location
-
-
-@pytest_asyncio.fixture
 def create_agency(session, create_user):
     async def _create_agency(**kwargs):
         if 'user_id' not in kwargs:
@@ -122,39 +105,47 @@ def create_agency(session, create_user):
             kwargs['user_id'] = user.id
 
         agency = AgencyFactory.build(**kwargs)
-
         session.add(agency)
         await session.commit()
         await session.refresh(agency)
-
         return agency
 
     return _create_agency
 
 
 @pytest_asyncio.fixture
-def create_unit(session, create_user):
+def create_unit(session, create_agency, create_user):
     async def _create_unit(**kwargs):
         if 'user_id' not in kwargs:
             user = await create_user()
             kwargs['user_id'] = user.id
+
+        if 'agency_id' not in kwargs:
+            agency = await create_agency(user_id=kwargs['user_id'])
+            kwargs['agency_id'] = agency.id
+
         unit = UnitFactory.build(**kwargs)
 
         session.add(unit)
         await session.commit()
         await session.refresh(unit)
 
+        await session.refresh(unit, ['agency'])
         return unit
 
     return _create_unit
 
 
 @pytest_asyncio.fixture
-def create_sector(session, create_user):
+def create_sector(session, create_unit, create_user):
     async def _create_sector(**kwargs):
         if 'user_id' not in kwargs:
             user = await create_user()
             kwargs['user_id'] = user.id
+
+        if 'unit_id' not in kwargs:
+            unit = await create_unit(user_id=kwargs['user_id'])
+            kwargs['unit_id'] = unit.id
 
         sector = SectorFactory.build(**kwargs)
 
@@ -162,9 +153,33 @@ def create_sector(session, create_user):
         await session.commit()
         await session.refresh(sector)
 
+        await session.refresh(sector, ['unit'])
         return sector
 
     return _create_sector
+
+
+@pytest_asyncio.fixture
+def create_location(session, create_sector, create_user):
+    async def _create_location(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        if 'sector_id' not in kwargs:
+            sector = await create_sector(user_id=kwargs['user_id'])
+            kwargs['sector_id'] = sector.id
+
+        location = LocationFactory.build(**kwargs)
+
+        session.add(location)
+        await session.commit()
+        await session.refresh(location)
+
+        await session.refresh(location, ['sector'])
+        return location
+
+    return _create_location
 
 
 @pytest_asyncio.fixture
@@ -250,14 +265,14 @@ def create_asset(
             sector = await create_sector()
             kwargs['sector_id'] = sector.id
         if 'location_id' not in kwargs:
-            sector = await create_location()
-            kwargs['location_id'] = sector.id
+            location = await create_location()
+            kwargs['location_id'] = location.id
         if 'material_id' not in kwargs:
-            sector = await create_material()
-            kwargs['material_id'] = sector.id
+            material = await create_material()
+            kwargs['material_id'] = material.id
         if 'legal_guardian_id' not in kwargs:
-            sector = await create_legal_guardian()
-            kwargs['legal_guardian_id'] = sector.id
+            legal_guardian = await create_legal_guardian()
+            kwargs['legal_guardian_id'] = legal_guardian.id
 
         asset = AssetFactory.build(**kwargs)
 

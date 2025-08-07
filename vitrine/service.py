@@ -1,7 +1,7 @@
 import os
 import re
 from typing import Annotated
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import polars as pl
 from fastapi import Depends, UploadFile
@@ -56,7 +56,7 @@ def file_to_list(file: UploadFile):
     dataframe = pl.read_excel(filepath)
     dataframe = normalize_dataframe(dataframe)
     os.remove(filepath)
-    return dataframe.to_dicts()
+    return dataframe.head(100).to_dicts()
 
 
 def align_assets(assets: list[dict]):
@@ -68,9 +68,7 @@ def align_assets(assets: list[dict]):
 
 
 def clean_string(name: str) -> str:
-    if name:
-        return re.sub(r'[^\w\s]', '*', name)
-    return 'NÃO DECLARADO'
+    return re.sub(r'[^\w\s]', '*', name)
 
 
 async def get_or_create_material(
@@ -114,12 +112,16 @@ async def get_or_create_agency(session: Session, data: dict, user_id):
     return db_agency
 
 
-async def get_or_create_unit(session: Session, data: dict, user_id) -> Unit:
+async def get_or_create_unit(
+    session: Session, data: dict, user_id, agency_id: UUID
+) -> Unit:
     unit = UnitSchema(**data)
     unit.unit_name = clean_string(unit.unit_name)
 
     db_unit = await session.scalar(
-        select(Unit).where((Unit.unit_name == unit.unit_name))
+        select(Unit).where(
+            (Unit.unit_name == unit.unit_name), (Unit.agency_id == agency_id)
+        )
     )
 
     if not db_unit:
@@ -128,6 +130,7 @@ async def get_or_create_unit(session: Session, data: dict, user_id) -> Unit:
             unit_code=unit.unit_code,
             unit_siaf=unit.unit_siaf,
             user_id=user_id,
+            agency_id=agency_id,
         )
         session.add(db_unit)
         await session.flush()
@@ -136,13 +139,16 @@ async def get_or_create_unit(session: Session, data: dict, user_id) -> Unit:
 
 
 async def get_or_create_sector(
-    session: Session, data: dict, user_id
+    session: Session, data: dict, user_id, unit_id: UUID
 ) -> Sector:
     sector = SectorSchema(**data)
     sector.sector_name = clean_string(sector.sector_name)
 
     db_sector = await session.scalar(
-        select(Sector).where((Sector.sector_name == sector.sector_name))
+        select(Sector).where(
+            (Sector.sector_name == sector.sector_name),
+            (Sector.unit_id == unit_id),
+        )
     )
 
     if not db_sector:
@@ -150,6 +156,7 @@ async def get_or_create_sector(
             sector_name=sector.sector_name,
             sector_code=sector.sector_code,
             user_id=user_id,
+            unit_id=unit_id,
         )
         session.add(db_sector)
         await session.flush()
@@ -158,14 +165,15 @@ async def get_or_create_sector(
 
 
 async def get_or_create_location(
-    session: Session, data: dict, user_id
+    session: Session, data: dict, user_id, sector_id: UUID
 ) -> Location:
     location = LocationSchema(**data)
     location.location_name = clean_string(location.location_name)
 
     db_location = await session.scalar(
         select(Location).where(
-            (Location.location_name == location.location_name)
+            (Location.location_name == location.location_name),
+            (Location.sector_id == sector_id),
         )
     )
 
@@ -174,6 +182,7 @@ async def get_or_create_location(
             location_name=location.location_name,
             location_code=location.location_code,
             user_id=user_id,
+            sector_id=sector_id,
         )
         session.add(db_location)
         await session.flush()
@@ -213,20 +222,27 @@ async def find_relationships(assets: list[dict], session: Session, user_id):
         db_material = await get_or_create_material(session, asset, user_id)
         asset['material_id'] = db_material.id
 
-        db_agency = await get_or_create_agency(session, asset, user_id)
-        asset['agency_id'] = db_agency.id
-
-        db_unit = await get_or_create_unit(session, asset, user_id)
-        asset['unit_id'] = db_unit.id
-
-        db_sector = await get_or_create_sector(session, asset, user_id)
-        asset['sector_id'] = db_sector.id
-
-        db_location = await get_or_create_location(session, asset, user_id)
-        asset['location_id'] = db_location.id
-
         db_guardian = await get_or_create_legal_guardian(
             session, asset, user_id
         )
         asset['legal_guardian_id'] = db_guardian.id
+
+        db_agency = await get_or_create_agency(session, asset, user_id)
+        asset['agency_id'] = db_agency.id
+
+        db_unit = await get_or_create_unit(
+            session, asset, user_id, agency_id=db_agency.id
+        )
+        asset['unit_id'] = db_unit.id
+
+        db_sector = await get_or_create_sector(
+            session, asset, user_id, unit_id=db_unit.id
+        )
+        asset['sector_id'] = db_sector.id
+
+        db_location = await get_or_create_location(
+            session, asset, user_id, sector_id=db_sector.id
+        )
+        asset['location_id'] = db_location.id
+
     return assets

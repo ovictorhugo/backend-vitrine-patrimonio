@@ -46,15 +46,14 @@ class FilterPage(BaseModel):
 
 
 class AgencySchema(BaseModel):
-    agency_name: str = Field(..., validation_alias='org_cod')
-    agency_code: str = Field(..., validation_alias='org_nom')
+    agency_name: str = Field(..., validation_alias='org_nom')
+    agency_code: str = Field(..., validation_alias='org_cod')
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class AgencyPublic(AgencySchema):
     id: UUID
-    model_config = ConfigDict(from_attributes=True)
 
 
 class AgencyList(BaseModel):
@@ -66,8 +65,10 @@ class FilterAgency(FilterPage):
 
 
 class UnitSchema(BaseModel):
-    unit_name: str = Field(..., validation_alias='uge_cod')
-    unit_code: str = Field(..., validation_alias='uge_nom')
+    agency_id: UUID
+
+    unit_name: str = Field(..., validation_alias='uge_nom')
+    unit_code: str = Field(..., validation_alias='uge_cod')
     unit_siaf: str = Field(..., validation_alias='uge_siaf')
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -75,7 +76,7 @@ class UnitSchema(BaseModel):
 
 class UnitPublic(UnitSchema):
     id: UUID
-    model_config = ConfigDict(from_attributes=True)
+    agency: AgencyPublic
 
 
 class UnitList(BaseModel):
@@ -87,15 +88,17 @@ class FilterUnit(FilterPage):
 
 
 class SectorSchema(BaseModel):
-    sector_name: str = Field(..., validation_alias='set_cod')
-    sector_code: str = Field(..., validation_alias='set_nom')
+    unit_id: UUID
+
+    sector_name: str = Field(..., validation_alias='set_nom')
+    sector_code: str = Field(..., validation_alias='set_cod')
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class SectorPublic(SectorSchema):
     id: UUID
-    model_config = ConfigDict(from_attributes=True)
+    unit: UnitPublic
 
 
 class SectorList(BaseModel):
@@ -107,15 +110,18 @@ class FilterSector(FilterPage):
 
 
 class LocationSchema(BaseModel):
-    location_code: str = Field(..., validation_alias='loc_cod')
+    sector_id: UUID
+
     location_name: str = Field(..., validation_alias='loc_nom')
+    location_code: str = Field(..., validation_alias='loc_cod')
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class LocationPublic(LocationSchema):
     id: UUID
-    model_config = ConfigDict(from_attributes=True)
+    # ✨ Adicionado: Retorna o objeto do setor pai completo na resposta.
+    sector: SectorPublic
 
 
 class LocationList(BaseModel):

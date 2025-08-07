@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
-from vitrine.models import Location, User
+from vitrine.models import Location, Sector, User
 from vitrine.schemas import (
     FilterLocation,
     LocationList,
@@ -22,7 +22,6 @@ router = APIRouter(
     prefix='/locations', tags=['estrutura organizacional - localização']
 )
 
-
 Session = Annotated[AsyncSession, Depends(get_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
@@ -35,21 +34,27 @@ async def create_location(
     session: Session,
     current_user: CurrentUser,
 ):
-    db_location = await session.scalar(
-        select(Location).where(
-            (Location.location_name == location.location_name)
-            | (Location.location_code == location.location_code)
+    db_sector = await session.get(Sector, location.sector_id)
+    if not db_sector or db_sector.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'O setor com ID "{location.sector_id}" não foi encontrado ou está inativo.',
         )
+
+    query = select(Location).where(
+        Location.location_name == location.location_name
     )
+    db_location = await session.scalar(query)
     if db_location:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='Location name or code already exists',
+            detail='Uma localização com este nome já existe.',
         )
 
     db_location = Location(
         location_name=location.location_name,
         location_code=location.location_code,
+        sector_id=location.sector_id,
         user_id=current_user.id,
     )
     session.add(db_location)
@@ -82,15 +87,19 @@ async def read_locations(
 async def delete_location(
     location_id: UUID, session: Session, current_user: CurrentUser
 ):
-    """Desativa (soft delete) uma localização."""
     db_location = await session.get(Location, location_id)
-
     if not db_location:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Location not found'
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Localização não encontrada.',
+        )
+    if db_location.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Esta localização já está desativada.',
         )
 
     db_location.deleted_at = datetime.now()
     await session.commit()
 
-    return {'message': 'Location deactivated successfully'}
+    return {'message': 'Localização desativada com sucesso.'}
