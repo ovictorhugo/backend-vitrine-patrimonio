@@ -1,10 +1,11 @@
 import os
+import re
 from typing import Annotated
 from uuid import uuid4
 
 import polars as pl
 from fastapi import Depends, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
@@ -28,12 +29,6 @@ from vitrine.schemas import (
 )
 
 Session = Annotated[AsyncSession, Depends(get_session)]
-
-
-def clean_search(tx):
-    return func.regexp_replace(
-        func.lower(func.unaccent(tx)), '[^a-z0-9\\s]+', ' ', 'g'
-    )
 
 
 def normalize_dataframe(dataframe: pl.DataFrame):
@@ -61,7 +56,7 @@ def file_to_list(file: UploadFile):
     dataframe = pl.read_excel(filepath)
     dataframe = normalize_dataframe(dataframe)
     os.remove(filepath)
-    return dataframe.head(100).to_dicts()
+    return dataframe.to_dicts()
 
 
 def align_assets(assets: list[dict]):
@@ -72,14 +67,20 @@ def align_assets(assets: list[dict]):
     return db_assets
 
 
+def clean_string(name: str) -> str:
+    if name:
+        return re.sub(r'[^\w\s]', '*', name)
+    return 'NÃO DECLARADO'
+
+
 async def get_or_create_material(
     session: Session, material_data: dict, user_id
 ):
     material = MaterialSchema(**material_data)
+    material.material_name = clean_string(material.material_name)
     db_material = await session.scalar(
         select(Material).where(
             (Material.material_name == material.material_name)
-            | (Material.material_code == material.material_code)
         )
     )
     if not db_material:
@@ -95,12 +96,10 @@ async def get_or_create_material(
 
 async def get_or_create_agency(session: Session, data: dict, user_id):
     agency = AgencySchema(**data)
+    agency.agency_name = clean_string(agency.agency_name)
 
     db_agency = await session.scalar(
-        select(Agency).where(
-            (Agency.agency_name == agency.agency_name)
-            | (Agency.agency_code == agency.agency_code)
-        )
+        select(Agency).where((Agency.agency_name == agency.agency_name))
     )
 
     if not db_agency:
@@ -117,12 +116,10 @@ async def get_or_create_agency(session: Session, data: dict, user_id):
 
 async def get_or_create_unit(session: Session, data: dict, user_id) -> Unit:
     unit = UnitSchema(**data)
+    unit.unit_name = clean_string(unit.unit_name)
 
     db_unit = await session.scalar(
-        select(Unit).where(
-            (Unit.unit_name == unit.unit_name)
-            | (Unit.unit_code == unit.unit_code)
-        )
+        select(Unit).where((Unit.unit_name == unit.unit_name))
     )
 
     if not db_unit:
@@ -142,12 +139,10 @@ async def get_or_create_sector(
     session: Session, data: dict, user_id
 ) -> Sector:
     sector = SectorSchema(**data)
+    sector.sector_name = clean_string(sector.sector_name)
 
     db_sector = await session.scalar(
-        select(Sector).where(
-            (Sector.sector_name == sector.sector_name)
-            | (Sector.sector_code == sector.sector_code)
-        )
+        select(Sector).where((Sector.sector_name == sector.sector_name))
     )
 
     if not db_sector:
@@ -166,11 +161,11 @@ async def get_or_create_location(
     session: Session, data: dict, user_id
 ) -> Location:
     location = LocationSchema(**data)
+    location.location_name = clean_string(location.location_name)
 
     db_location = await session.scalar(
         select(Location).where(
             (Location.location_name == location.location_name)
-            | (Location.location_code == location.location_code)
         )
     )
 
@@ -190,16 +185,13 @@ async def get_or_create_legal_guardian(
     session: Session, data: dict, user_id
 ) -> LegalGuardian:
     guardian = LegalGuardianSchema(**data)
+    guardian.legal_guardians_name = clean_string(guardian.legal_guardians_name)
 
     db_guardian = await session.scalar(
         select(LegalGuardian).where(
             (
                 LegalGuardian.legal_guardians_name
                 == guardian.legal_guardians_name
-            )
-            | (
-                LegalGuardian.legal_guardians_code
-                == guardian.legal_guardians_code
             )
         )
     )
@@ -237,5 +229,4 @@ async def find_relationships(assets: list[dict], session: Session, user_id):
             session, asset, user_id
         )
         asset['legal_guardian_id'] = db_guardian.id
-
     return assets
