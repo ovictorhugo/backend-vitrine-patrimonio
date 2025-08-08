@@ -1,16 +1,24 @@
+import os
 from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from vitrine.database import get_session
-from vitrine.models import Catalog, CatalogWorkFlow, User, WorkFlowStatus
+from vitrine.models import (
+    Catalog,
+    CatalogImage,
+    CatalogWorkFlow,
+    User,
+    WorkFlowStatus,
+)
 from vitrine.schemas import (
+    CatalogImagePublic,
     CatalogList,
     CatalogPublic,
     CatalogSchema,
@@ -35,9 +43,9 @@ async def create_catalog_entry(
     session: Session,
     current_user: CurrentUser,
 ):
-    db_catalog_check = await session.scalar(
-        select(Catalog).where(Catalog.asset_id == catalog_data.asset_id)
-    )
+    query = select(Catalog).where(Catalog.asset_id == catalog_data.asset_id)
+    db_catalog_check = await session.scalar(query)
+
     if db_catalog_check:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
@@ -51,7 +59,6 @@ async def create_catalog_entry(
         description=catalog_data.description,
         user_id=current_user.id,
     )
-
     session.add(db_catalog)
     await session.flush()
 
@@ -61,7 +68,6 @@ async def create_catalog_entry(
         workflow_status=WorkFlowStatus.STARTED,
         detail={'message': 'Catalog entry created and workflow started.'},
     )
-
     session.add(initial_workflow)
     await session.commit()
     await session.refresh(db_catalog)
@@ -104,30 +110,35 @@ async def add_workflow_step(
 async def read_catalog_entries(
     session: Session, filters: Annotated[FilterPage, Depends()]
 ):
-    query = await session.scalars(
+    query = (
         select(Catalog)
         .where(Catalog.deleted_at.is_(None))
         .offset(filters.offset)
         .limit(filters.limit)
     )
-    entries = query.all()
+    result = await session.scalars(query)
+    entries = result.all()
+
     return {'catalog_entries': entries}
 
 
 @router.get('/{catalog_id}', response_model=CatalogPublic)
 async def read_catalog_entry(catalog_id: UUID, session: Session):
-    stmt = (
+    query = (
         select(Catalog)
-        .options(selectinload(Catalog.workflow_history))
+        .options(
+            selectinload(Catalog.workflow_history),
+            selectinload(Catalog.images),
+        )
         .where(Catalog.id == catalog_id)
     )
-    result = await session.execute(stmt)
-    db_catalog = result.scalar_one_or_none()
+    db_catalog = await session.scalar(query)
 
     if not db_catalog or db_catalog.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
         )
+
     return db_catalog
 
 
@@ -171,3 +182,46 @@ async def delete_catalog_entry(
     await session.commit()
 
     return {'message': 'Catalog entry deactivated'}
+
+
+@router.post(
+    '/{catalog_id}/images',
+    status_code=HTTPStatus.CREATED,
+    response_model=CatalogImagePublic,
+)
+async def upload_catalog_image(
+    catalog_id: UUID, file: UploadFile, session: Session
+):
+    filename = f'{uuid4()}{os.path.splitext(file.filename)[1]}'
+    file_path = os.path.join('vitrine/storage/uploads', filename)
+
+    with open(file_path, 'wb') as buffer:
+        buffer.write(await file.read())
+
+    db_image = CatalogImage(catalog_id=catalog_id, file_path=filename)
+    session.add(db_image)
+    await session.commit()
+    await session.refresh(db_image)
+
+    return db_image
+
+
+@router.delete('/{catalog_id}/images/{image_id}', response_model=Message)
+async def delete_catalog_image(
+    catalog_id: UUID,
+    image_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+):
+    db_image = await session.get(CatalogImage, image_id)
+    if not db_image or db_image.catalog_id != catalog_id:
+        raise HTTPException(status_code=404, detail='Image not found')
+
+    file_full_path = os.path.join(os.getcwd(), db_image.file_path.lstrip('/'))
+    if os.path.exists(file_full_path):
+        os.remove(file_full_path)
+
+    await session.delete(db_image)
+    await session.commit()
+
+    return {'message': 'Image deleted'}

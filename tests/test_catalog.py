@@ -1,5 +1,4 @@
-# testes/test_catalog.py
-
+import io
 import uuid
 from http import HTTPStatus
 
@@ -176,3 +175,79 @@ async def test_add_workflow_step_for_nonexistent_catalog(
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()['detail'] == 'Catalog entry not found'
+
+
+@pytest.mark.asyncio
+async def test_upload_catalog_image_and_get(
+    client, create_user, create_catalog_entry, create_token
+):
+    owner_user = await create_user()
+    entry = await create_catalog_entry(user_id=owner_user.id)
+
+    file_content = b'fake image content'
+    file_name = 'test_image.png'
+
+    response_upload = client.post(
+        f'/catalog/{entry.id}/images',
+        files={'file': (file_name, io.BytesIO(file_content), 'image/png')},
+        headers={'Authorization': f'Bearer {create_token(owner_user)}'},
+    )
+
+    assert response_upload.status_code == HTTPStatus.CREATED
+    image_data = response_upload.json()
+    assert image_data['catalog_id'] == str(entry.id)
+    assert image_data['file_url'].startswith('/uploads/')
+
+    print(client.get('/catalog/').json())
+
+    response_get = client.get(f'/catalog/{entry.id}')
+    assert response_get.status_code == HTTPStatus.OK
+    catalog_data = response_get.json()
+    assert len(catalog_data['images']) == 1
+    assert catalog_data['images'][0]['file_url'] == image_data['file_url']
+
+
+@pytest.mark.asyncio
+async def test_upload_image_to_nonexistent_catalog(
+    client, create_user, create_token
+):
+    user = await create_user()
+    token = create_token(user)
+    fake_id = uuid.uuid4()
+
+    response = client.post(
+        f'/catalog/{fake_id}/images',
+        files={'file': ('test.png', io.BytesIO(b'abc'), 'image/png')},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()['detail'] == 'Catalog entry not found'
+
+
+@pytest.mark.asyncio
+async def test_delete_catalog_image(
+    client, create_user, create_catalog_entry, create_token
+):
+    owner_user = await create_user()
+    entry = await create_catalog_entry(user_id=owner_user.id)
+    token = create_token(owner_user)
+
+    upload_resp = client.post(
+        f'/catalog/{entry.id}/images',
+        files={'file': ('delete_me.png', io.BytesIO(b'123'), 'image/png')},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert upload_resp.status_code == HTTPStatus.CREATED
+    image_id = upload_resp.json()['id']
+
+    delete_resp = client.delete(
+        f'/catalog/{entry.id}/images/{image_id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert delete_resp.status_code == HTTPStatus.OK
+    assert delete_resp.json() == {'message': 'Image deleted'}
+
+    get_resp = client.get(f'/catalog/{entry.id}')
+    assert get_resp.status_code == HTTPStatus.OK
+    assert len(get_resp.json()['images']) == 0

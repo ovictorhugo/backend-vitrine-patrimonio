@@ -449,7 +449,13 @@ class Catalog:
         default_factory=list,
         init=False,
     )
-
+    images: Mapped[list['CatalogImage']] = relationship(
+        back_populates='catalog',
+        cascade='all, delete-orphan',
+        lazy='selectin',
+        default_factory=list,
+        init=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -458,6 +464,26 @@ class Catalog:
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class CatalogImage:
+    __tablename__ = 'catalog_images'
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+
+    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
+    file_path: Mapped[str] = mapped_column(nullable=False)
+
+    catalog: Mapped['Catalog'] = relationship(
+        init=False, back_populates='images'
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
     )
 
 

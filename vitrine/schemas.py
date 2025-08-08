@@ -273,6 +273,13 @@ class CatalogWorkFlowPublic(CatalogWorkFlowSchema):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CatalogImagePublic(BaseModel):
+    id: UUID
+    catalog_id: UUID
+    file_url: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CatalogPublic(CatalogSchema):
     id: UUID
 
@@ -281,6 +288,7 @@ class CatalogPublic(CatalogSchema):
 
     asset: AssetPublic
     user: UserPublic
+    images: list[CatalogImagePublic] = []
 
     workflow_history: list[CatalogWorkFlowPublic] = []
     model_config = ConfigDict(from_attributes=True)

@@ -2,6 +2,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from vitrine.routers import assets, auth, catalog, inventory, users
 from vitrine.routers.organizational_structure import (
@@ -13,10 +14,19 @@ from vitrine.routers.organizational_structure import (
     units,
 )
 
-storage_path = os.path.join(os.path.dirname(__file__), 'storage')
-os.makedirs(storage_path, exist_ok=True)
+BASE_DIR = os.path.dirname(__file__)
+STORAGE_DIR = os.path.join(BASE_DIR, 'storage')
+os.makedirs(STORAGE_DIR, exist_ok=True)
+
+UPLOADS_DIR = os.path.join(STORAGE_DIR, 'uploads')
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+TEMP_DIR = os.path.join(STORAGE_DIR, 'temp')
+os.makedirs(TEMP_DIR, exist_ok=True)
 
 app = FastAPI()
+
+app.mount('/uploads', StaticFiles(directory=UPLOADS_DIR), name='uploads')
 
 app.add_middleware(
     CORSMiddleware,
