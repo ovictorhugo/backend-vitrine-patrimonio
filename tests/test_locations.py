@@ -145,6 +145,28 @@ async def test_read_locations_with_text_search(client, create_location):
 
 
 @pytest.mark.asyncio
+async def test_filter_location_by_sector(
+    client, create_location, create_sector
+):
+    EXPECTED_COUNT = 1
+    sector1 = await create_sector()
+    await create_location(sector_id=sector1.id)
+    sector2 = await create_sector()
+    await create_location(sector_id=sector2.id)
+
+    response = client.get(f'/locations?sector_id={sector2.id}')
+    assert response.status_code == HTTPStatus.OK
+    sectors = response.json()['locations']
+    assert len(sectors) == EXPECTED_COUNT
+
+    EXPECTED_COUNT = 2
+    response = client.get('/locations')
+    assert response.status_code == HTTPStatus.OK
+    sectors = response.json()['locations']
+    assert len(sectors) == EXPECTED_COUNT
+
+
+@pytest.mark.asyncio
 async def test_delete_location_success(
     client, create_location, create_user, create_token, session
 ):

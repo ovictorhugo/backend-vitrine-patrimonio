@@ -136,6 +136,9 @@ class LocationList(BaseModel):
 
 class FilterLocation(FilterPage):
     q: str | None = Field(default=None)
+    sector_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID do setor'
+    )
 
 
 class LegalGuardianSchema(BaseModel):

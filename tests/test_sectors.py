@@ -144,7 +144,7 @@ async def test_read_sectors_with_text_search(client, create_sector):
 
 
 @pytest.mark.asyncio
-async def test_filter_unity_by_agency(client, create_unit, create_sector):
+async def test_filter_sectors_by_unit(client, create_unit, create_sector):
     EXPECTED_COUNT = 1
     unit1 = await create_unit()
     await create_sector(unit_id=unit1.id)

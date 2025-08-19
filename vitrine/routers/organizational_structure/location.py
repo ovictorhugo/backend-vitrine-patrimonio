@@ -75,6 +75,9 @@ async def read_locations(
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Location.tsv.op('@@')(ts_query))
 
+    if filters.sector_id:
+        query = query.where(Location.sector_id == filters.sector_id)
+
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)
