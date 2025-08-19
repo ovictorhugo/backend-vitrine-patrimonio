@@ -110,6 +110,9 @@ class SectorList(BaseModel):
 
 class FilterSector(FilterPage):
     q: str | None = Field(default=None)
+    unit_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID da Unidade'
+    )
 
 
 class LocationSchema(BaseModel):

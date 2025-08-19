@@ -144,6 +144,26 @@ async def test_read_sectors_with_text_search(client, create_sector):
 
 
 @pytest.mark.asyncio
+async def test_filter_unity_by_agency(client, create_unit, create_sector):
+    EXPECTED_COUNT = 1
+    unit1 = await create_unit()
+    await create_sector(unit_id=unit1.id)
+    unit2 = await create_unit()
+    await create_sector(unit_id=unit2.id)
+
+    response = client.get(f'/sectors?unit_id={unit2.id}')
+    assert response.status_code == HTTPStatus.OK
+    sectors = response.json()['sectors']
+    assert len(sectors) == EXPECTED_COUNT
+
+    EXPECTED_COUNT = 2
+    response = client.get('/sectors')
+    assert response.status_code == HTTPStatus.OK
+    sectors = response.json()['sectors']
+    assert len(sectors) == EXPECTED_COUNT
+
+
+@pytest.mark.asyncio
 async def test_delete_sector_success(
     client, create_sector, create_user, create_token, session
 ):

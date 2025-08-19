@@ -28,14 +28,10 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=SectorPublic)
 async def create_sector(
-    sector: SectorSchema,  # Presume-se que SectorSchema agora contém unit_id
+    sector: SectorSchema,
     session: Session,
     current_user: CurrentUser,
 ):
-    """
-    Cria um novo setor, obrigatoriamente vinculado a uma unidade.
-    """
-    # 1. ✨ Validar se a unit_id informada existe e está ativa
     db_unit = await session.get(Unit, sector.unit_id)
     if not db_unit or db_unit.deleted_at:
         raise HTTPException(
@@ -43,7 +39,6 @@ async def create_sector(
             detail=f'A unidade com ID "{sector.unit_id}" não foi encontrada ou está inativa.',
         )
 
-    # 2. ✨ Verificar se já existe um setor com o mesmo nome
     query = select(Sector).where(Sector.sector_name == sector.sector_name)
     db_sector = await session.scalar(query)
     if db_sector:
@@ -52,11 +47,10 @@ async def create_sector(
             detail='Um setor com este nome já existe.',
         )
 
-    # 3. ✨ Criar o setor com o unit_id
     db_sector = Sector(
         sector_name=sector.sector_name,
         sector_code=sector.sector_code,
-        unit_id=sector.unit_id,  # Adicionar o ID da unidade
+        unit_id=sector.unit_id,
         user_id=current_user.id,
     )
     session.add(db_sector)
@@ -76,6 +70,9 @@ async def read_sectors(
         prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Sector.tsv.op('@@')(ts_query))
+
+    if filters.unit_id:
+        query = query.where(Sector.unit_id == filters.unit_id)
 
     query = query.offset(filters.offset).limit(filters.limit)
 
