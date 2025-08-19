@@ -5,12 +5,13 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from vitrine.database import get_session
 from vitrine.models import (
+    Asset,
     Catalog,
     CatalogImage,
     CatalogWorkFlow,
@@ -24,7 +25,7 @@ from vitrine.schemas import (
     CatalogSchema,
     CatalogWorkFlowPublic,
     CatalogWorkFlowSchema,
-    FilterPage,
+    FilterCatalog,
     Message,
 )
 from vitrine.security import get_current_user
@@ -108,14 +109,18 @@ async def add_workflow_step(
 
 @router.get('/', response_model=CatalogList)
 async def read_catalog_entries(
-    session: Session, filters: Annotated[FilterPage, Depends()]
+    session: Session, filters: Annotated[FilterCatalog, Depends()]
 ):
-    query = (
-        select(Catalog)
-        .where(Catalog.deleted_at.is_(None))
-        .offset(filters.offset)
-        .limit(filters.limit)
-    )
+    query = select(Catalog).where(Catalog.deleted_at.is_(None))
+
+    if filters.q:
+        query = query.join(Catalog.asset)
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(Asset.tsv.op('@@')(ts_query))
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
     result = await session.scalars(query)
     entries = result.all()
 

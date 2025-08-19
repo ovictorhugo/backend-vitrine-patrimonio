@@ -241,11 +241,33 @@ class AssetList(BaseModel):
     assets: List[AssetPublic]
 
 
+class AssetCode(BaseModel):
+    asset_code: List[str]
+
+
+class AssetCheckDigit(BaseModel):
+    asset_check_digit: List[str]
+
+
+class AtmNumber(BaseModel):
+    atm_number: List[str]
+
+
 class FilterAsset(BaseModel):
     limit: int = 100
     offset: int = 0
     q: Optional[str] = Field(
         default=None, description='Termo de busca (full-text search)'
+    )
+
+    asset_code: Optional[str] = Field(
+        default=None, description='Filtrar por ID da Agência'
+    )
+    asset_check_digit: Optional[str] = Field(
+        default=None, description='Filtrar por ID da Agência'
+    )
+    atm_number: Optional[str] = Field(
+        default=None, description='Filtrar por ID da Agência'
     )
 
     agency_id: Optional[UUID] = Field(
@@ -305,6 +327,10 @@ class CatalogPublic(CatalogSchema):
 
 class CatalogList(BaseModel):
     catalog_entries: list[CatalogPublic]
+
+
+class FilterCatalog(FilterPage):
+    q: str | None = Field(default=None)
 
 
 class InventorySchema(BaseModel):

@@ -12,9 +12,12 @@ from vitrine import service
 from vitrine.database import get_session
 from vitrine.models import Asset, User
 from vitrine.schemas import (
+    AssetCheckDigit,
+    AssetCode,
     AssetList,
     AssetPublic,
     AssetSchema,
+    AtmNumber,
     FilterAsset,
     Message,
 )
@@ -77,6 +80,15 @@ async def read_assets(
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Asset.tsv.op('@@')(ts_query))
 
+    if filters.asset_code:
+        query = query.where(Asset.asset_code == filters.asset_code)
+    if filters.asset_check_digit:
+        query = query.where(
+            Asset.asset_check_digit == filters.asset_check_digit
+        )
+    if filters.atm_number:
+        query = query.where(Asset.atm_number == filters.atm_number)
+
     if filters.agency_id:
         query = query.where(Asset.agency_id == filters.agency_id)
     if filters.unit_id:
@@ -129,3 +141,45 @@ async def delete_asset(
     db_asset.deleted_at = datetime.now()
     await session.commit()
     return {'message': 'Asset deleted'}
+
+
+@router.get('/search/asset-code', response_model=AssetCode)
+async def search_by_asset_code(
+    q: str,
+    session: Session,
+):
+    query = (
+        select(Asset.asset_code)
+        .where(Asset.deleted_at.is_(None))
+        .where(Asset.asset_code.ilike(f'{q}%'))
+    )
+    result = await session.scalars(query)
+    return {'asset_code': result.all()}
+
+
+@router.get('/search/asset-check-digit', response_model=AssetCheckDigit)
+async def search_by_asset_check_digit(
+    q: str,
+    session: Session,
+):
+    query = (
+        select(Asset.asset_check_digit)
+        .where(Asset.deleted_at.is_(None))
+        .where(Asset.asset_check_digit.ilike(f'{q}%'))
+    )
+    result = await session.scalars(query)
+    return {'asset_check_digit': result.all()}
+
+
+@router.get('/search/atm-number', response_model=AtmNumber)
+async def search_by_atm_number(
+    q: str,
+    session: Session,
+):
+    query = (
+        select(Asset.atm_number)
+        .where(Asset.deleted_at.is_(None))
+        .where(Asset.atm_number.ilike(f'{q}%'))
+    )
+    result = await session.scalars(query)
+    return {'atm_number': result.all()}

@@ -51,6 +51,40 @@ async def test_read_catalog_entries(client, create_catalog_entry):
 
 
 @pytest.mark.asyncio
+async def test_search_catalog_entries_by_asset_data(
+    client,
+    create_user,
+    create_token,
+    create_asset,
+    create_catalog_entry,
+):
+    user = await create_user()
+    token = create_token(user)
+    auth_header = {'Authorization': f'Bearer {token}'}
+
+    asset_notebook = await create_asset(
+        asset_description='Notebook Dell de alta performance'
+    )
+    await create_catalog_entry(user_id=user.id, asset_id=asset_notebook.id)
+
+    asset_chair = await create_asset(
+        asset_description='Cadeira de escritório ergonômica'
+    )
+    await create_catalog_entry(user_id=user.id, asset_id=asset_chair.id)
+
+    response = client.get('/catalog?q=Notebook', headers=auth_header)
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+
+    assert len(data['catalog_entries']) == 1
+
+    returned_entry = data['catalog_entries'][0]
+    assert 'Notebook Dell' in returned_entry['asset']['asset_description']
+    assert returned_entry['asset']['id'] == str(asset_notebook.id)
+
+
+@pytest.mark.asyncio
 async def test_update_catalog_entry(
     client, create_user, create_asset, create_catalog_entry, create_token
 ):

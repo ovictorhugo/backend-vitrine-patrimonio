@@ -392,3 +392,143 @@ async def test_filter_assets_by_material_id(
     assert len(data['assets']) == 1
     assert data['assets'][0]['material']['id'] == str(material_notebook.id)
     assert data['assets'][0]['asset_description'] == 'Notebook Dell i7'
+
+
+@pytest.mark.asyncio
+async def test_search_assets_with_asset_code(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+    asset_code_to_find = '123456'
+    await create_asset(asset_code=asset_code_to_find)
+    await create_asset(asset_code='987654')
+
+    response = client.get(
+        f'/assets?asset_code={asset_code_to_find}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['asset_code'] == asset_code_to_find
+
+
+@pytest.mark.asyncio
+async def test_search_assets_with_asset_check_digit(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+    check_digit_to_find = '9'
+    await create_asset(asset_check_digit=check_digit_to_find)
+    await create_asset(asset_check_digit='1')
+
+    response = client.get(
+        f'/assets?asset_check_digit={check_digit_to_find}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['asset_check_digit'] == check_digit_to_find
+
+
+@pytest.mark.asyncio
+async def test_search_assets_with_atm_number(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    atm_number_to_find = 'ATM007'
+
+    await create_asset(atm_number=atm_number_to_find)
+    await create_asset(atm_number='ATM008')
+
+    response = client.get(
+        f'/assets?atm_number={atm_number_to_find}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['atm_number'] == atm_number_to_find
+
+
+@pytest.mark.asyncio
+async def test_search_assets_by_asset_code(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    await create_asset(asset_code='ABC123')
+    await create_asset(asset_code='ABC999')
+    await create_asset(asset_code='XYZ123')
+
+    response = client.get(
+        '/assets/search/asset-code?q=ABC',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert 'asset_code' in data
+    assert all(code.startswith('ABC') for code in data['asset_code'])
+    assert 'ABC123' in data['asset_code']
+    assert 'ABC999' in data['asset_code']
+    assert 'XYZ123' not in data['asset_code']
+
+
+@pytest.mark.asyncio
+async def test_search_assets_by_asset_check_digit(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    await create_asset(asset_check_digit='CD001')
+    await create_asset(asset_check_digit='CD002')
+    await create_asset(asset_check_digit='ZZ001')
+
+    response = client.get(
+        '/assets/search/asset-check-digit?q=CD',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert 'asset_check_digit' in data
+    assert all(cd.startswith('CD') for cd in data['asset_check_digit'])
+    assert 'CD001' in data['asset_check_digit']
+    assert 'CD002' in data['asset_check_digit']
+    assert 'ZZ001' not in data['asset_check_digit']
+
+
+@pytest.mark.asyncio
+async def test_search_assets_by_atm_number(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    await create_asset(atm_number='ATM100')
+    await create_asset(atm_number='ATM101')
+    await create_asset(atm_number='BANK001')
+
+    response = client.get(
+        '/assets/search/atm-number?q=ATM',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert 'atm_number' in data
+    assert all(num.startswith('ATM') for num in data['atm_number'])
+    assert 'ATM100' in data['atm_number']
+    assert 'ATM101' in data['atm_number']
+    assert 'BANK001' not in data['atm_number']
