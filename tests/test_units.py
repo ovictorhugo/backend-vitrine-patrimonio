@@ -150,6 +150,26 @@ async def test_read_units_with_text_search(client, create_unit):
 
 
 @pytest.mark.asyncio
+async def test_filter_unity_by_agency(client, create_unit, create_agency):
+    EXPECTED_COUNT = 1
+    agency1 = await create_agency()
+    await create_unit(agency_id=agency1.id)
+    agency2 = await create_agency()
+    await create_unit(agency_id=agency2.id)
+
+    response = client.get(f'/units?agency_id={agency2.id}')
+    assert response.status_code == HTTPStatus.OK
+    units = response.json()['units']
+    assert len(units) == EXPECTED_COUNT
+
+    EXPECTED_COUNT = 2
+    response = client.get('/units')
+    assert response.status_code == HTTPStatus.OK
+    units = response.json()['units']
+    assert len(units) == EXPECTED_COUNT
+
+
+@pytest.mark.asyncio
 async def test_delete_unit_success(
     client, create_unit, create_user, create_token, session
 ):

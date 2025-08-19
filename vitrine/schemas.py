@@ -85,6 +85,9 @@ class UnitList(BaseModel):
 
 class FilterUnit(FilterPage):
     q: str | None = Field(default=None)
+    agency_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID da Agência'
+    )
 
 
 class SectorSchema(BaseModel):

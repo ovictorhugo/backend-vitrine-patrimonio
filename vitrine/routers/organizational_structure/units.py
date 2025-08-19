@@ -73,6 +73,9 @@ async def read_units(
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Unit.tsv.op('@@')(ts_query))
 
+    if filters.agency_id:
+        query = query.where(Unit.agency_id == filters.agency_id)
+
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)
