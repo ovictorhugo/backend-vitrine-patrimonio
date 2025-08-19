@@ -56,7 +56,7 @@ def file_to_list(file: UploadFile):
     dataframe = pl.read_excel(filepath)
     dataframe = normalize_dataframe(dataframe)
     os.remove(filepath)
-    return dataframe.head(100).to_dicts()
+    return dataframe.to_dicts()
 
 
 def align_assets(assets: list[dict]):
