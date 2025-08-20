@@ -14,6 +14,7 @@ from vitrine.models import Asset, User
 from vitrine.schemas import (
     AssetCheckDigit,
     AssetCode,
+    AssetIdentifier,
     AssetList,
     AssetPublic,
     AssetSchema,
@@ -80,12 +81,12 @@ async def read_assets(
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Asset.tsv.op('@@')(ts_query))
 
-    if filters.asset_code:
-        query = query.where(Asset.asset_code == filters.asset_code)
-    if filters.asset_check_digit:
+    if filters.asset_identifier:
         query = query.where(
-            Asset.asset_check_digit == filters.asset_check_digit
+            func.concat(Asset.asset_code, Asset.asset_check_digit)
+            == filters.asset_identifier.replace('-', '')
         )
+
     if filters.atm_number:
         query = query.where(Asset.atm_number == filters.atm_number)
 
@@ -97,6 +98,7 @@ async def read_assets(
         query = query.where(Asset.sector_id == filters.sector_id)
     if filters.material_id:
         query = query.where(Asset.material_id == filters.material_id)
+
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)
@@ -183,3 +185,22 @@ async def search_by_atm_number(
     )
     result = await session.scalars(query)
     return {'atm_number': result.all()}
+
+
+@router.get('/search/asset-identifier', response_model=AssetIdentifier)
+async def search_by_asset_identifier(
+    q: str,
+    session: Session,
+):
+    q = q.replace('-', '')
+    query = (
+        select(func.concat(Asset.asset_code, '-', Asset.asset_check_digit))
+        .where(Asset.deleted_at.is_(None))
+        .where(
+            func.concat(Asset.asset_code, Asset.asset_check_digit).ilike(
+                f'{q}%'
+            )
+        )
+    )
+    result = await session.scalars(query)
+    return {'asset_identifier': result.all()}

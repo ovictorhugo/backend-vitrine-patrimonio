@@ -8,13 +8,20 @@ from vitrine.schemas import AgencyPublic
 
 
 @pytest.mark.asyncio
-async def test_create_agency_success(client, create_user, create_token):
+async def test_create_agency_success(
+    client, create_user, create_token, create_unit
+):
     user = await create_user()
+    unit = await create_unit()
     token = create_token(user)
 
     response = client.post(
         '/agencies',
-        json={'agency_name': 'Ministério da Magia', 'agency_code': 'MM-001'},
+        json={
+            'agency_name': 'Ministério da Magia',
+            'agency_code': 'MM-001',
+            'unit_id': str(unit.id),
+        },
         headers={'Authorization': f'Bearer {token}'},
     )
 
@@ -28,15 +35,20 @@ async def test_create_agency_success(client, create_user, create_token):
 
 @pytest.mark.asyncio
 async def test_create_agency_conflict(
-    client, create_agency, create_user, create_token
+    client, create_agency, create_user, create_token, create_unit
 ):
     user = await create_user()
+    unit = await create_unit()
     token = create_token(user)
     await create_agency(agency_name='Ministério da Magia')
 
     response = client.post(
         '/agencies',
-        json={'agency_name': 'Ministério da Magia', 'agency_code': 'MM-002'},
+        json={
+            'agency_name': 'Ministério da Magia',
+            'agency_code': 'MM-001',
+            'unit_id': str(unit.id),
+        },
         headers={'Authorization': f'Bearer {token}'},
     )
 
@@ -104,12 +116,13 @@ async def test_delete_agency_success(
 
 @pytest.mark.asyncio
 async def test_delete_agency_with_active_units_conflict(
-    client, create_unit, create_user, create_token
+    client, create_sector, create_user, create_token
 ):
     user = await create_user()
     token = create_token(user)
-    unit = await create_unit(user_id=user.id)
-    agency_id = unit.agency.id
+
+    sector = await create_sector(user_id=user.id)
+    agency_id = sector.agency.id
 
     response = client.delete(
         f'/agencies/{agency_id}',
@@ -119,7 +132,7 @@ async def test_delete_agency_with_active_units_conflict(
     assert response.status_code == HTTPStatus.CONFLICT
     assert (
         response.json()['detail']
-        == 'Não é possível desativar o órgão pois ele possui 1 unidade(s) ativa(s).'
+        == 'Não é possível desativar o órgão pois ele possui 1 setores(s) ativa(s).'
     )
 
 

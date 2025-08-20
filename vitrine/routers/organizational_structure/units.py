@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
-from vitrine.models import Agency, Sector, Unit, User
+from vitrine.models import Unit, User
 from vitrine.schemas import (
     FilterUnit,
     Message,
@@ -32,13 +32,6 @@ async def create_unit(
     session: Session,
     current_user: CurrentUser,
 ):
-    db_agency = await session.get(Agency, unit.agency_id)
-    if not db_agency or db_agency.deleted_at:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f'O órgão com ID "{unit.agency_id}" não foi encontrado ou está inativo.',
-        )
-
     query = select(Unit).where(Unit.unit_name == unit.unit_name)
     db_unit = await session.scalar(query)
     if db_unit:
@@ -51,7 +44,6 @@ async def create_unit(
         unit_name=unit.unit_name,
         unit_code=unit.unit_code,
         unit_siaf=unit.unit_siaf,
-        agency_id=unit.agency_id,
         user_id=current_user.id,
     )
     session.add(db_unit)
@@ -97,17 +89,6 @@ async def delete_unit(
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail='Esta unidade já está desativada.',
-        )
-
-    query = select(func.count(Sector.id)).where(
-        Sector.unit_id == unit_id, Sector.deleted_at.is_(None)
-    )
-    active_sectors_count = await session.scalar(query)
-
-    if active_sectors_count > 0:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail=f'Não é possível desativar a unidade pois ela possui {active_sectors_count} setor(es) ativo(s).',
         )
 
     db_unit.deleted_at = datetime.now()

@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from vitrine.models import (
     AssetSituation,
-    ConservationStatus,
     WorkFlowStatus,
 )
 
@@ -48,7 +47,7 @@ class FilterPage(BaseModel):
 class AgencySchema(BaseModel):
     agency_name: str = Field(..., validation_alias='org_nom')
     agency_code: str = Field(..., validation_alias='org_cod')
-
+    unit_id: UUID
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
@@ -65,8 +64,6 @@ class FilterAgency(FilterPage):
 
 
 class UnitSchema(BaseModel):
-    agency_id: UUID
-
     unit_name: str = Field(..., validation_alias='uge_nom')
     unit_code: str = Field(..., validation_alias='uge_cod')
     unit_siaf: str = Field(..., validation_alias='uge_siaf')
@@ -76,7 +73,6 @@ class UnitSchema(BaseModel):
 
 class UnitPublic(UnitSchema):
     id: UUID
-    agency: AgencyPublic
 
 
 class UnitList(BaseModel):
@@ -91,7 +87,7 @@ class FilterUnit(FilterPage):
 
 
 class SectorSchema(BaseModel):
-    unit_id: UUID
+    agency_id: UUID
 
     sector_name: str = Field(..., validation_alias='set_nom')
     sector_code: str = Field(..., validation_alias='set_cod')
@@ -101,7 +97,7 @@ class SectorSchema(BaseModel):
 
 class SectorPublic(SectorSchema):
     id: UUID
-    unit: UnitPublic
+    agency: AgencyPublic
 
 
 class SectorList(BaseModel):
@@ -110,8 +106,8 @@ class SectorList(BaseModel):
 
 class FilterSector(FilterPage):
     q: str | None = Field(default=None)
-    unit_id: Optional[UUID] = Field(
-        default=None, description='Filtrar por ID da Unidade'
+    agency_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID da Organização'
     )
 
 
@@ -218,18 +214,18 @@ class AssetSchema(BaseModel):
 
 class AssetPublic(AssetSchema):
     id: UUID
-
+    material: MaterialPublic
+    legal_guardian: LegalGuardianPublic
     agency: AgencyPublic
     unit: UnitPublic
     sector: SectorPublic
     location: LocationPublic
-    material: MaterialPublic
-    legal_guardian: LegalGuardianPublic
 
     agency_id: UUID = Field(exclude=True)
     unit_id: UUID = Field(exclude=True)
     sector_id: UUID = Field(exclude=True)
     location_id: UUID = Field(exclude=True)
+
     material_id: UUID = Field(exclude=True)
     legal_guardian_id: UUID = Field(exclude=True)
 
@@ -253,6 +249,10 @@ class AtmNumber(BaseModel):
     atm_number: List[str]
 
 
+class AssetIdentifier(BaseModel):
+    asset_identifier: list[str]
+
+
 class FilterAsset(BaseModel):
     limit: int = 100
     offset: int = 0
@@ -260,14 +260,12 @@ class FilterAsset(BaseModel):
         default=None, description='Termo de busca (full-text search)'
     )
 
-    asset_code: Optional[str] = Field(
-        default=None, description='Filtrar por ID da Agência'
-    )
-    asset_check_digit: Optional[str] = Field(
-        default=None, description='Filtrar por ID da Agência'
+    asset_identifier: Optional[str] = Field(
+        default=None,
+        description='Filtrar por Asset Code + Check Digit (formato: código-dígito)',
     )
     atm_number: Optional[str] = Field(
-        default=None, description='Filtrar por ID da Agência'
+        default=None, description='Filtrar por número do ATM'
     )
 
     agency_id: Optional[UUID] = Field(
@@ -286,8 +284,9 @@ class FilterAsset(BaseModel):
 
 class CatalogSchema(BaseModel):
     asset_id: UUID
+    location_id: UUID
     situation: AssetSituation
-    conservation_status: ConservationStatus
+    conservation_status: str
     description: Optional[str] = None
 
 
@@ -300,28 +299,30 @@ class CatalogWorkFlowPublic(CatalogWorkFlowSchema):
     id: UUID
     user_id: UUID
     catalog_id: UUID
-
     model_config = ConfigDict(from_attributes=True)
 
 
 class CatalogImagePublic(BaseModel):
     id: UUID
     catalog_id: UUID
-    file_url: str
+    file_path: str
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class CatalogPublic(CatalogSchema):
     id: UUID
-
     asset_id: UUID = Field(exclude=True)
     user_id: UUID = Field(exclude=True)
+    location_id: UUID = Field(exclude=True)
 
     asset: AssetPublic
     user: UserPublic
-    images: list[CatalogImagePublic] = []
+    location: LocationPublic
 
+    images: list[CatalogImagePublic] = []
     workflow_history: list[CatalogWorkFlowPublic] = []
+
     model_config = ConfigDict(from_attributes=True)
 
 

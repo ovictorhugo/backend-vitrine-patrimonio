@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
-from vitrine.models import Location, Sector, Unit, User
+from vitrine.models import Agency, Location, Sector, User
 from vitrine.schemas import (
     FilterSector,
     Message,
@@ -32,11 +32,11 @@ async def create_sector(
     session: Session,
     current_user: CurrentUser,
 ):
-    db_unit = await session.get(Unit, sector.unit_id)
-    if not db_unit or db_unit.deleted_at:
+    db_agency = await session.get(Agency, sector.agency_id)
+    if not db_agency or db_agency.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
-            detail=f'A unidade com ID "{sector.unit_id}" não foi encontrada ou está inativa.',
+            detail=f'A organização com ID "{sector.agency_id}" não foi encontrada ou está inativa.',
         )
 
     query = select(Sector).where(Sector.sector_name == sector.sector_name)
@@ -50,7 +50,7 @@ async def create_sector(
     db_sector = Sector(
         sector_name=sector.sector_name,
         sector_code=sector.sector_code,
-        unit_id=sector.unit_id,
+        agency_id=sector.agency_id,
         user_id=current_user.id,
     )
     session.add(db_sector)
@@ -71,8 +71,8 @@ async def read_sectors(
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Sector.tsv.op('@@')(ts_query))
 
-    if filters.unit_id:
-        query = query.where(Sector.unit_id == filters.unit_id)
+    if filters.agency_id:
+        query = query.where(Sector.agency_id == filters.agency_id)
 
     query = query.offset(filters.offset).limit(filters.limit)
 

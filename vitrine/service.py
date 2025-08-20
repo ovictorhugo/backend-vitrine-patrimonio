@@ -68,7 +68,9 @@ def align_assets(assets: list[dict]):
 
 
 def clean_string(name: str) -> str:
-    return re.sub(r'[^\w\s]', '*', name)
+    if name:
+        return re.sub(r'[^\w\s]', '*', name)
+    return 'INDETERMINADO'
 
 
 async def get_or_create_material(
@@ -92,12 +94,17 @@ async def get_or_create_material(
     return db_material
 
 
-async def get_or_create_agency(session: Session, data: dict, user_id):
+async def get_or_create_agency(
+    session: Session, data: dict, user_id, unit_id: UUID
+):
     agency = AgencySchema(**data)
     agency.agency_name = clean_string(agency.agency_name)
 
     db_agency = await session.scalar(
-        select(Agency).where((Agency.agency_name == agency.agency_name))
+        select(Agency).where(
+            (Agency.agency_name == agency.agency_name),
+            (Agency.unit_id == unit_id),
+        )
     )
 
     if not db_agency:
@@ -105,6 +112,7 @@ async def get_or_create_agency(session: Session, data: dict, user_id):
             agency_name=agency.agency_name,
             agency_code=agency.agency_code,
             user_id=user_id,
+            unit_id=unit_id,
         )
         session.add(db_agency)
         await session.flush()
@@ -112,16 +120,12 @@ async def get_or_create_agency(session: Session, data: dict, user_id):
     return db_agency
 
 
-async def get_or_create_unit(
-    session: Session, data: dict, user_id, agency_id: UUID
-) -> Unit:
+async def get_or_create_unit(session: Session, data: dict, user_id) -> Unit:
     unit = UnitSchema(**data)
     unit.unit_name = clean_string(unit.unit_name)
 
     db_unit = await session.scalar(
-        select(Unit).where(
-            (Unit.unit_name == unit.unit_name), (Unit.agency_id == agency_id)
-        )
+        select(Unit).where((Unit.unit_name == unit.unit_name))
     )
 
     if not db_unit:
@@ -130,7 +134,6 @@ async def get_or_create_unit(
             unit_code=unit.unit_code,
             unit_siaf=unit.unit_siaf,
             user_id=user_id,
-            agency_id=agency_id,
         )
         session.add(db_unit)
         await session.flush()
@@ -139,7 +142,7 @@ async def get_or_create_unit(
 
 
 async def get_or_create_sector(
-    session: Session, data: dict, user_id, unit_id: UUID
+    session: Session, data: dict, user_id, agency_id: UUID
 ) -> Sector:
     sector = SectorSchema(**data)
     sector.sector_name = clean_string(sector.sector_name)
@@ -147,7 +150,7 @@ async def get_or_create_sector(
     db_sector = await session.scalar(
         select(Sector).where(
             (Sector.sector_name == sector.sector_name),
-            (Sector.unit_id == unit_id),
+            (Sector.agency_id == agency_id),
         )
     )
 
@@ -156,7 +159,7 @@ async def get_or_create_sector(
             sector_name=sector.sector_name,
             sector_code=sector.sector_code,
             user_id=user_id,
-            unit_id=unit_id,
+            agency_id=agency_id,
         )
         session.add(db_sector)
         await session.flush()
@@ -166,7 +169,7 @@ async def get_or_create_sector(
 
 async def get_or_create_location(
     session: Session, data: dict, user_id, sector_id: UUID
-) -> Location:
+):
     location = LocationSchema(**data)
     location.location_name = clean_string(location.location_name)
 
@@ -190,9 +193,7 @@ async def get_or_create_location(
     return db_location
 
 
-async def get_or_create_legal_guardian(
-    session: Session, data: dict, user_id
-) -> LegalGuardian:
+async def get_or_create_legal_guardian(session: Session, data: dict, user_id):
     guardian = LegalGuardianSchema(**data)
     guardian.legal_guardians_name = clean_string(guardian.legal_guardians_name)
 
@@ -226,17 +227,16 @@ async def find_relationships(assets: list[dict], session: Session, user_id):
             session, asset, user_id
         )
         asset['legal_guardian_id'] = db_guardian.id
-
-        db_agency = await get_or_create_agency(session, asset, user_id)
-        asset['agency_id'] = db_agency.id
-
-        db_unit = await get_or_create_unit(
-            session, asset, user_id, agency_id=db_agency.id
-        )
+        db_unit = await get_or_create_unit(session, asset, user_id)
         asset['unit_id'] = db_unit.id
 
+        db_agency = await get_or_create_agency(
+            session, asset, user_id, asset['unit_id']
+        )
+        asset['agency_id'] = db_agency.id
+
         db_sector = await get_or_create_sector(
-            session, asset, user_id, unit_id=db_unit.id
+            session, asset, user_id, asset['agency_id']
         )
         asset['sector_id'] = db_sector.id
 

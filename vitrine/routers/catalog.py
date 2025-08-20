@@ -7,7 +7,6 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from vitrine.database import get_session
 from vitrine.models import (
@@ -58,6 +57,7 @@ async def create_catalog_entry(
         situation=catalog_data.situation,
         conservation_status=catalog_data.conservation_status,
         description=catalog_data.description,
+        location_id=catalog_data.location_id,
         user_id=current_user.id,
     )
     session.add(db_catalog)
@@ -69,10 +69,10 @@ async def create_catalog_entry(
         workflow_status=WorkFlowStatus.STARTED,
         detail={'message': 'Catalog entry created and workflow started.'},
     )
+
     session.add(initial_workflow)
     await session.commit()
     await session.refresh(db_catalog)
-
     return db_catalog
 
 
@@ -129,21 +129,11 @@ async def read_catalog_entries(
 
 @router.get('/{catalog_id}', response_model=CatalogPublic)
 async def read_catalog_entry(catalog_id: UUID, session: Session):
-    query = (
-        select(Catalog)
-        .options(
-            selectinload(Catalog.workflow_history),
-            selectinload(Catalog.images),
-        )
-        .where(Catalog.id == catalog_id)
-    )
-    db_catalog = await session.scalar(query)
-
+    db_catalog = await session.get(Catalog, catalog_id)
     if not db_catalog or db_catalog.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
         )
-
     return db_catalog
 
 
@@ -197,18 +187,21 @@ async def delete_catalog_entry(
 async def upload_catalog_image(
     catalog_id: UUID, file: UploadFile, session: Session
 ):
+    db_catalog = await session.get(Catalog, catalog_id)
+    if not db_catalog or db_catalog.id != catalog_id:
+        raise HTTPException(status_code=404, detail='Catalog entry not found')
+
     filename = f'{uuid4()}{os.path.splitext(file.filename)[1]}'
     file_path = os.path.join('vitrine/storage/uploads', filename)
 
     with open(file_path, 'wb') as buffer:
         buffer.write(await file.read())
-
-    db_image = CatalogImage(catalog_id=catalog_id, file_path=filename)
-    session.add(db_image)
+    db_catalog = CatalogImage(catalog_id=catalog_id, file_path=filename)
+    session.add(db_catalog)
     await session.commit()
-    await session.refresh(db_image)
+    await session.refresh(db_catalog)
 
-    return db_image
+    return db_catalog
 
 
 @router.delete('/{catalog_id}/images/{image_id}', response_model=Message)

@@ -25,7 +25,6 @@ from tests.factories import (
 from vitrine.app import app
 from vitrine.database import get_session
 from vitrine.models import (
-    Catalog,
     CatalogWorkFlow,
     User,
     table_registry,
@@ -98,11 +97,15 @@ def mock_db_time():
 
 
 @pytest_asyncio.fixture
-def create_agency(session, create_user):
+def create_agency(session, create_user, create_unit):
     async def _create_agency(**kwargs):
         if 'user_id' not in kwargs:
             user = await create_user()
             kwargs['user_id'] = user.id
+
+        if 'unit_id' not in kwargs:
+            unit = await create_unit()
+            kwargs['unit_id'] = unit.id
 
         agency = AgencyFactory.build(**kwargs)
         session.add(agency)
@@ -114,8 +117,25 @@ def create_agency(session, create_user):
 
 
 @pytest_asyncio.fixture
-def create_unit(session, create_agency, create_user):
+def create_unit(session, create_user):
     async def _create_unit(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        unit = UnitFactory.build(**kwargs)
+
+        session.add(unit)
+        await session.commit()
+        await session.refresh(unit)
+        return unit
+
+    return _create_unit
+
+
+@pytest_asyncio.fixture
+def create_sector(session, create_agency, create_user):
+    async def _create_sector(**kwargs):
         if 'user_id' not in kwargs:
             user = await create_user()
             kwargs['user_id'] = user.id
@@ -124,36 +144,12 @@ def create_unit(session, create_agency, create_user):
             agency = await create_agency(user_id=kwargs['user_id'])
             kwargs['agency_id'] = agency.id
 
-        unit = UnitFactory.build(**kwargs)
-
-        session.add(unit)
-        await session.commit()
-        await session.refresh(unit)
-
-        await session.refresh(unit, ['agency'])
-        return unit
-
-    return _create_unit
-
-
-@pytest_asyncio.fixture
-def create_sector(session, create_unit, create_user):
-    async def _create_sector(**kwargs):
-        if 'user_id' not in kwargs:
-            user = await create_user()
-            kwargs['user_id'] = user.id
-
-        if 'unit_id' not in kwargs:
-            unit = await create_unit(user_id=kwargs['user_id'])
-            kwargs['unit_id'] = unit.id
-
         sector = SectorFactory.build(**kwargs)
 
         session.add(sector)
         await session.commit()
         await session.refresh(sector)
 
-        await session.refresh(sector, ['unit'])
         return sector
 
     return _create_sector
@@ -304,7 +300,7 @@ async def access_header(create_token, create_user):
 
 
 @pytest_asyncio.fixture
-def create_catalog_entry(session, create_asset, create_user):
+def create_catalog_entry(session, create_asset, create_user, create_location):
     async def _create_catalog_entry(**kwargs):
         if 'user_id' not in kwargs:
             user = await create_user()
@@ -314,21 +310,17 @@ def create_catalog_entry(session, create_asset, create_user):
             asset = await create_asset()
             kwargs['asset_id'] = asset.id
 
-        factory_catalog = CatalogFactory.build(**kwargs)
+        if 'location_id' not in kwargs:
+            location = await create_location()
+            kwargs['location_id'] = location.id
 
-        catalog_entry = Catalog(
-            asset_id=factory_catalog.asset_id,
-            user_id=factory_catalog.user_id,
-            situation=factory_catalog.situation,
-            conservation_status=factory_catalog.conservation_status,
-            description=factory_catalog.description,
-        )
+        catalog = CatalogFactory.build(**kwargs)
 
-        session.add(catalog_entry)
+        session.add(catalog)
         await session.commit()
-        await session.refresh(catalog_entry)
+        await session.refresh(catalog)
 
-        return catalog_entry
+        return catalog
 
     return _create_catalog_entry
 

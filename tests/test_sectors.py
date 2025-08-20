@@ -9,18 +9,18 @@ from vitrine.schemas import SectorPublic
 
 @pytest.mark.asyncio
 async def test_create_sector_success(
-    client, create_unit, create_user, create_token
+    client, create_agency, create_user, create_token
 ):
     user = await create_user()
     token = create_token(user)
-    unit = await create_unit(user_id=user.id)
+    agency = await create_agency(user_id=user.id)
 
     response = client.post(
         '/sectors',
         json={
             'sector_name': 'Seção de Feitiços',
             'sector_code': 'SF-01',
-            'unit_id': str(unit.id),
+            'agency_id': str(agency.id),
         },
         headers={'Authorization': f'Bearer {token}'},
     )
@@ -29,7 +29,7 @@ async def test_create_sector_success(
     data = response.json()
     assert data['sector_name'] == 'Seção de Feitiços'
     assert data['sector_code'] == 'SF-01'
-    assert data['unit_id'] == str(unit.id)
+    assert data['agency_id'] == str(agency.id)
     assert 'id' in data
 
 
@@ -39,35 +39,35 @@ async def test_create_sector_for_non_existent_unit(
 ):
     user = await create_user()
     token = create_token(user)
-    non_existent_unit_id = uuid.uuid4()
+    non_existent_agency_id = uuid.uuid4()
 
     response = client.post(
         '/sectors',
         json={
             'sector_name': 'Setor Fantasma',
             'sector_code': 'SF-GHOST',
-            'unit_id': str(non_existent_unit_id),
+            'agency_id': str(non_existent_agency_id),
         },
         headers={'Authorization': f'Bearer {token}'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert (
-        f'A unidade com ID "{non_existent_unit_id}" não foi encontrada ou está inativa.'
+        f'A organização com ID "{non_existent_agency_id}" não foi encontrada ou está inativa.'
         in response.json()['detail']
     )
 
 
 @pytest.mark.asyncio
 async def test_create_sector_for_inactive_unit(
-    client, create_unit, create_user, create_token, session
+    client, create_agency, create_user, create_token, session
 ):
     user = await create_user()
     token = create_token(user)
-    unit = await create_unit(user_id=user.id)
+    agency = await create_agency(user_id=user.id)
 
-    unit.deleted_at = datetime.now()
-    session.add(unit)
+    agency.deleted_at = datetime.now()
+    session.add(agency)
     await session.commit()
 
     response = client.post(
@@ -75,7 +75,7 @@ async def test_create_sector_for_inactive_unit(
         json={
             'sector_name': 'Setor para Unidade Inativa',
             'sector_code': 'SUI-01',
-            'unit_id': str(unit.id),
+            'agency_id': str(agency.id),
         },
         headers={'Authorization': f'Bearer {token}'},
     )
@@ -98,7 +98,7 @@ async def test_create_sector_conflict(
         json={
             'sector_name': 'Nome de Setor Repetido',
             'sector_code': 'NSR-02',
-            'unit_id': str(sector.unit.id),
+            'agency_id': str(sector.agency.id),
         },
         headers={'Authorization': f'Bearer {token}'},
     )
@@ -144,14 +144,14 @@ async def test_read_sectors_with_text_search(client, create_sector):
 
 
 @pytest.mark.asyncio
-async def test_filter_sectors_by_unit(client, create_unit, create_sector):
+async def test_filter_sectors_by_unit(client, create_agency, create_sector):
     EXPECTED_COUNT = 1
-    unit1 = await create_unit()
-    await create_sector(unit_id=unit1.id)
-    unit2 = await create_unit()
-    await create_sector(unit_id=unit2.id)
+    agency1 = await create_agency()
+    await create_sector(agency_id=agency1.id)
+    agency2 = await create_agency()
+    await create_sector(agency_id=agency2.id)
 
-    response = client.get(f'/sectors?unit_id={unit2.id}')
+    response = client.get(f'/sectors?agency_id={agency2.id}')
     assert response.status_code == HTTPStatus.OK
     sectors = response.json()['sectors']
     assert len(sectors) == EXPECTED_COUNT

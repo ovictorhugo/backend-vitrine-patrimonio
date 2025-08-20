@@ -7,7 +7,6 @@ from vitrine.models import (
     AssetSituation,
     Catalog,
     CatalogWorkFlow,
-    ConservationStatus,
     Inventory,
     InventoryAsset,
     InventoryStatus,
@@ -124,9 +123,7 @@ class CatalogFactory(factory.Factory):
         model = Catalog
 
     situation = factory.Faker('random_element', elements=list(AssetSituation))
-    conservation_status = factory.Faker(
-        'random_element', elements=list(ConservationStatus)
-    )
+    conservation_status = factory.Faker('word')
     description = factory.LazyFunction(fake.sentence)
 
 

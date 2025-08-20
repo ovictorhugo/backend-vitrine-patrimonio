@@ -395,45 +395,31 @@ async def test_filter_assets_by_material_id(
 
 
 @pytest.mark.asyncio
-async def test_search_assets_with_asset_code(
+async def test_search_assets_with_asset_identifier(
     client, create_user, create_token, create_asset
 ):
     user = await create_user()
     token = create_token(user)
-    asset_code_to_find = '123456'
-    await create_asset(asset_code=asset_code_to_find)
-    await create_asset(asset_code='987654')
+
+    asset_code = '987652'
+    asset_check_digit = '2'
+    asset_identifier_to_find = asset_code + '-' + asset_check_digit
+    await create_asset(
+        asset_code=asset_code,
+        asset_check_digit=asset_check_digit,
+    )
+    await create_asset(asset_code='987123654', asset_check_digit='2')
 
     response = client.get(
-        f'/assets?asset_code={asset_code_to_find}',
+        f'/assets?asset_identifier={asset_identifier_to_find}',
         headers={'Authorization': f'Bearer {token}'},
     )
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert len(data['assets']) == 1
-    assert data['assets'][0]['asset_code'] == asset_code_to_find
-
-
-@pytest.mark.asyncio
-async def test_search_assets_with_asset_check_digit(
-    client, create_user, create_token, create_asset
-):
-    user = await create_user()
-    token = create_token(user)
-    check_digit_to_find = '9'
-    await create_asset(asset_check_digit=check_digit_to_find)
-    await create_asset(asset_check_digit='1')
-
-    response = client.get(
-        f'/assets?asset_check_digit={check_digit_to_find}',
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()
-    assert len(data['assets']) == 1
-    assert data['assets'][0]['asset_check_digit'] == check_digit_to_find
+    assert data['assets'][0]['asset_code'] == asset_code
+    assert data['assets'][0]['asset_check_digit'] == asset_check_digit
 
 
 @pytest.mark.asyncio
