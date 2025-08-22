@@ -55,7 +55,7 @@ async def test_read_catalog_entries(client, create_catalog_entry):
     entry_schema = CatalogPublic.model_validate(entry).model_dump(mode='json')
 
     response = client.get('/catalog')
-
+    print(response)
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'catalog_entries': [entry_schema]}
 

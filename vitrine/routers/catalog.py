@@ -73,6 +73,7 @@ async def create_catalog_entry(
     session.add(initial_workflow)
     await session.commit()
     await session.refresh(db_catalog)
+
     return db_catalog
 
 
