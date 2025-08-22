@@ -55,7 +55,6 @@ async def test_read_catalog_entries(client, create_catalog_entry):
     entry_schema = CatalogPublic.model_validate(entry).model_dump(mode='json')
 
     response = client.get('/catalog')
-    print(response)
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'catalog_entries': [entry_schema]}
 
@@ -228,13 +227,14 @@ async def test_create_catalog_entry_also_creates_workflow(
     )
 
     assert response.status_code == HTTPStatus.CREATED
-    # data = response.json()
-    # assert 'workflow_history' in data
-    # assert len(data['workflow_history']) == 1
+    data = response.json()
+    print(data)
+    assert 'workflow_history' in data
+    assert len(data['workflow_history']) == 1
 
-    # workflow_step = data['workflow_history'][0]
-    # assert workflow_step['workflow_status'] == WorkFlowStatus.STARTED.value
-    # assert uuid.UUID(workflow_step['user_id'])
+    workflow_step = data['workflow_history'][0]
+    assert workflow_step['workflow_status'] == WorkFlowStatus.STARTED.value
+    assert uuid.UUID(workflow_step['user_id'])
 
 
 @pytest.mark.asyncio
@@ -304,12 +304,11 @@ async def test_upload_catalog_image_and_get(
     assert image_data['catalog_id'] == str(entry.id)
     assert image_data['file_path'].startswith('/uploads/')
 
-
-#     response_get = client.get(f'/catalog/{entry.id}')
-#     assert response_get.status_code == HTTPStatus.OK
-#     catalog_data = response_get.json()
-#     assert len(catalog_data['images']) == 1
-#     assert catalog_data['images'][0]['file_path'] == image_data['file_path']
+    response_get = client.get(f'/catalog/{entry.id}')
+    assert response_get.status_code == HTTPStatus.OK
+    catalog_data = response_get.json()
+    assert len(catalog_data['images']) == 1
+    assert catalog_data['images'][0]['file_path'] == image_data['file_path']
 
 
 @pytest.mark.asyncio
@@ -355,4 +354,61 @@ async def test_delete_catalog_image(
 
     get_resp = client.get(f'/catalog/{entry.id}')
     assert get_resp.status_code == HTTPStatus.OK
-    # assert len(get_resp.json()['images']) == 0
+    assert len(get_resp.json()['images']) == 0
+
+
+@pytest.mark.asyncio
+async def test_catalog_entry_has_workflow_and_image(
+    client,
+    create_user,
+    create_token,
+    create_asset,
+    create_location,
+):
+    user = await create_user()
+    asset = await create_asset()
+    location = await create_location()
+    token = create_token(user)
+    auth_headers = {'Authorization': f'Bearer {token}'}
+
+    catalog_payload = {
+        'asset_id': str(asset.id),
+        'situation': 'UNECONOMICAL',
+        'conservation_status': 'Bom',
+        'description': 'Entrada de teste com workflow e imagem.',
+        'location_id': str(location.id),
+    }
+
+    response_create = client.post(
+        '/catalog', json=catalog_payload, headers=auth_headers
+    )
+    assert response_create.status_code == HTTPStatus.CREATED
+    created_catalog_data = response_create.json()
+    catalog_id = created_catalog_data['id']
+
+    file_content = b'conteudo da imagem de teste'
+    file_name = 'imagem_de_teste.jpg'
+
+    response_upload = client.post(
+        f'/catalog/{catalog_id}/images',
+        files={'file': (file_name, io.BytesIO(file_content), 'image/jpeg')},
+        headers=auth_headers,
+    )
+    assert response_upload.status_code == HTTPStatus.CREATED
+    uploaded_image_data = response_upload.json()
+
+    response_get = client.get(f'/catalog/{catalog_id}')
+    assert response_get.status_code == HTTPStatus.OK
+    final_data = response_get.json()
+
+    assert 'workflow_history' in final_data
+    assert len(final_data['workflow_history']) == 1
+    workflow_step = final_data['workflow_history'][0]
+    assert workflow_step['workflow_status'] == 'STARTED'
+    assert workflow_step['user_id'] == str(user.id)
+
+    assert 'images' in final_data
+    assert len(final_data['images']) == 1
+    image_info = final_data['images'][0]
+    assert image_info['id'] == uploaded_image_data['id']
+    assert image_info['file_path'] == uploaded_image_data['file_path']

@@ -445,6 +445,19 @@ class Catalog:
         ForeignKey('locations.id'), nullable=True
     )
     location: Mapped[Location] = relationship(init=False, lazy='joined')
+    images: Mapped[list['CatalogImage']] = relationship(
+        back_populates='catalog',
+        init=False,
+        lazy='selectin',
+        cascade='all, delete-orphan',
+    )
+
+    workflow_history: Mapped[list['CatalogWorkFlow']] = relationship(
+        back_populates='catalog',
+        init=False,
+        lazy='selectin',
+        cascade='all, delete-orphan',
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -467,6 +480,9 @@ class CatalogImage:
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
     file_path: Mapped[str] = mapped_column(nullable=False)
+    catalog: Mapped['Catalog'] = relationship(
+        back_populates='images', init=False
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -484,9 +500,10 @@ class CatalogWorkFlow:
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
 
-    catalog: Mapped[Catalog] = relationship(init=False, lazy='joined')
     user: Mapped[User] = relationship(init=False, lazy='joined')
-
+    catalog: Mapped['Catalog'] = relationship(
+        back_populates='workflow_history', init=False
+    )
     workflow_status: Mapped[WorkFlowStatus] = mapped_column(
         SQLAlchemyEnum(WorkFlowStatus, name='workflow_status_enum'),
         nullable=False,

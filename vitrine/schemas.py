@@ -305,9 +305,12 @@ class CatalogPublic(CatalogSchema):
     asset_id: UUID = Field(exclude=True)
     user_id: UUID = Field(exclude=True)
     location_id: UUID = Field(exclude=True)
+
     asset: AssetPublic
     user: UserPublic
     location: LocationPublic
+    images: list[CatalogImagePublic]
+    workflow_history: list[CatalogWorkFlowPublic]
 
     model_config = ConfigDict(from_attributes=True)
 
