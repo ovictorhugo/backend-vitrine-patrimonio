@@ -387,7 +387,7 @@ async def test_catalog_entry_has_workflow_and_image(
     catalog_id = created_catalog_data['id']
 
     file_content = b'conteudo da imagem de teste'
-    file_name = 'imagem_de_teste.jpg'
+    file_name = 'imagem_de_teste.png'
 
     response_upload = client.post(
         f'/catalog/{catalog_id}/images',

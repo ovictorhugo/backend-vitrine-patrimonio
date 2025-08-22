@@ -11,7 +11,6 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
 
@@ -428,10 +427,7 @@ class Catalog:
         init=False, primary_key=True, default=uuid.uuid4
     )
 
-    situation: Mapped[AssetSituation] = mapped_column(
-        SQLAlchemyEnum(AssetSituation, name='asset_situation_enum'),
-        nullable=False,
-    )
+    situation: Mapped[str | None] = mapped_column(nullable=False, index=True)
     conservation_status: Mapped[str | None] = mapped_column(nullable=True)
     description: Mapped[str | None] = mapped_column(nullable=True)
 
@@ -504,87 +500,12 @@ class CatalogWorkFlow:
     catalog: Mapped['Catalog'] = relationship(
         back_populates='workflow_history', init=False
     )
-    workflow_status: Mapped[WorkFlowStatus] = mapped_column(
-        SQLAlchemyEnum(WorkFlowStatus, name='workflow_status_enum'),
-        nullable=False,
+    workflow_status: Mapped[str | None] = mapped_column(
+        nullable=False, index=True
     )
 
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
-    )
-
-
-@table_registry.mapped_as_dataclass
-class Inventory:
-    __tablename__ = 'inventory'
-    __table_args__ = (
-        UniqueConstraint(
-            'location_id',
-            'term',
-            name='uq_inventory_location_term',
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
-    )
-    location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('locations.id'))
-    term: Mapped[str] = mapped_column(nullable=False)
-
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='joined')
-
-    assets: Mapped[list['InventoryAsset']] = relationship(
-        back_populates='inventory', init=False
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
-
-
-@table_registry.mapped_as_dataclass
-class InventoryAsset:
-    __tablename__ = 'inventory_assets'
-    __table_args__ = (
-        UniqueConstraint(
-            'inventory_id', 'asset_id', name='uq_inventory_asset'
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
-    )
-    inventory_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey('inventory.id'), nullable=False
-    )
-    asset_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey('assets.id'), nullable=False
-    )
-    inventory_status: Mapped[InventoryStatus] = mapped_column(
-        SQLAlchemyEnum(InventoryStatus, name='inventory_status_enum'),
-        nullable=False,
-    )
-
-    inventory: Mapped['Inventory'] = relationship(
-        init=False, lazy='joined', back_populates='assets'
-    )
-    asset: Mapped['Asset'] = relationship(init=False, lazy='joined')
-
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
     )

@@ -129,6 +129,9 @@ async def read_catalog_entries(
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Asset.tsv.op('@@')(ts_query))
 
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
+
     if filters.workflow_status:
         latest_workflow_sq = select(
             CatalogWorkFlow.catalog_id,

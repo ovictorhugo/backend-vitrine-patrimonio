@@ -28,6 +28,17 @@ class UserPublic(BaseModel):
     id: UUID
     username: str
     email: EmailStr
+    provider: str | None = None
+    linkedin: str | None = None
+    lattes_id: str | None = None
+    orcid: str | None = None
+    ramal: str | None = None
+    photo_url: str | None = None
+    background_url: str | None = None
+    matricula: str | None = None
+    verify: bool | None = None
+    institution_id: UUID | None = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -321,6 +332,7 @@ class CatalogList(BaseModel):
 
 class FilterCatalog(FilterPage):
     q: str | None = Field(default=None)
+    user_id: UUID | None = None
     workflow_status: Optional[WorkFlowStatus] = None
 
 

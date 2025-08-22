@@ -14,7 +14,6 @@ from tests.factories import (
     AssetFactory,
     CatalogFactory,
     CatalogWorkFlowFactory,
-    InventoryFactory,
     LegalGuardiansFactory,
     LocationFactory,
     MaterialFactory,
@@ -343,25 +342,3 @@ def create_workflow_step(session, create_catalog_entry, create_user):
         return workflow_step
 
     return _create_workflow_step
-
-
-@pytest_asyncio.fixture
-def create_inventory(session, create_user, create_location):
-    async def _create_inventory(**kwargs):
-        if 'user_id' not in kwargs:
-            user = await create_user()
-            kwargs['user_id'] = user.id
-
-        if 'location_id' not in kwargs:
-            location = await create_location()
-            kwargs['location_id'] = location.id
-
-        inventory = InventoryFactory.build(**kwargs)
-
-        session.add(inventory)
-        await session.commit()
-        await session.refresh(inventory)
-
-        return inventory
-
-    return _create_inventory

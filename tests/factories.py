@@ -7,9 +7,6 @@ from vitrine.models import (
     AssetSituation,
     Catalog,
     CatalogWorkFlow,
-    Inventory,
-    InventoryAsset,
-    InventoryStatus,
     LegalGuardian,
     Location,
     Material,
@@ -134,20 +131,4 @@ class CatalogWorkFlowFactory(factory.Factory):
     workflow_status = WorkFlowStatus.REVIEW_REQUESTED.value
     detail = factory.LazyFunction(
         lambda: {'reason': 'Awaiting approval from manager.'}
-    )
-
-
-class InventoryFactory(factory.Factory):
-    class Meta:
-        model = Inventory
-
-    term = factory.Sequence(lambda n: f'2024-{(n % 12) + 1:02}')
-
-
-class InventoryAssetFactory(factory.Factory):
-    class Meta:
-        model = InventoryAsset
-
-    inventory_status = factory.Faker(
-        'random_element', elements=list(InventoryStatus)
     )
