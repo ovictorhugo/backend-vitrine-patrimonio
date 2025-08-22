@@ -1,6 +1,7 @@
 import io
 import uuid
 from http import HTTPStatus
+from uuid import uuid4
 
 import pytest
 
@@ -38,6 +39,14 @@ async def test_create_catalog_entry(
     data = response.json()
     assert data['asset']['id'] == str(asset.id)
     assert uuid.UUID(data['id'])
+
+
+@pytest.mark.asyncio
+async def test_read_catalog_entry_not_found(client):
+    catalog_id = str(uuid4())
+    response = client.get(f'/catalog/{catalog_id}')
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json() == {'detail': 'Catalog entry not found'}
 
 
 @pytest.mark.asyncio
@@ -124,6 +133,41 @@ async def test_update_catalog_entry(
 
 
 @pytest.mark.asyncio
+async def test_update_catalog_entry_not_found(
+    client,
+    create_user,
+    create_asset,
+    create_catalog_entry,
+    create_token,
+    create_location,
+):
+    owner_user = await create_user()
+    asset = await create_asset()
+    location = await create_location()
+    entry = await create_catalog_entry(
+        user_id=owner_user.id, asset_id=asset.id
+    )
+
+    token = create_token(owner_user)
+    fake_id = uuid4()
+    update_payload = {
+        'asset_id': str(entry.asset_id),
+        'situation': AssetSituation.BROKEN.value,
+        'conservation_status': 'XPTO',
+        'description': 'Item foi movimentado e está ocioso.',
+        'location_id': str(location.id),
+    }
+
+    response = client.put(
+        f'/catalog/{fake_id}',
+        json=update_payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.asyncio
 async def test_delete_catalog_entry(
     client, create_user, create_catalog_entry, create_token
 ):
@@ -140,6 +184,22 @@ async def test_delete_catalog_entry(
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'message': 'Catalog entry deactivated'}
+
+
+@pytest.mark.asyncio
+async def test_delete_catalog_entry_not_found(
+    client, create_user, create_catalog_entry, create_token
+):
+    fake_id = uuid4()
+    action_user = await create_user()
+    token = create_token(action_user)
+
+    response = client.delete(
+        f'/catalog/{fake_id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 @pytest.mark.asyncio
