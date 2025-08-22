@@ -196,7 +196,9 @@ async def upload_catalog_image(
 
     with open(file_path, 'wb') as buffer:
         buffer.write(await file.read())
-    db_catalog = CatalogImage(catalog_id=catalog_id, file_path=filename)
+
+    public_path = f'/uploads/{filename}'
+    db_catalog = CatalogImage(catalog_id=catalog_id, file_path=public_path)
     session.add(db_catalog)
     await session.commit()
     await session.refresh(db_catalog)

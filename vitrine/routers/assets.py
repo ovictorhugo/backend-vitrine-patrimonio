@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine import service
 from vitrine.database import get_session
-from vitrine.models import Asset, User
+from vitrine.models import Agency, Asset, Location, Sector, User
 from vitrine.schemas import (
     AssetCheckDigit,
     AssetCode,
@@ -86,18 +86,33 @@ async def read_assets(
             func.concat(Asset.asset_code, Asset.asset_check_digit)
             == filters.asset_identifier.replace('-', '')
         )
-
     if filters.atm_number:
         query = query.where(Asset.atm_number == filters.atm_number)
-
-    if filters.agency_id:
-        query = query.where(Asset.agency_id == filters.agency_id)
-    if filters.unit_id:
-        query = query.where(Asset.unit_id == filters.unit_id)
-    if filters.sector_id:
-        query = query.where(Asset.sector_id == filters.sector_id)
     if filters.material_id:
         query = query.where(Asset.material_id == filters.material_id)
+
+    if filters.unit_id:
+        query = (
+            query.join(Asset.location)
+            .join(Location.sector)
+            .join(Sector.agency)
+            .where(Agency.unit_id == filters.unit_id)
+        )
+
+    if filters.agency_id:
+        query = (
+            query.join(Asset.location)
+            .join(Location.sector)
+            .where(Sector.agency_id == filters.agency_id)
+        )
+
+    if filters.sector_id:
+        query = query.join(Asset.location).where(
+            Location.sector_id == filters.sector_id
+        )
+
+    if filters.location_id:
+        query = query.where(Asset.location_id == filters.location_id)
 
     query = query.offset(filters.offset).limit(filters.limit)
 

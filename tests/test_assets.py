@@ -246,52 +246,54 @@ async def test_search_assets_with_prefix(
 
 @pytest.mark.asyncio
 async def test_filter_assets_by_foreign_key(
-    client, create_user, create_token, create_agency, create_asset
+    client, create_user, create_token, create_location, create_asset
 ):
     user = await create_user()
     token = create_token(user)
 
-    agency_a = await create_agency(agency_name='Agência A')
-    agency_b = await create_agency(agency_name='Agência B')
-    await create_asset(agency_id=agency_a.id)
-    await create_asset(agency_id=agency_b.id)
+    location_a = await create_location(location_name='Sala A')
+    location_b = await create_location(location_name='Sala B')
+    await create_asset(location_id=location_a.id)
+    await create_asset(location_id=location_b.id)
 
     response = client.get(
-        f'/assets?agency_id={agency_a.id}',
+        f'/assets?agency_id={location_a.sector.agency.id}',
         headers={'Authorization': f'Bearer {token}'},
     )
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert len(data['assets']) == 1
-    assert data['assets'][0]['agency']['id'] == str(agency_a.id)
+    assert data['assets'][0]['location']['sector']['agency']['id'] == str(
+        location_a.sector.agency.id
+    )
 
 
 @pytest.mark.asyncio
 async def test_search_assets_combined_with_fk_filter(
-    client, create_user, create_token, create_agency, create_asset
+    client, create_user, create_token, create_location, create_asset
 ):
     user = await create_user()
     token = create_token(user)
 
-    agency_a = await create_agency(agency_name='TI - Matriz')
-    agency_b = await create_agency(agency_name='RH - Filial')
+    location_a = await create_location(location_name='Data Center')
+    location_b = await create_location(location_name='Sala Entrevistas')
 
     await create_asset(
         asset_description='Notebook i7',
-        agency_id=agency_a.id,
+        location_id=location_a.id,
     )
     await create_asset(
         asset_description='Cadeira ergonômica',
-        agency_id=agency_a.id,
+        location_id=location_a.id,
     )
     await create_asset(
         asset_description='Notebook i5',
-        agency_id=agency_b.id,
+        location_id=location_b.id,
     )
 
     response = client.get(
-        f'/assets?q=Notebook&agency_id={agency_a.id}',
+        f'/assets?q=Notebook&agency_id={location_a.sector.agency.id}',
         headers={'Authorization': f'Bearer {token}'},
     )
 
@@ -299,65 +301,103 @@ async def test_search_assets_combined_with_fk_filter(
     data = response.json()
 
     assert len(data['assets']) == 1
+
     asset_found = data['assets'][0]
-    assert 'Notebook i7' in asset_found['asset_description']
-    assert asset_found['agency']['id'] == str(agency_a.id)
+    assert asset_found['asset_description'] == 'Notebook i7'
+
+    assert asset_found['location']['sector']['agency']['id'] == str(
+        location_a.sector.agency.id
+    )
 
 
 @pytest.mark.asyncio
 async def test_filter_assets_by_unit_id(
-    client, create_user, create_token, create_unit, create_asset
+    client,
+    create_user,
+    create_token,
+    create_unit,
+    create_agency,
+    create_sector,
+    create_location,
+    create_asset,
 ):
+    # Arrange
     user = await create_user()
     token = create_token(user)
 
     unit_A = await create_unit(unit_name='Unidade de TI')
-    unit_B = await create_unit(unit_name='Unidade Administrativa')
-
-    await create_asset(asset_description='Servidor Blade', unit_id=unit_A.id)
+    agency_A = await create_agency(unit_id=unit_A.id)
+    sector_A = await create_sector(agency_id=agency_A.id)
+    location_A = await create_location(sector_id=sector_A.id)
     await create_asset(
-        asset_description='Projetor Multimídia', unit_id=unit_B.id
+        asset_description='Servidor Blade', location_id=location_A.id
     )
 
+    unit_B = await create_unit(unit_name='Unidade Administrativa')
+    agency_B = await create_agency(unit_id=unit_B.id)
+    sector_B = await create_sector(agency_id=agency_B.id)
+    location_B = await create_location(sector_id=sector_B.id)
+    await create_asset(
+        asset_description='Projetor Multimídia', location_id=location_B.id
+    )
+
+    # Act
     response = client.get(
         f'/assets?unit_id={unit_A.id}',
         headers={'Authorization': f'Bearer {token}'},
     )
 
+    # Assert
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert len(data['assets']) == 1
-    assert data['assets'][0]['unit']['id'] == str(unit_A.id)
-    assert data['assets'][0]['asset_description'] == 'Servidor Blade'
+
+    asset_found = data['assets'][0]
+    assert asset_found['asset_description'] == 'Servidor Blade'
+    assert asset_found['location']['sector']['agency']['unit']['id'] == str(
+        unit_A.id
+    )
 
 
 @pytest.mark.asyncio
 async def test_filter_assets_by_sector_id(
-    client, create_user, create_token, create_sector, create_asset
+    client,
+    create_user,
+    create_token,
+    create_sector,
+    create_location,
+    create_asset,
 ):
+    # Arrange
     user = await create_user()
     token = create_token(user)
 
     sector_A = await create_sector(sector_name='Setor de Redes')
+    location_A = await create_location(sector_id=sector_A.id)
+    await create_asset(
+        asset_description='Switch 24 Portas', location_id=location_A.id
+    )
+
     sector_B = await create_sector(sector_name='Setor de Compras')
-
+    location_B = await create_location(sector_id=sector_B.id)
     await create_asset(
-        asset_description='Switch 24 Portas', sector_id=sector_A.id
-    )
-    await create_asset(
-        asset_description='Arquivo de Aço', sector_id=sector_B.id
+        asset_description='Arquivo de Aço', location_id=location_B.id
     )
 
+    # Act
     response = client.get(
         f'/assets?sector_id={sector_A.id}',
         headers={'Authorization': f'Bearer {token}'},
     )
 
+    # Assert
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert len(data['assets']) == 1
-    assert data['assets'][0]['sector']['id'] == str(sector_A.id)
-    assert data['assets'][0]['asset_description'] == 'Switch 24 Portas'
+
+    asset_found = data['assets'][0]
+    assert asset_found['asset_description'] == 'Switch 24 Portas'
+    assert asset_found['location']['sector']['id'] == str(sector_A.id)
 
 
 @pytest.mark.asyncio

@@ -130,7 +130,6 @@ class Agency:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
     )
-    # 1. Removido unique=True daqui
     agency_name: Mapped[str] = mapped_column(nullable=False)
     agency_code: Mapped[str] = mapped_column(nullable=False)
 
@@ -353,15 +352,6 @@ class Asset:
         init=False, primary_key=True, default=uuid4
     )
 
-    unit_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey('units.id'), nullable=True
-    )
-    agency_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey('agencys.id'), nullable=True
-    )
-    sector_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey('sectors.id'), nullable=True
-    )
     location_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('locations.id'), nullable=True
     )
@@ -372,9 +362,6 @@ class Asset:
         ForeignKey('legal_guardians.id'), nullable=True
     )
 
-    unit: Mapped[Unit] = relationship(init=False, lazy='joined')
-    agency: Mapped[Agency] = relationship(init=False, lazy='joined')
-    sector: Mapped[Sector] = relationship(init=False, lazy='joined')
     location: Mapped[Location] = relationship(init=False, lazy='joined')
 
     material: Mapped[Material] = relationship(init=False, lazy='joined')
@@ -454,22 +441,6 @@ class Catalog:
     asset: Mapped[Asset] = relationship(init=False, lazy='joined')
     user: Mapped[User] = relationship(init=False, lazy='joined')
 
-    workflow_history: Mapped[list['CatalogWorkFlow']] = relationship(
-        'CatalogWorkFlow',
-        back_populates='catalog',
-        lazy='selectin',
-        order_by='CatalogWorkFlow.created_at',
-        default_factory=list,
-        init=False,
-    )
-    images: Mapped[list['CatalogImage']] = relationship(
-        back_populates='catalog',
-        cascade='all, delete-orphan',
-        lazy='selectin',
-        default_factory=list,
-        init=False,
-    )
-
     location_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('locations.id'), nullable=True
     )
@@ -496,10 +467,6 @@ class CatalogImage:
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
     file_path: Mapped[str] = mapped_column(nullable=False)
-
-    catalog: Mapped['Catalog'] = relationship(
-        init=False, back_populates='images'
-    )
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()

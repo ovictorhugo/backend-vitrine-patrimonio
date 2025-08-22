@@ -251,15 +251,6 @@ def create_asset(
     create_legal_guardian,
 ):
     async def _create_asset(**kwargs):
-        if 'agency_id' not in kwargs:
-            agency = await create_agency()
-            kwargs['agency_id'] = agency.id
-        if 'unit_id' not in kwargs:
-            unit = await create_unit()
-            kwargs['unit_id'] = unit.id
-        if 'sector_id' not in kwargs:
-            sector = await create_sector()
-            kwargs['sector_id'] = sector.id
         if 'location_id' not in kwargs:
             location = await create_location()
             kwargs['location_id'] = location.id

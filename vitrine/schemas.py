@@ -44,25 +44,6 @@ class FilterPage(BaseModel):
     limit: int = Field(100, ge=1)
 
 
-class AgencySchema(BaseModel):
-    agency_name: str = Field(..., validation_alias='org_nom')
-    agency_code: str = Field(..., validation_alias='org_cod')
-    unit_id: UUID
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-
-
-class AgencyPublic(AgencySchema):
-    id: UUID
-
-
-class AgencyList(BaseModel):
-    agencies: list[AgencyPublic]
-
-
-class FilterAgency(FilterPage):
-    q: str | None = Field(default=None)
-
-
 class UnitSchema(BaseModel):
     unit_name: str = Field(..., validation_alias='uge_nom')
     unit_code: str = Field(..., validation_alias='uge_cod')
@@ -84,6 +65,26 @@ class FilterUnit(FilterPage):
     agency_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID da Agência'
     )
+
+
+class AgencySchema(BaseModel):
+    agency_name: str = Field(..., validation_alias='org_nom')
+    agency_code: str = Field(..., validation_alias='org_cod')
+    unit_id: UUID
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class AgencyPublic(AgencySchema):
+    id: UUID
+    unit: UnitPublic
+
+
+class AgencyList(BaseModel):
+    agencies: list[AgencyPublic]
+
+
+class FilterAgency(FilterPage):
+    q: str | None = Field(default=None)
 
 
 class SectorSchema(BaseModel):
@@ -122,7 +123,6 @@ class LocationSchema(BaseModel):
 
 class LocationPublic(LocationSchema):
     id: UUID
-    # ✨ Adicionado: Retorna o objeto do setor pai completo na resposta.
     sector: SectorPublic
 
 
@@ -192,9 +192,6 @@ class AssetSchema(BaseModel):
         None, validation_alias='tre_cod'
     )
 
-    agency_id: UUID
-    unit_id: UUID
-    sector_id: UUID
     location_id: UUID
     material_id: UUID
     legal_guardian_id: UUID
@@ -216,19 +213,10 @@ class AssetPublic(AssetSchema):
     id: UUID
     material: MaterialPublic
     legal_guardian: LegalGuardianPublic
-    agency: AgencyPublic
-    unit: UnitPublic
-    sector: SectorPublic
     location: LocationPublic
-
-    agency_id: UUID = Field(exclude=True)
-    unit_id: UUID = Field(exclude=True)
-    sector_id: UUID = Field(exclude=True)
     location_id: UUID = Field(exclude=True)
-
     material_id: UUID = Field(exclude=True)
     legal_guardian_id: UUID = Field(exclude=True)
-
     is_official: bool
     model_config = ConfigDict(from_attributes=True)
 
@@ -277,6 +265,9 @@ class FilterAsset(BaseModel):
     sector_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID do Setor'
     )
+    location_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID da Sala'
+    )
     material_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID do Material'
     )
@@ -306,7 +297,6 @@ class CatalogImagePublic(BaseModel):
     id: UUID
     catalog_id: UUID
     file_path: str
-
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -315,13 +305,9 @@ class CatalogPublic(CatalogSchema):
     asset_id: UUID = Field(exclude=True)
     user_id: UUID = Field(exclude=True)
     location_id: UUID = Field(exclude=True)
-
     asset: AssetPublic
     user: UserPublic
     location: LocationPublic
-
-    images: list[CatalogImagePublic] = []
-    workflow_history: list[CatalogWorkFlowPublic] = []
 
     model_config = ConfigDict(from_attributes=True)
 
