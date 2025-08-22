@@ -345,7 +345,6 @@ def create_workflow_step(session, create_catalog_entry, create_user):
     return _create_workflow_step
 
 
-# NOVO: Fixture para criar Inventories
 @pytest_asyncio.fixture
 def create_inventory(session, create_user, create_location):
     async def _create_inventory(**kwargs):

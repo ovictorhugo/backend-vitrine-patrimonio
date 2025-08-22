@@ -129,6 +129,28 @@ async def read_catalog_entries(
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Asset.tsv.op('@@')(ts_query))
 
+    if filters.workflow_status:
+        latest_workflow_sq = select(
+            CatalogWorkFlow.catalog_id,
+            CatalogWorkFlow.workflow_status,
+            func.row_number()
+            .over(
+                partition_by=CatalogWorkFlow.catalog_id,
+                order_by=CatalogWorkFlow.created_at.desc(),
+            )
+            .label('rn'),
+        ).subquery('latest_workflow_sq')
+
+        query = query.join(
+            latest_workflow_sq,
+            Catalog.id == latest_workflow_sq.c.catalog_id,
+        )
+
+        query = query.where(
+            latest_workflow_sq.c.rn == 1,
+            latest_workflow_sq.c.workflow_status == filters.workflow_status,
+        )
+
     query = query.options(
         selectinload(Catalog.images),
         selectinload(Catalog.workflow_history).options(

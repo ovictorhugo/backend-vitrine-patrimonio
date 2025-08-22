@@ -321,6 +321,7 @@ class CatalogList(BaseModel):
 
 class FilterCatalog(FilterPage):
     q: str | None = Field(default=None)
+    workflow_status: Optional[WorkFlowStatus] = None
 
 
 class InventorySchema(BaseModel):

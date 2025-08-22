@@ -412,3 +412,80 @@ async def test_catalog_entry_has_workflow_and_image(
     image_info = final_data['images'][0]
     assert image_info['id'] == uploaded_image_data['id']
     assert image_info['file_path'] == uploaded_image_data['file_path']
+
+
+@pytest.mark.asyncio
+async def test_filter_catalog_by_workflow_status(
+    client,
+    create_user,
+    create_catalog_entry,
+    create_workflow_step,
+):
+    user = await create_user()
+
+    entry_started = await create_catalog_entry(user_id=user.id)
+    entry_review_requested = await create_catalog_entry(user_id=user.id)
+    entry_completed = await create_catalog_entry(user_id=user.id)
+
+    # Adiciona workflow inicial STARTED para cada entry
+    await create_workflow_step(
+        catalog_id=entry_started.id,
+        user_id=user.id,
+        workflow_status=WorkFlowStatus.STARTED.value,
+    )
+
+    await create_workflow_step(
+        catalog_id=entry_review_requested.id,
+        user_id=user.id,
+        workflow_status=WorkFlowStatus.REVIEW_REQUESTED.value,
+    )
+
+    await create_workflow_step(
+        catalog_id=entry_completed.id,
+        user_id=user.id,
+        workflow_status=WorkFlowStatus.REVIEW_REQUESTED.value,
+    )
+    await create_workflow_step(
+        catalog_id=entry_completed.id,
+        user_id=user.id,
+        workflow_status=WorkFlowStatus.COMPLETED.value,
+    )
+
+    # Testa STARTED
+    response_started = client.get(
+        f'/catalog?workflow_status={WorkFlowStatus.STARTED.value}'
+    )
+    assert response_started.status_code == HTTPStatus.OK
+    data_started = response_started.json()
+    assert len(data_started['catalog_entries']) == 1
+    assert data_started['catalog_entries'][0]['id'] == str(entry_started.id)
+
+    # Testa REVIEW_REQUESTED
+    response_review = client.get(
+        f'/catalog?workflow_status={WorkFlowStatus.REVIEW_REQUESTED.value}'
+    )
+    assert response_review.status_code == HTTPStatus.OK
+    data_review = response_review.json()
+    assert len(data_review['catalog_entries']) == 1
+    assert data_review['catalog_entries'][0]['id'] == str(
+        entry_review_requested.id
+    )
+
+    # Testa COMPLETED
+    response_completed = client.get(
+        f'/catalog?workflow_status={WorkFlowStatus.COMPLETED.value}'
+    )
+    assert response_completed.status_code == HTTPStatus.OK
+    data_completed = response_completed.json()
+    assert len(data_completed['catalog_entries']) == 1
+    assert data_completed['catalog_entries'][0]['id'] == str(
+        entry_completed.id
+    )
+
+    # Testa workflow inexistente
+    response_empty = client.get(
+        f'/catalog?workflow_status={WorkFlowStatus.ADJUSTMENT_REQUESTED.value}'
+    )
+    assert response_empty.status_code == HTTPStatus.OK
+    data_empty = response_empty.json()
+    assert len(data_empty['catalog_entries']) == 0
