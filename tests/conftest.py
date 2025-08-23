@@ -5,7 +5,7 @@ import pytest
 import pytest_asyncio
 from faker import Faker
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
@@ -14,6 +14,7 @@ from tests.factories import (
     AssetFactory,
     CatalogFactory,
     CatalogWorkFlowFactory,
+    InventoryFactory,
     LegalGuardiansFactory,
     LocationFactory,
     MaterialFactory,
@@ -25,6 +26,7 @@ from vitrine.app import app
 from vitrine.database import get_session
 from vitrine.models import (
     CatalogWorkFlow,
+    InventoryOwner,
     User,
     table_registry,
 )
@@ -342,3 +344,34 @@ def create_workflow_step(session, create_catalog_entry, create_user):
         return workflow_step
 
     return _create_workflow_step
+
+
+@pytest_asyncio.fixture
+def create_inventory(session, create_user):
+    async def _create(**kwargs):
+        if 'created_by_id' not in kwargs:
+            user = await create_user()
+            kwargs['created_by_id'] = user.id
+
+        query = select(User).where(User.deleted_at.is_(None))
+        users_db = await session.scalars(query)
+        users_db = users_db.all()
+
+        inventory_db = InventoryFactory(**kwargs)
+
+        session.add(inventory_db)
+        await session.flush()
+
+        owners = []
+        for user in users_db:
+            i = InventoryOwner(inventory_id=inventory_db.id, user_id=user.id)
+            owners.append(i)
+
+        session.add(inventory_db)
+        session.add_all(owners)
+
+        await session.commit()
+        await session.refresh(inventory_db)
+        return inventory_db
+
+    return _create

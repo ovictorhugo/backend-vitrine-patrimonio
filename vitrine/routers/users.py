@@ -79,7 +79,8 @@ async def read_users(
     return {'users': users}
 
 
-@router.get('/my-self', response_model=UserPublic)
+@router.get('/my-self', include_in_schema=False)
+@router.get('/my', response_model=UserPublic)
 async def read_me(current_user: CurrentUser):
     return current_user
 

@@ -337,16 +337,26 @@ class FilterCatalog(FilterPage):
 
 
 class InventorySchema(BaseModel):
-    location_id: UUID
-    term: str
+    key: str
+    model_config = ConfigDict(from_attributes=True)
 
+
+class InventoryOwnerPublic(BaseModel):
+    user_id: UUID = Field(exclude=True)
+    user: UserPublic
     model_config = ConfigDict(from_attributes=True)
 
 
 class InventoryPublic(InventorySchema):
     id: UUID
+    created_by: UserPublic
+    owners: list[InventoryOwnerPublic]
     model_config = ConfigDict(from_attributes=True)
 
 
 class InventoryList(BaseModel):
     inventories: list[InventoryPublic]
+
+
+class FilterInventory(FilterPage):
+    q: str | None = Field(default=None)

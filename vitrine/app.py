@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from vitrine.routers import assets, auth, catalog, users
+from vitrine.routers import assets, auth, catalog, inventory, users
 from vitrine.routers.organizational_structure import (
     agencies,
     legal_guardians,
@@ -40,7 +40,7 @@ app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(assets.router)
 app.include_router(catalog.router)
-# app.include_router(inventory.router)
+app.include_router(inventory.router)
 
 app.include_router(agencies.router)
 app.include_router(units.router)

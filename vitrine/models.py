@@ -83,7 +83,6 @@ class Unit:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
     )
-    # 1. Removido unique=True daqui
     unit_name: Mapped[str] = mapped_column(nullable=False)
     unit_code: Mapped[str] = mapped_column(nullable=False)
     unit_siaf: Mapped[str] = mapped_column(nullable=False)
@@ -495,7 +494,6 @@ class CatalogWorkFlow:
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-
     user: Mapped[User] = relationship(init=False, lazy='joined')
     catalog: Mapped['Catalog'] = relationship(
         back_populates='workflow_history', init=False
@@ -505,6 +503,62 @@ class CatalogWorkFlow:
     )
 
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+
+
+@table_registry.mapped_as_dataclass
+class Inventory:
+    __tablename__ = 'inventory'
+    __table_args__ = (UniqueConstraint('key', name='uq_inventory_key'),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+    key: Mapped[str] = mapped_column(nullable=False)
+
+    owners: Mapped[list['InventoryOwner']] = relationship(
+        back_populates='inventory',
+        init=False,
+        lazy='selectin',
+        cascade='all, delete-orphan',
+    )
+
+    created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    created_by: Mapped[User] = relationship(init=False, lazy='joined')
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        init=False, nullable=True, onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class InventoryOwner:
+    __tablename__ = 'inventory_owners'
+    __table_args__ = (
+        UniqueConstraint('inventory_id', 'user_id', name='uq_inventory_user'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+
+    inventory_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('inventory.id'))
+    inventory: Mapped['Inventory'] = relationship(
+        init=False,
+        back_populates='owners',
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user: Mapped['User'] = relationship(init=False, lazy='joined')
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()

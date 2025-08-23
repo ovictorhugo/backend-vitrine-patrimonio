@@ -1,3 +1,5 @@
+import uuid
+
 import factory
 from faker import Faker
 
@@ -7,6 +9,8 @@ from vitrine.models import (
     AssetSituation,
     Catalog,
     CatalogWorkFlow,
+    Inventory,
+    InventoryOwner,
     LegalGuardian,
     Location,
     Material,
@@ -132,3 +136,18 @@ class CatalogWorkFlowFactory(factory.Factory):
     detail = factory.LazyFunction(
         lambda: {'reason': 'Awaiting approval from manager.'}
     )
+
+
+class InventoryFactory(factory.Factory):
+    class Meta:
+        model = Inventory
+
+    key = factory.Faker('slug')
+
+
+class InventoryOwnerFactory(factory.Factory):
+    class Meta:
+        model = InventoryOwner
+
+    inventory = factory.SubFactory(InventoryFactory)
+    user_id = factory.LazyFunction(uuid.uuid4)

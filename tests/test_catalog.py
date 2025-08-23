@@ -228,7 +228,6 @@ async def test_create_catalog_entry_also_creates_workflow(
 
     assert response.status_code == HTTPStatus.CREATED
     data = response.json()
-    print(data)
     assert 'workflow_history' in data
     assert len(data['workflow_history']) == 1
 
