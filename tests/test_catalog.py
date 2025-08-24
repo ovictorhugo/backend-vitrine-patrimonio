@@ -512,3 +512,32 @@ async def test_list_catalog_materials(
     response = client.get('/catalog/search/material_name?q=Ferr')
     assert response.status_code == HTTPStatus.OK
     assert len(response.json()['material_name']) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_catalog_legal_guardians(
+    client, create_catalog_entry, create_asset, create_legal_guardian
+):
+    guardian1 = await create_legal_guardian(legal_guardians_name='João')
+    guardian2 = await create_legal_guardian(legal_guardians_name='Jozé')
+    guardian3 = await create_legal_guardian(legal_guardians_name='Pedro')
+
+    asset1 = await create_asset(legal_guardian_id=guardian1.id)
+    asset2 = await create_asset(legal_guardian_id=guardian2.id)
+    asset3 = await create_asset(legal_guardian_id=guardian3.id)
+
+    await create_catalog_entry(asset_id=asset1.id)
+    await create_catalog_entry(asset_id=asset2.id)
+    await create_catalog_entry(asset_id=asset3.id)
+
+    response = client.get('/catalog/search/legal_guardians_name?q=J')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['legal_guardians_name']) == 2
+
+    response = client.get('/catalog/search/legal_guardians_name')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['legal_guardians_name']) == 3
+
+    response = client.get('/catalog/search/legal_guardians_name?q=Joz')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['legal_guardians_name']) == 1

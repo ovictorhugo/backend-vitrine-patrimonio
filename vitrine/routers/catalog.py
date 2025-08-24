@@ -15,6 +15,7 @@ from vitrine.models import (
     Catalog,
     CatalogImage,
     CatalogWorkFlow,
+    LegalGuardian,
     Material,
     User,
     WorkFlowStatus,
@@ -27,6 +28,7 @@ from vitrine.schemas import (
     CatalogWorkFlowPublic,
     CatalogWorkFlowSchema,
     FilterCatalog,
+    LegalGuardianNameResponse,
     MaterialNameResponse,
     Message,
 )
@@ -294,8 +296,8 @@ async def delete_catalog_image(
 
 @router.get('/search/material_name', response_model=MaterialNameResponse)
 async def list_catalog_materials(
-    q: str,
     session: Session,
+    q: str = str(),
 ):
     query = (
         select(Material.material_name)
@@ -310,3 +312,26 @@ async def list_catalog_materials(
     material_names = result.all()
 
     return {'material_name': material_names}
+
+
+@router.get(
+    '/search/legal_guardians_name',
+    response_model=LegalGuardianNameResponse,
+)
+async def list_catalog_legal_guardians(
+    session: Session,
+    q: str = str(),
+):
+    query = (
+        select(LegalGuardian.legal_guardians_name)
+        .join_from(Catalog, Asset)
+        .join(LegalGuardian)
+        .where(Catalog.deleted_at.is_(None))
+        .where(LegalGuardian.legal_guardians_name.ilike(f'{q}%'))
+        .distinct()
+    )
+
+    result = await session.scalars(query)
+    material_names = result.all()
+
+    return {'legal_guardians_name': material_names}

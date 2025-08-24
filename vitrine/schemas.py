@@ -256,6 +256,10 @@ class MaterialNameResponse(BaseModel):
     material_name: List[str] = None
 
 
+class LegalGuardianNameResponse(BaseModel):
+    legal_guardians_name: List[str] = None
+
+
 class FilterAsset(BaseModel):
     limit: int = 100
     offset: int = 0

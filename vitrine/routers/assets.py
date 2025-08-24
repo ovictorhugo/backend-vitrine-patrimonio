@@ -176,8 +176,8 @@ async def search_by_asset_code(
 
 @router.get('/search/asset-check-digit', response_model=AssetCheckDigit)
 async def search_by_asset_check_digit(
-    q: str,
     session: Session,
+    q: str = str(),
 ):
     query = (
         select(Asset.asset_check_digit)
@@ -190,8 +190,8 @@ async def search_by_asset_check_digit(
 
 @router.get('/search/atm-number', response_model=AtmNumber)
 async def search_by_atm_number(
-    q: str,
     session: Session,
+    q: str = str(),
 ):
     query = (
         select(Asset.atm_number)
@@ -204,8 +204,8 @@ async def search_by_atm_number(
 
 @router.get('/search/asset-identifier', response_model=AssetIdentifier)
 async def search_by_asset_identifier(
-    q: str,
     session: Session,
+    q: str = str(),
 ):
     q = q.replace('-', '')
     query = (
