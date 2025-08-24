@@ -114,6 +114,11 @@ async def read_assets(
     if filters.location_id:
         query = query.where(Asset.location_id == filters.location_id)
 
+    if filters.legal_guardian_id:
+        query = query.where(
+            Asset.legal_guardian_id == filters.legal_guardian_id
+        )
+
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)

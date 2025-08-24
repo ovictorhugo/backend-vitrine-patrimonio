@@ -435,6 +435,43 @@ async def test_filter_assets_by_material_id(
 
 
 @pytest.mark.asyncio
+async def test_filter_assets_by_legal_guardian_id(
+    client, create_user, create_token, create_legal_guardian, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    legal_guardian_notebook = await create_legal_guardian(
+        legal_guardians_name='Notebook Corporativo'
+    )
+    legal_guardian_monitor = await create_legal_guardian(
+        legal_guardians_name='Monitor 24 polegadas'
+    )
+
+    await create_asset(
+        asset_description='Notebook Dell i7',
+        legal_guardian_id=legal_guardian_notebook.id,
+    )
+    await create_asset(
+        asset_description='Monitor LG Ultrawide',
+        legal_guardian_id=legal_guardian_monitor.id,
+    )
+
+    response = client.get(
+        f'/assets?legal_guardian_id={legal_guardian_notebook.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['legal_guardian']['id'] == str(
+        legal_guardian_notebook.id
+    )
+    assert data['assets'][0]['asset_description'] == 'Notebook Dell i7'
+
+
+@pytest.mark.asyncio
 async def test_search_assets_with_asset_identifier(
     client, create_user, create_token, create_asset
 ):

@@ -10,7 +10,6 @@ from vitrine.schemas import LegalGuardianPublic
 
 @pytest.mark.asyncio
 async def test_create_legal_guardian(client, create_user, create_token):
-    """Testa a criação de um novo responsável legal com sucesso."""
     user = await create_user()
     token = create_token(user)
 

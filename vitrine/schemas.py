@@ -287,6 +287,9 @@ class FilterAsset(BaseModel):
     material_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID do Material'
     )
+    legal_guardian_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID do Responsavel pelo bem'
+    )
 
 
 class CatalogSchema(BaseModel):
