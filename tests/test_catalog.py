@@ -245,7 +245,7 @@ async def test_add_workflow_step(
     catalog_id = str(catalog_entry.id)
 
     workflow_payload = {
-        'workflow_status': WorkFlowStatus.REVIEW_REQUESTED.value,
+        'workflow_status': WorkFlowStatus.REVIEW_REQUESTED_VITRINE.value,
         'detail': {'reason': 'Awaiting approval from manager.'},
     }
     response = client.post(
@@ -258,7 +258,10 @@ async def test_add_workflow_step(
 
     data = response.json()
 
-    assert data['workflow_status'] == WorkFlowStatus.REVIEW_REQUESTED.value
+    assert (
+        data['workflow_status']
+        == WorkFlowStatus.REVIEW_REQUESTED_VITRINE.value
+    )
     assert data['detail']['reason'] == 'Awaiting approval from manager.'
     assert data['catalog_id'] == catalog_id
 
@@ -435,13 +438,13 @@ async def test_filter_catalog_by_workflow_status(
     await create_workflow_step(
         catalog_id=entry_review_requested.id,
         user_id=user.id,
-        workflow_status=WorkFlowStatus.REVIEW_REQUESTED.value,
+        workflow_status=WorkFlowStatus.REVIEW_REQUESTED_VITRINE.value,
     )
 
     await create_workflow_step(
         catalog_id=entry_completed.id,
         user_id=user.id,
-        workflow_status=WorkFlowStatus.REVIEW_REQUESTED.value,
+        workflow_status=WorkFlowStatus.REVIEW_REQUESTED_VITRINE.value,
     )
     await create_workflow_step(
         catalog_id=entry_completed.id,
@@ -458,7 +461,7 @@ async def test_filter_catalog_by_workflow_status(
     assert data_started['catalog_entries'][0]['id'] == str(entry_started.id)
 
     response_review = client.get(
-        f'/catalog?workflow_status={WorkFlowStatus.REVIEW_REQUESTED.value}'
+        f'/catalog?workflow_status={WorkFlowStatus.REVIEW_REQUESTED_VITRINE.value}'
     )
     assert response_review.status_code == HTTPStatus.OK
     data_review = response_review.json()

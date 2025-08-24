@@ -132,7 +132,7 @@ class CatalogWorkFlowFactory(factory.Factory):
     class Meta:
         model = CatalogWorkFlow
 
-    workflow_status = WorkFlowStatus.REVIEW_REQUESTED.value
+    workflow_status = WorkFlowStatus.STARTED.value
     detail = factory.LazyFunction(
         lambda: {'reason': 'Awaiting approval from manager.'}
     )

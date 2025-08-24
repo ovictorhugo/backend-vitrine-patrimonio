@@ -19,7 +19,7 @@ services:
     entrypoint: ./entrypoint.sh
     container_name: vitrine_api
     ports:
-      - "8000:8000"
+      - "5055:8000"
     depends_on:
       - db
     environment:

@@ -15,7 +15,7 @@ from vitrine.settings import Settings
 
 SECRET_KEY = Settings().SECRET_KEY
 ALGORITHM = 'HS256'
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 10080
 pwd_context = PasswordHash.recommended()
 
 oauth2_scheme = OAuth2PasswordBearer(

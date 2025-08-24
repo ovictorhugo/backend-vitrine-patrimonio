@@ -17,6 +17,12 @@ from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
 table_registry = registry()
 
 
+class InventoryAssetStatus(str, PythonEnum):
+    FOUND = 'FOUND'
+    NOT_FOUND = 'NOT_FOUND'
+    PENDING = 'PENDING'
+
+
 class AssetSituation(str, PythonEnum):
     UNUSED = 'UNUSED'
     RECOVERABLE = 'RECOVERABLE'
@@ -401,6 +407,7 @@ class Asset:
         TSVECTOR,
         Computed(
             "to_tsvector('portuguese', "
+            "coalesce(asset_code, '') || ' ' || "
             "coalesce(serial_number, '') || ' ' || "
             "coalesce(asset_description, '') || ' ' || "
             "coalesce(item_brand, '') || ' ' || "
@@ -555,6 +562,43 @@ class InventoryOwner:
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped['User'] = relationship(init=False, lazy='joined')
+
+    assets: Mapped[list['InventoryAsset']] = relationship(
+        back_populates='inventory_owner',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
+    )
+
+
+@table_registry.mapped_as_dataclass
+class InventoryAsset:
+    __tablename__ = 'inventory_assets'
+    __table_args__ = (
+        UniqueConstraint(
+            'inventory_owner_id', 'asset_id', name='uq_inventory_owner_asset'
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+    inventory_owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('inventory_owners.id')
+    )
+    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'))
+    inventory_owner: Mapped[InventoryOwner] = relationship(
+        init=False, back_populates='assets'
+    )
+    asset: Mapped[Asset] = relationship(init=False, lazy='joined')
+    status: Mapped[str | None] = mapped_column(nullable=False, index=True)
+    comment: Mapped[str | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
     )

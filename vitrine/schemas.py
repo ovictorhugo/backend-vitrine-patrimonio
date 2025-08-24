@@ -3,10 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from vitrine.models import (
-    AssetSituation,
-    WorkFlowStatus,
-)
+from vitrine.models import AssetSituation, InventoryAssetStatus, WorkFlowStatus
 
 
 class Message(BaseModel):
@@ -377,3 +374,22 @@ class InventoryList(BaseModel):
 
 class FilterInventory(FilterPage):
     q: str | None = Field(default=None)
+
+
+class InventoryAssetSchema(BaseModel):
+    asset_id: UUID
+    status: InventoryAssetStatus = InventoryAssetStatus.FOUND.value
+    comment: str | None = None
+
+
+class InventoryAssetPublic(BaseModel):
+    id: UUID
+    asset: AssetPublic
+    status: InventoryAssetStatus
+    comment: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryAssetList(BaseModel):
+    assets: list[InventoryAssetPublic]

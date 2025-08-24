@@ -79,7 +79,6 @@ async def create_catalog_entry(
 
     if catalog_data.situation in {'UNECONOMICAL', 'BROKEN'}:
         status = WorkFlowStatus.REVIEW_REQUESTED_DESFAZIMENTO
-
     if catalog_data.situation in {'UNUSED', 'RECOVERABLE'}:
         status = WorkFlowStatus.REVIEW_REQUESTED_VITRINE
 
