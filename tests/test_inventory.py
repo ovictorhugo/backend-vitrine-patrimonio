@@ -78,65 +78,6 @@ async def test_read_inventories(
 
 
 @pytest.mark.asyncio
-async def test_read_inventory_by_id(
-    client, create_user, create_token, create_inventory
-):
-    user = await create_user()
-    token = create_token(user)
-
-    inv = await create_inventory(key=f'KEY-{uuid4()}')
-
-    response = client.get(
-        f'/inventories/{inv.id}',
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()
-    assert data['id'] == str(inv.id)
-    assert data['key'] == inv.key
-
-
-@pytest.mark.asyncio
-async def test_read_inventory_by_id_not_found(
-    client, create_user, create_token
-):
-    user = await create_user()
-    token = create_token(user)
-
-    response = client.get(
-        f'/inventories/{uuid4()}',
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.NOT_FOUND
-    assert response.json()['detail'] == 'Inventory not found'
-
-
-@pytest.mark.asyncio
-async def test_read_my_inventories(
-    client, create_user, create_token, create_inventory
-):
-    creator = await create_user(email='creator@test.com')
-    other = await create_user(email='other@test.com')
-
-    await create_inventory(key=f'KEY-{uuid4()}', created_by_id=creator.id)
-    await create_inventory(key=f'KEY-{uuid4()}', created_by_id=other.id)
-
-    token = create_token(creator)
-
-    response = client.get(
-        '/inventories/my',
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()
-    assert len(data['inventories']) == 1
-    assert data['inventories'][0]['created_by']['id'] == str(creator.id)
-
-
-@pytest.mark.asyncio
 async def test_update_inventory_success(
     client, session, create_user, create_token, create_inventory
 ):
@@ -221,21 +162,6 @@ async def test_delete_inventory_forbidden(
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json()['detail'] == 'Not enough permissions'
-
-
-@pytest.mark.asyncio
-async def test_read_my_inventories_empty(client, create_user, create_token):
-    user = await create_user(email='empty@test.com')
-    token = create_token(user)
-
-    response = client.get(
-        '/inventories/my',
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()
-    assert data['inventories'] == []
 
 
 @pytest.mark.asyncio

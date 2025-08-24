@@ -528,7 +528,7 @@ class Inventory:
 
     created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     created_by: Mapped[User] = relationship(init=False, lazy='joined')
-
+    available: Mapped[bool] = mapped_column(default=True, init=False)
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -546,20 +546,16 @@ class InventoryOwner:
     __table_args__ = (
         UniqueConstraint('inventory_id', 'user_id', name='uq_inventory_user'),
     )
-
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
     )
-
     inventory_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('inventory.id'))
     inventory: Mapped['Inventory'] = relationship(
         init=False,
         back_populates='owners',
     )
-
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped['User'] = relationship(init=False, lazy='joined')
-
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )

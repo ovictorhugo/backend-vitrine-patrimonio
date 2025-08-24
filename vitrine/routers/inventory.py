@@ -85,28 +85,6 @@ async def read_inventories(
     return {'inventories': inventories}
 
 
-@router.get('/my', response_model=InventoryList)
-async def read_my_inventories(session: Session, current_user: CurrentUser):
-    query = await session.scalars(
-        select(Inventory).where(
-            Inventory.created_by_id == current_user.id,
-            Inventory.deleted_at.is_(None),
-        )
-    )
-    inventories = query.all()
-    return {'inventories': inventories}
-
-
-@router.get('/{inventory_id}', response_model=InventoryPublic)
-async def read_inventory(inventory_id: UUID, session: Session):
-    inventory = await session.get(Inventory, inventory_id)
-    if not inventory or inventory.deleted_at:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Inventory not found'
-        )
-    return inventory
-
-
 @router.put('/{inventory_id}', response_model=InventoryPublic)
 async def update_inventory(
     inventory_id: UUID,
