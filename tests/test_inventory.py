@@ -221,3 +221,67 @@ async def test_delete_inventory_forbidden(
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json()['detail'] == 'Not enough permissions'
+
+
+@pytest.mark.asyncio
+async def test_read_my_inventories_empty(client, create_user, create_token):
+    user = await create_user(email='empty@test.com')
+    token = create_token(user)
+
+    response = client.get(
+        '/inventories/my',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert data['inventories'] == []
+
+
+@pytest.mark.asyncio
+async def test_update_inventory_conflict(
+    client, create_user, create_token, create_inventory
+):
+    user = await create_user()
+    token = create_token(user)
+
+    inv1 = await create_inventory(key=f'KEY-{uuid4()}', created_by_id=user.id)
+    inv2 = await create_inventory(key=f'KEY-{uuid4()}', created_by_id=user.id)
+
+    response = client.put(
+        f'/inventories/{inv2.id}',
+        json={'key': inv1.key},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json()['detail'] == 'Inventory key already exists'
+
+
+@pytest.mark.asyncio
+async def test_delete_inventory_not_found(client, create_user, create_token):
+    user = await create_user()
+    token = create_token(user)
+
+    response = client.delete(
+        f'/inventories/{uuid4()}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()['detail'] == 'Inventory not found'
+
+
+@pytest.mark.asyncio
+async def test_put_inventory_not_found(client, create_user, create_token):
+    user = await create_user()
+    token = create_token(user)
+
+    response = client.put(
+        f'/inventories/{uuid4()}',
+        json={'key': 'xpto'},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()['detail'] == 'Inventory not found'

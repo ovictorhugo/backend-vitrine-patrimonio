@@ -48,12 +48,6 @@ async def create_inventory(
     users_db = await session.scalars(query)
     users_db = users_db.all()
 
-    if not users_db:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail='There are no active users on the platform to create inventory for.',
-        )
-
     inventory_db = Inventory(
         key=inventory.key,
         created_by_id=current_user.id,
