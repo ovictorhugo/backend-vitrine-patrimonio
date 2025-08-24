@@ -72,7 +72,11 @@ class User:
     institution_id: Mapped[UUID] = mapped_column(
         default=UUID('27b3839b-d9b3-43c6-824a-aef738ace101'), init=False
     )
-
+    favorites: Mapped[list['FavoriteCatalog']] = relationship(
+        back_populates='user',
+        init=False,
+        cascade='all, delete-orphan',
+    )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -459,7 +463,11 @@ class Catalog:
         lazy='selectin',
         cascade='all, delete-orphan',
     )
-
+    favorited_by: Mapped[list['FavoriteCatalog']] = relationship(
+        back_populates='catalog',
+        init=False,
+        cascade='all, delete-orphan',
+    )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -601,4 +609,30 @@ class InventoryAsset:
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class FavoriteCatalog:
+    __tablename__ = 'favorite_catalogs'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'catalog_id', name='uq_favorite_catalog'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('users.id'), nullable=False
+    )
+    catalog_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('catalog.id'), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+
+    user: Mapped['User'] = relationship(back_populates='favorites', init=False)
+    catalog: Mapped['Catalog'] = relationship(
+        back_populates='favorited_by', init=False, lazy='joined'
     )

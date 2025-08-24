@@ -1,5 +1,3 @@
-# Em tests/test_materials.py
-
 import uuid
 from http import HTTPStatus
 

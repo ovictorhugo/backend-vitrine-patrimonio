@@ -9,6 +9,7 @@ from vitrine.models import (
     AssetSituation,
     Catalog,
     CatalogWorkFlow,
+    FavoriteCatalog,
     Inventory,
     InventoryOwner,
     LegalGuardian,
@@ -151,3 +152,11 @@ class InventoryOwnerFactory(factory.Factory):
 
     inventory = factory.SubFactory(InventoryFactory)
     user_id = factory.LazyFunction(uuid.uuid4)
+
+
+class FavoriteCatalogFactory(factory.Factory):
+    class Meta:
+        model = FavoriteCatalog
+
+    user_id = None
+    catalog_id = None

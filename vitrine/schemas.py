@@ -393,3 +393,11 @@ class InventoryAssetPublic(BaseModel):
 
 class InventoryAssetList(BaseModel):
     assets: list[InventoryAssetPublic]
+
+
+class FavoriteSchema(BaseModel):
+    catalog_id: UUID
+
+
+class FavoriteList(BaseModel):
+    favorites: list[CatalogPublic]

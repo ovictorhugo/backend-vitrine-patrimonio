@@ -14,6 +14,7 @@ from tests.factories import (
     AssetFactory,
     CatalogFactory,
     CatalogWorkFlowFactory,
+    FavoriteCatalogFactory,
     InventoryFactory,
     LegalGuardiansFactory,
     LocationFactory,
@@ -375,3 +376,25 @@ def create_inventory(session, create_user):
         return inventory_db
 
     return _create
+
+
+@pytest_asyncio.fixture
+def create_favorite_catalog(session, create_user, create_catalog_entry):
+    async def _create_favorite_catalog(**kwargs):
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        if 'catalog_id' not in kwargs:
+            catalog = await create_catalog_entry()
+            kwargs['catalog_id'] = catalog.id
+
+        favorite = FavoriteCatalogFactory.build(**kwargs)
+
+        session.add(favorite)
+        await session.commit()
+        await session.refresh(favorite)
+
+        return favorite
+
+    return _create_favorite_catalog
