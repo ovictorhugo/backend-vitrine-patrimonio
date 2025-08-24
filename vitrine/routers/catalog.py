@@ -28,11 +28,13 @@ from vitrine.schemas import (
     CatalogWorkFlowPublic,
     CatalogWorkFlowSchema,
     FilterCatalog,
-    LegalGuardianNameResponse,
-    MaterialNameResponse,
+    FilterSearchCatalog,
+    LegalGuardianList,
+    MaterialList,
     Message,
 )
 from vitrine.security import get_current_user
+from vitrine.service import apply_catalog_filters
 
 router = APIRouter(
     prefix='/catalog', tags=['vitrine - patrimônios anunciados']
@@ -127,36 +129,24 @@ async def read_catalog_entries(
 ):
     query = select(Catalog).where(Catalog.deleted_at.is_(None))
 
-    if filters.q:
+    asset_join = filters.q or filters.material_id or filters.legal_guardian_id
+    if asset_join:
         query = query.join(Catalog.asset)
+
+    if filters.q:
         prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Asset.tsv.op('@@')(ts_query))
 
-    if filters.user_id:
-        query = query.where(Catalog.user_id == filters.user_id)
+    if filters.material_id:
+        query = query.where(Asset.material_id == filters.material_id)
 
-    if filters.workflow_status:
-        latest_workflow_sq = select(
-            CatalogWorkFlow.catalog_id,
-            CatalogWorkFlow.workflow_status,
-            func.row_number()
-            .over(
-                partition_by=CatalogWorkFlow.catalog_id,
-                order_by=CatalogWorkFlow.created_at.desc(),
-            )
-            .label('rn'),
-        ).subquery('latest_workflow_sq')
-
-        query = query.join(
-            latest_workflow_sq,
-            Catalog.id == latest_workflow_sq.c.catalog_id,
-        )
-
+    if filters.legal_guardian_id:
         query = query.where(
-            latest_workflow_sq.c.rn == 1,
-            latest_workflow_sq.c.workflow_status == filters.workflow_status,
+            Asset.legal_guardian_id == filters.legal_guardian_id
         )
+
+    query = apply_catalog_filters(query, filters)
 
     query = query.options(
         selectinload(Catalog.images),
@@ -294,44 +284,53 @@ async def delete_catalog_image(
     return {'message': 'Image deleted'}
 
 
-@router.get('/search/material_name', response_model=MaterialNameResponse)
+@router.get('/search/materials', response_model=MaterialList)
 async def list_catalog_materials(
-    session: Session,
-    q: str = str(),
+    session: Session, filters: Annotated[FilterSearchCatalog, Depends()]
 ):
     query = (
-        select(Material.material_name)
+        select(Material)
         .join_from(Catalog, Asset)
         .join(Material)
         .where(Catalog.deleted_at.is_(None))
-        .where(Material.material_name.ilike(f'{q}%'))
-        .distinct()
     )
 
-    result = await session.scalars(query)
-    material_names = result.all()
+    query = apply_catalog_filters(query, filters)
 
-    return {'material_name': material_names}
+    if filters.q:
+        query = query.where(
+            Material.material_name.ilike(f'{filters.q}%')
+        ).distinct()
+
+    result = await session.scalars(query)
+    materials = result.all()
+
+    return {'materials': materials}
 
 
 @router.get(
-    '/search/legal_guardians_name',
-    response_model=LegalGuardianNameResponse,
+    '/search/legal_guardians',
+    response_model=LegalGuardianList,
 )
 async def list_catalog_legal_guardians(
     session: Session,
-    q: str = str(),
+    filters: Annotated[FilterSearchCatalog, Depends()],
 ):
     query = (
-        select(LegalGuardian.legal_guardians_name)
+        select(LegalGuardian)
         .join_from(Catalog, Asset)
         .join(LegalGuardian)
         .where(Catalog.deleted_at.is_(None))
-        .where(LegalGuardian.legal_guardians_name.ilike(f'{q}%'))
-        .distinct()
     )
 
-    result = await session.scalars(query)
-    material_names = result.all()
+    query = apply_catalog_filters(query, filters)
 
-    return {'legal_guardians_name': material_names}
+    if filters.q:
+        query = query.where(
+            LegalGuardian.legal_guardians_name.ilike(f'{filters.q}%')
+        )
+
+    result = await session.scalars(query)
+    legal_guardians = result.all()
+
+    return {'legal_guardians': legal_guardians}

@@ -341,6 +341,14 @@ class CatalogList(BaseModel):
 
 class FilterCatalog(FilterPage):
     q: str | None = Field(default=None)
+    material_id: UUID | None = None
+    legal_guardian_id: UUID | None = None
+    user_id: UUID | None = None
+    workflow_status: Optional[WorkFlowStatus] = None
+
+
+class FilterSearchCatalog(FilterPage):
+    q: str | None = Field(default=None)
     user_id: UUID | None = None
     workflow_status: Optional[WorkFlowStatus] = None
 

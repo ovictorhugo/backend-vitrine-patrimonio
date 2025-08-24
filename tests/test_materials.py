@@ -26,7 +26,8 @@ async def test_create_material(client, create_user, create_token):
     data = response.json()
     assert data['material_name'] == 'Cadeira de Escritório'
     assert data['material_code'] == 'CAD-01'
-    assert 'id' in data and uuid.UUID(data['id'])
+    assert 'id' in data
+    assert uuid.UUID(data['id'])
 
 
 @pytest.mark.asyncio

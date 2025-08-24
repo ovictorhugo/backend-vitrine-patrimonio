@@ -259,7 +259,6 @@ class Location:
         index=False,
     )
 
-    # 2. Adicionada a UniqueConstraint para (location_name, sector_id)
     __table_args__ = (
         UniqueConstraint(
             'location_name', 'sector_id', name='uq_location_name_sector_id'
@@ -367,9 +366,9 @@ class Asset:
         init=False, lazy='joined'
     )
 
-    asset_code: Mapped[str] = mapped_column(nullable=False)
-    asset_check_digit: Mapped[str] = mapped_column(nullable=False)
-    atm_number: Mapped[str | None] = mapped_column(nullable=True)
+    asset_code: Mapped[str] = mapped_column(nullable=False, index=True)
+    asset_check_digit: Mapped[str] = mapped_column(nullable=False, index=True)
+    atm_number: Mapped[str | None] = mapped_column(nullable=True, index=True)
     serial_number: Mapped[str | None] = mapped_column(nullable=True)
     asset_description: Mapped[str | None] = mapped_column(nullable=True)
     asset_status: Mapped[str | None] = mapped_column(nullable=True)
@@ -401,7 +400,6 @@ class Asset:
         TSVECTOR,
         Computed(
             "to_tsvector('portuguese', "
-            "coalesce(asset_code, '') || ' ' || "
             "coalesce(serial_number, '') || ' ' || "
             "coalesce(asset_description, '') || ' ' || "
             "coalesce(item_brand, '') || ' ' || "

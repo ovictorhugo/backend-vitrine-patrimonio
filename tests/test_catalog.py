@@ -501,17 +501,45 @@ async def test_list_catalog_materials(
     await create_catalog_entry(asset_id=asset2.id)
     await create_catalog_entry(asset_id=asset3.id)
 
-    response = client.get('/catalog/search/material_name?q=F')
+    response = client.get('/catalog/search/materials?q=F')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()['material_name']) == 2
+    assert len(response.json()['materials']) == 2
 
-    response = client.get('/catalog/search/material_name')
+    response = client.get('/catalog/search/materials')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()['material_name']) == 3
+    assert len(response.json()['materials']) == 3
 
-    response = client.get('/catalog/search/material_name?q=Ferr')
+    response = client.get('/catalog/search/materials?q=Ferr')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()['material_name']) == 1
+    assert len(response.json()['materials']) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_catalog_by_material(
+    client, create_catalog_entry, create_asset, create_material
+):
+    mat1 = await create_material(material_name='Ferro')
+    mat2 = await create_material(material_name='Zinco')
+
+    asset1 = await create_asset(material_id=mat1.id)
+    asset2 = await create_asset(material_id=mat2.id)
+    asset3 = await create_asset(material_id=mat2.id)
+
+    await create_catalog_entry(asset_id=asset1.id)
+    await create_catalog_entry(asset_id=asset2.id)
+    await create_catalog_entry(asset_id=asset3.id)
+
+    response = client.get(f'/catalog?material_id={mat1.id}')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['catalog_entries']) == 1
+
+    response = client.get('/catalog')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['catalog_entries']) == 3
+
+    response = client.get(f'/catalog?material_id={mat2.id}')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['catalog_entries']) == 2
 
 
 @pytest.mark.asyncio
@@ -530,14 +558,42 @@ async def test_list_catalog_legal_guardians(
     await create_catalog_entry(asset_id=asset2.id)
     await create_catalog_entry(asset_id=asset3.id)
 
-    response = client.get('/catalog/search/legal_guardians_name?q=J')
+    response = client.get('/catalog/search/legal_guardians?q=J')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()['legal_guardians_name']) == 2
+    assert len(response.json()['legal_guardians']) == 2
 
-    response = client.get('/catalog/search/legal_guardians_name')
+    response = client.get('/catalog/search/legal_guardians')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()['legal_guardians_name']) == 3
+    assert len(response.json()['legal_guardians']) == 3
 
-    response = client.get('/catalog/search/legal_guardians_name?q=Joz')
+    response = client.get('/catalog/search/legal_guardians?q=Joz')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()['legal_guardians_name']) == 1
+    assert len(response.json()['legal_guardians']) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_catalog_by_legal_guardian_id(
+    client, create_catalog_entry, create_asset, create_legal_guardian
+):
+    guardian1 = await create_legal_guardian(legal_guardians_name='João')
+    guardian2 = await create_legal_guardian(legal_guardians_name='Jozé')
+
+    asset1 = await create_asset(legal_guardian_id=guardian1.id)
+    asset2 = await create_asset(legal_guardian_id=guardian2.id)
+    asset3 = await create_asset(legal_guardian_id=guardian2.id)
+
+    await create_catalog_entry(asset_id=asset1.id)
+    await create_catalog_entry(asset_id=asset2.id)
+    await create_catalog_entry(asset_id=asset3.id)
+
+    response = client.get(f'/catalog?legal_guardian_id={guardian2.id}')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['catalog_entries']) == 2
+
+    response = client.get('/catalog')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['catalog_entries']) == 3
+
+    response = client.get(f'/catalog?legal_guardian_id={guardian1.id}')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['catalog_entries']) == 1
