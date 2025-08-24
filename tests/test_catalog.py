@@ -232,7 +232,10 @@ async def test_create_catalog_entry_also_creates_workflow(
     assert len(data['workflow_history']) == 1
 
     workflow_step = data['workflow_history'][0]
-    assert workflow_step['workflow_status'] == WorkFlowStatus.STARTED.value
+    assert (
+        workflow_step['workflow_status']
+        == WorkFlowStatus.REVIEW_REQUESTED_DESFAZIMENTO.value
+    )
     assert uuid.UUID(workflow_step['user']['id'])
 
 
@@ -406,7 +409,7 @@ async def test_catalog_entry_has_workflow_and_image(
     assert 'workflow_history' in final_data
     assert len(final_data['workflow_history']) == 1
     workflow_step = final_data['workflow_history'][0]
-    assert workflow_step['workflow_status'] == 'STARTED'
+    assert workflow_step['workflow_status'] == 'REVIEW_REQUESTED_DESFAZIMENTO'
     assert workflow_step['user']['id'] == str(user.id)
 
     assert 'images' in final_data

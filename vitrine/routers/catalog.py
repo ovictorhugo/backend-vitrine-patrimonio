@@ -69,14 +69,6 @@ async def create_catalog_entry(
     session.add(db_catalog)
     await session.flush()
 
-    workflow = CatalogWorkFlow(
-        catalog_id=db_catalog.id,
-        user_id=current_user.id,
-        workflow_status=WorkFlowStatus.STARTED,
-        detail={'message': 'Catalog entry created and workflow started.'},
-    )
-    session.add(workflow)
-
     if catalog_data.situation in {'UNECONOMICAL', 'BROKEN'}:
         status = WorkFlowStatus.REVIEW_REQUESTED_DESFAZIMENTO
     if catalog_data.situation in {'UNUSED', 'RECOVERABLE'}:
@@ -86,6 +78,7 @@ async def create_catalog_entry(
         catalog_id=db_catalog.id,
         user_id=current_user.id,
         workflow_status=status,
+        detail={},
     )
     session.add(workflow)
     await session.commit()
