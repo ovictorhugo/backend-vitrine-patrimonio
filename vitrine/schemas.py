@@ -252,6 +252,10 @@ class AssetIdentifier(BaseModel):
     asset_identifier: list[str]
 
 
+class MaterialNameResponse(BaseModel):
+    material_name: List[str]
+
+
 class FilterAsset(BaseModel):
     limit: int = 100
     offset: int = 0

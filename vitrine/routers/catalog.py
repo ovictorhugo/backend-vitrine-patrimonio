@@ -15,6 +15,7 @@ from vitrine.models import (
     Catalog,
     CatalogImage,
     CatalogWorkFlow,
+    Material,
     User,
     WorkFlowStatus,
 )
@@ -26,6 +27,7 @@ from vitrine.schemas import (
     CatalogWorkFlowPublic,
     CatalogWorkFlowSchema,
     FilterCatalog,
+    MaterialNameResponse,
     Message,
 )
 from vitrine.security import get_current_user
@@ -288,3 +290,23 @@ async def delete_catalog_image(
     await session.refresh(db_catalog, ['images'])
 
     return {'message': 'Image deleted'}
+
+
+@router.get('/search/material_name', response_model=MaterialNameResponse)
+async def list_catalog_materials(
+    q: str,
+    session: Session,
+):
+    query = (
+        select(Material.material_name)
+        .join_from(Catalog, Asset)
+        .join(Material)
+        .where(Catalog.deleted_at.is_(None))
+        .where(Material.material_name.ilike(f'{q}%'))
+        .distinct()
+    )
+
+    result = await session.scalars(query)
+    material_names = result.all()
+
+    return {'material_name': material_names}

@@ -426,7 +426,6 @@ async def test_filter_catalog_by_workflow_status(
     entry_review_requested = await create_catalog_entry(user_id=user.id)
     entry_completed = await create_catalog_entry(user_id=user.id)
 
-    # Adiciona workflow inicial STARTED para cada entry
     await create_workflow_step(
         catalog_id=entry_started.id,
         user_id=user.id,
@@ -450,7 +449,6 @@ async def test_filter_catalog_by_workflow_status(
         workflow_status=WorkFlowStatus.COMPLETED.value,
     )
 
-    # Testa STARTED
     response_started = client.get(
         f'/catalog?workflow_status={WorkFlowStatus.STARTED.value}'
     )
@@ -459,7 +457,6 @@ async def test_filter_catalog_by_workflow_status(
     assert len(data_started['catalog_entries']) == 1
     assert data_started['catalog_entries'][0]['id'] == str(entry_started.id)
 
-    # Testa REVIEW_REQUESTED
     response_review = client.get(
         f'/catalog?workflow_status={WorkFlowStatus.REVIEW_REQUESTED.value}'
     )
@@ -470,7 +467,6 @@ async def test_filter_catalog_by_workflow_status(
         entry_review_requested.id
     )
 
-    # Testa COMPLETED
     response_completed = client.get(
         f'/catalog?workflow_status={WorkFlowStatus.COMPLETED.value}'
     )
@@ -488,3 +484,32 @@ async def test_filter_catalog_by_workflow_status(
     assert response_empty.status_code == HTTPStatus.OK
     data_empty = response_empty.json()
     assert len(data_empty['catalog_entries']) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_catalog_materials(
+    client, create_catalog_entry, create_asset, create_material
+):
+    mat1 = await create_material(material_name='Ferro')
+    mat2 = await create_material(material_name='Zinco')
+    mat3 = await create_material(material_name='Fosforo')
+
+    asset1 = await create_asset(material_id=mat1.id)
+    asset2 = await create_asset(material_id=mat2.id)
+    asset3 = await create_asset(material_id=mat3.id)
+
+    await create_catalog_entry(asset_id=asset1.id)
+    await create_catalog_entry(asset_id=asset2.id)
+    await create_catalog_entry(asset_id=asset3.id)
+
+    response = client.get('/catalog/search/material_name?q=F')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['material_name']) == 2
+
+    response = client.get('/catalog/search/material_name')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['material_name']) == 3
+
+    response = client.get('/catalog/search/material_name?q=Ferr')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['material_name']) == 1
