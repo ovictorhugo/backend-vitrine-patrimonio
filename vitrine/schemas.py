@@ -253,7 +253,7 @@ class AssetIdentifier(BaseModel):
 
 
 class MaterialNameResponse(BaseModel):
-    material_name: List[str]
+    material_name: List[str] = None
 
 
 class FilterAsset(BaseModel):
@@ -303,7 +303,8 @@ class CatalogWorkFlowSchema(BaseModel):
 
 class CatalogWorkFlowPublic(CatalogWorkFlowSchema):
     id: UUID
-    user_id: UUID
+    user_id: UUID = Field(exclude=True)
+    user: UserPublic
     catalog_id: UUID
     model_config = ConfigDict(from_attributes=True)
 

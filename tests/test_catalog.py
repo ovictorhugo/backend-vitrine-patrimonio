@@ -233,7 +233,7 @@ async def test_create_catalog_entry_also_creates_workflow(
 
     workflow_step = data['workflow_history'][0]
     assert workflow_step['workflow_status'] == WorkFlowStatus.STARTED.value
-    assert uuid.UUID(workflow_step['user_id'])
+    assert uuid.UUID(workflow_step['user']['id'])
 
 
 @pytest.mark.asyncio
@@ -404,7 +404,7 @@ async def test_catalog_entry_has_workflow_and_image(
     assert len(final_data['workflow_history']) == 1
     workflow_step = final_data['workflow_history'][0]
     assert workflow_step['workflow_status'] == 'STARTED'
-    assert workflow_step['user_id'] == str(user.id)
+    assert workflow_step['user']['id'] == str(user.id)
 
     assert 'images' in final_data
     assert len(final_data['images']) == 1
@@ -477,7 +477,6 @@ async def test_filter_catalog_by_workflow_status(
         entry_completed.id
     )
 
-    # Testa workflow inexistente
     response_empty = client.get(
         f'/catalog?workflow_status={WorkFlowStatus.ADJUSTMENT_REQUESTED.value}'
     )
