@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import RedirectResponse
 
 from vitrine.database import get_session
-from vitrine.models import User
+from vitrine.models import LegalGuardian, SystemIdentity, User
 from vitrine.schemas import Token
 from vitrine.security import (
     create_access_token,
@@ -58,7 +58,8 @@ async def refresh_access_token(user: CurrentUser):
 @router.get('/shibboleth/login')
 async def shibboleth_login(request: Request, session: Session):
     shib_data = request.headers
-    if not shib_data.get('eppn'):
+    eppn = shib_data.get('eppn')
+    if not eppn:
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
             detail=(
@@ -66,12 +67,14 @@ async def shibboleth_login(request: Request, session: Session):
                 'Provedor de Identidade. Acesso negado.'
             ),
         )
+
     db_user = await session.scalar(
         select(User).where(
             (User.username == shib_data.get('shib-person-commonname'))
             | (User.email == shib_data.get('shib-person-mail'))
         )
     )
+
     if not db_user:
         hashed_password = get_password_hash(token_hex(256))
         db_user = User(
@@ -81,6 +84,18 @@ async def shibboleth_login(request: Request, session: Session):
             provider='SHIB',
         )
         session.add(db_user)
+
+        query_lg = select(LegalGuardian).where(
+            LegalGuardian.legal_guardians_code == eppn
+        )
+        found_legal_guardian = await session.scalar(query_lg)
+
+        if found_legal_guardian:
+            new_identity = SystemIdentity(
+                user=db_user, legal_guardian=found_legal_guardian
+            )
+            session.add(new_identity)
+
         await session.commit()
         await session.refresh(db_user)
 

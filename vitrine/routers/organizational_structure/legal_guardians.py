@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
-from vitrine.models import LegalGuardian, User
+from vitrine.models import LegalGuardian, SystemIdentity, User
 from vitrine.schemas import (
     FilterLegalGuardian,
     LegalGuardianList,
@@ -60,6 +60,18 @@ async def create_legal_guardian(
         user_id=current_user.id,
     )
     session.add(db_legal_guardian)
+
+    query_user = select(User).where(
+        User.email == db_legal_guardian.legal_guardians_code
+    )
+    found_user = await session.scalar(query_user)
+
+    if found_user:
+        new_identity = SystemIdentity(
+            user=found_user, legal_guardian=db_legal_guardian
+        )
+        session.add(new_identity)
+
     await session.commit()
     await session.refresh(db_legal_guardian)
 

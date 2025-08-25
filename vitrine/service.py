@@ -19,7 +19,9 @@ from vitrine.models import (
     Location,
     Material,
     Sector,
+    SystemIdentity,
     Unit,
+    User,
 )
 from vitrine.schemas import (
     AgencySchema,
@@ -218,6 +220,18 @@ async def get_or_create_legal_guardian(session: Session, data: dict, user_id):
         )
         session.add(db_guardian)
         await session.flush()
+
+        if db_guardian.legal_guardians_code:
+            query_user = select(User).where(
+                User.email == db_guardian.legal_guardians_code
+            )
+            found_user = await session.scalar(query_user)
+
+            if found_user:
+                new_identity = SystemIdentity(
+                    user=found_user, legal_guardian=db_guardian
+                )
+                session.add(new_identity)
 
     return db_guardian
 

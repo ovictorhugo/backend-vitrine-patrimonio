@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import Enum as PythonEnum
+from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -76,6 +77,12 @@ class User:
         back_populates='user',
         init=False,
         cascade='all, delete-orphan',
+    )
+    system_identity: Mapped[Optional['SystemIdentity']] = relationship(
+        back_populates='user',
+        init=False,
+        cascade='all, delete-orphan',
+        uselist=False,
     )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -301,7 +308,13 @@ class LegalGuardian:
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
     )
-
+    system_identity: Mapped[Optional['SystemIdentity']] = relationship(
+        back_populates='legal_guardian',
+        init=False,
+        cascade='all, delete-orphan',
+        uselist=False,
+        foreign_keys='[SystemIdentity.legal_guardian_id]',
+    )
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
         Computed(
@@ -635,4 +648,40 @@ class FavoriteCatalog:
     user: Mapped['User'] = relationship(back_populates='favorites', init=False)
     catalog: Mapped['Catalog'] = relationship(
         back_populates='favorited_by', init=False, lazy='joined'
+    )
+
+
+@table_registry.mapped_as_dataclass
+class SystemIdentity:
+    __tablename__ = 'system_identities'
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+
+    # Chave estrangeira para User. unique=True garante que um usuário só pode estar em uma linha.
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey('users.id'), unique=True, nullable=False
+    )
+
+    # Chave estrangeira para LegalGuardian. unique=True garante que um tutor só pode estar em uma linha.
+    legal_guardian_id: Mapped[UUID] = mapped_column(
+        ForeignKey('legal_guardians.id'), unique=True, nullable=False
+    )
+
+    user: Mapped['User'] = relationship(
+        back_populates='system_identity', init=False
+    )
+    legal_guardian: Mapped['LegalGuardian'] = relationship(
+        back_populates='system_identity', init=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True, onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
     )
