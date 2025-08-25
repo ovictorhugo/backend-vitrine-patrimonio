@@ -1,5 +1,3 @@
-# vitrine/routers/favorites.py
-
 from http import HTTPStatus
 from typing import Annotated
 from uuid import UUID
