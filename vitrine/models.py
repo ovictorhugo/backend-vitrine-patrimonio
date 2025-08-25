@@ -249,6 +249,13 @@ class Location:
     location_code: Mapped[str] = mapped_column(nullable=False)
     location_name: Mapped[str] = mapped_column(nullable=False)
 
+    legal_guardian_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('legal_guardians.id'), nullable=False
+    )
+    legal_guardian: Mapped['LegalGuardian'] = relationship(
+        init=False, lazy='joined', back_populates='locations'
+    )
+
     sector_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('sectors.id'))
     sector: Mapped['Sector'] = relationship(
         init=False, lazy='joined', back_populates='locations'
@@ -279,7 +286,10 @@ class Location:
 
     __table_args__ = (
         UniqueConstraint(
-            'location_name', 'sector_id', name='uq_location_name_sector_id'
+            'location_name',
+            'sector_id',
+            'legal_guardian_id',
+            name='uq_location_name_sector_lg_id',
         ),
         Index('ix_locations_tsv', tsv, postgresql_using='gin'),
     )
@@ -314,6 +324,11 @@ class LegalGuardian:
         cascade='all, delete-orphan',
         uselist=False,
         foreign_keys='[SystemIdentity.legal_guardian_id]',
+    )
+    locations: Mapped[list['Location']] = relationship(
+        back_populates='legal_guardian',
+        init=False,
+        cascade='all, delete-orphan',
     )
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,

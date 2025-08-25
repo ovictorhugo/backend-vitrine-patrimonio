@@ -11,11 +11,12 @@ from vitrine.schemas import LocationPublic
 
 @pytest.mark.asyncio
 async def test_create_location_success(
-    client, create_sector, create_user, create_token
+    client, create_sector, create_user, create_token, create_legal_guardian
 ):
     user = await create_user()
     token = create_token(user)
     sector = await create_sector(user_id=user.id)
+    legal_guardian = await create_legal_guardian()
 
     response = client.post(
         '/locations',
@@ -23,6 +24,9 @@ async def test_create_location_success(
             'location_name': 'Câmara Secreta',
             'location_code': 'CS-01',
             'sector_id': str(sector.id),
+            'legal_guardian_id': str(
+                legal_guardian.id,
+            ),
         },
         headers={'Authorization': f'Bearer {token}'},
     )
@@ -37,9 +41,10 @@ async def test_create_location_success(
 
 @pytest.mark.asyncio
 async def test_create_location_for_non_existent_sector(
-    client, create_user, create_token
+    client, create_user, create_token, create_legal_guardian
 ):
     user = await create_user()
+    legal_guardian = await create_legal_guardian()
     token = create_token(user)
     non_existent_sector_id = uuid.uuid4()
 
@@ -49,6 +54,7 @@ async def test_create_location_for_non_existent_sector(
             'location_name': 'Localização Perdida',
             'location_code': 'LP-404',
             'sector_id': str(non_existent_sector_id),
+            'legal_guardian_id': str(legal_guardian.id),
         },
         headers={'Authorization': f'Bearer {token}'},
     )
@@ -62,9 +68,15 @@ async def test_create_location_for_non_existent_sector(
 
 @pytest.mark.asyncio
 async def test_create_location_for_inactive_sector(
-    client, create_sector, create_user, create_token, session
+    client,
+    create_sector,
+    create_user,
+    create_token,
+    session,
+    create_legal_guardian,
 ):
     user = await create_user()
+    legal_guardian = await create_legal_guardian()
     token = create_token(user)
     sector = await create_sector(user_id=user.id)
 
@@ -78,6 +90,7 @@ async def test_create_location_for_inactive_sector(
             'location_name': 'Localização para Setor Inativo',
             'location_code': 'LSI-01',
             'sector_id': str(sector.id),
+            'legal_guardian_id': str(legal_guardian.id),
         },
         headers={'Authorization': f'Bearer {token}'},
     )
@@ -101,13 +114,15 @@ async def test_create_location_conflict(
             'location_name': 'Sala Precisa',
             'location_code': 'SP-02',
             'sector_id': str(location.sector.id),
+            'legal_guardian_id': str(location.legal_guardian.id),
         },
         headers={'Authorization': f'Bearer {token}'},
     )
 
     assert response.status_code == HTTPStatus.CONFLICT
     assert (
-        'Uma localização com este nome já existe.' in response.json()['detail']
+        'Uma localização com este nome já existe para este setor e responsável.'
+        in response.json()['detail']
     )
 
 

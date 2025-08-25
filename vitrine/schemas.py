@@ -121,28 +121,13 @@ class FilterSector(FilterPage):
 
 
 class LocationSchema(BaseModel):
+    legal_guardian_id: UUID
     sector_id: UUID
 
     location_name: str = Field(..., validation_alias='loc_nom')
     location_code: str = Field(..., validation_alias='loc_cod')
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-
-
-class LocationPublic(LocationSchema):
-    id: UUID
-    sector: SectorPublic
-
-
-class LocationList(BaseModel):
-    locations: list[LocationPublic]
-
-
-class FilterLocation(FilterPage):
-    q: str | None = Field(default=None)
-    sector_id: Optional[UUID] = Field(
-        default=None, description='Filtrar por ID do setor'
-    )
 
 
 class LegalGuardianSchema(BaseModel):
@@ -163,6 +148,26 @@ class LegalGuardianList(BaseModel):
 
 class FilterLegalGuardian(FilterPage):
     q: str | None = Field(default=None)
+
+
+class LocationPublic(LocationSchema):
+    id: UUID
+    sector: SectorPublic
+    legal_guardian: LegalGuardianPublic
+
+
+class LocationList(BaseModel):
+    locations: list[LocationPublic]
+
+
+class FilterLocation(FilterPage):
+    q: str | None = Field(default=None)
+    sector_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID do setor'
+    )
+    legal_guardian_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID do responsável legal'
+    )
 
 
 class MaterialSchema(BaseModel):

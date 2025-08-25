@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
-from vitrine.models import Location, Sector, User
+from vitrine.models import LegalGuardian, Location, Sector, User
 from vitrine.schemas import (
     FilterLocation,
     LocationList,
@@ -41,20 +41,32 @@ async def create_location(
             detail=f'O setor com ID "{location.sector_id}" não foi encontrado ou está inativo.',
         )
 
+    db_legal_guardian = await session.get(
+        LegalGuardian, location.legal_guardian_id
+    )
+    if not db_legal_guardian or db_legal_guardian.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'O responsável legal com ID "{location.legal_guardian_id}" não foi encontrado ou está inativo.',
+        )
+
     query = select(Location).where(
-        Location.location_name == location.location_name
+        Location.location_name == location.location_name,
+        Location.sector_id == location.sector_id,
+        Location.legal_guardian_id == location.legal_guardian_id,
     )
     db_location = await session.scalar(query)
     if db_location:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='Uma localização com este nome já existe.',
+            detail='Uma localização com este nome já existe para este setor e responsável.',
         )
 
     db_location = Location(
         location_name=location.location_name,
         location_code=location.location_code,
         sector_id=location.sector_id,
+        legal_guardian_id=location.legal_guardian_id,
         user_id=current_user.id,
     )
     session.add(db_location)
@@ -77,6 +89,11 @@ async def read_locations(
 
     if filters.sector_id:
         query = query.where(Location.sector_id == filters.sector_id)
+
+    if filters.legal_guardian_id:
+        query = query.where(
+            Location.legal_guardian_id == filters.legal_guardian_id
+        )
 
     query = query.offset(filters.offset).limit(filters.limit)
 

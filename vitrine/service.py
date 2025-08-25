@@ -174,7 +174,11 @@ async def get_or_create_sector(
 
 
 async def get_or_create_location(
-    session: Session, data: dict, user_id, sector_id: UUID
+    session: Session,
+    data: dict,
+    user_id,
+    sector_id: UUID,
+    legal_guardian_id: UUID,
 ):
     location = LocationSchema(**data)
     location.location_name = clean_string(location.location_name)
@@ -192,6 +196,7 @@ async def get_or_create_location(
             location_code=location.location_code,
             user_id=user_id,
             sector_id=sector_id,
+            legal_guardian_id=legal_guardian_id,
         )
         session.add(db_location)
         await session.flush()
@@ -259,7 +264,11 @@ async def find_relationships(assets: list[dict], session: Session, user_id):
         asset['sector_id'] = db_sector.id
 
         db_location = await get_or_create_location(
-            session, asset, user_id, sector_id=db_sector.id
+            session,
+            asset,
+            user_id,
+            sector_id=db_sector.id,
+            legal_guardian_id=db_guardian.id,
         )
         asset['location_id'] = db_location.id
 

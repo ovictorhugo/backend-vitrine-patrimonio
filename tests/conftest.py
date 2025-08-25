@@ -158,15 +158,23 @@ def create_sector(session, create_agency, create_user):
 
 
 @pytest_asyncio.fixture
-def create_location(session, create_sector, create_user):
+def create_location(
+    session, create_sector, create_user, create_legal_guardian
+):
     async def _create_location(**kwargs):
         if 'user_id' not in kwargs:
             user = await create_user()
             kwargs['user_id'] = user.id
 
         if 'sector_id' not in kwargs:
-            sector = await create_sector(user_id=kwargs['user_id'])
-            kwargs['sector_id'] = sector.id
+            legal_guardian = await create_sector(user_id=kwargs['user_id'])
+            kwargs['sector_id'] = legal_guardian.id
+
+        if 'legal_guardian_id' not in kwargs:
+            legal_guardian = await create_legal_guardian(
+                user_id=kwargs['user_id']
+            )
+            kwargs['legal_guardian_id'] = legal_guardian.id
 
         location = LocationFactory.build(**kwargs)
 
