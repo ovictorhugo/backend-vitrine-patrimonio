@@ -28,6 +28,7 @@ from vitrine.database import get_session
 from vitrine.models import (
     CatalogWorkFlow,
     InventoryOwner,
+    SystemIdentity,
     User,
     table_registry,
 )
@@ -406,3 +407,21 @@ def create_favorite_catalog(session, create_user, create_catalog_entry):
         return favorite
 
     return _create_favorite_catalog
+
+
+@pytest.fixture
+def create_system_identity(session: AsyncSession):
+    async def _create_system_identity(
+        user_id,
+        legal_guardian_id,
+    ):
+        system_identity = SystemIdentity(
+            user_id=user_id,
+            legal_guardian_id=legal_guardian_id,
+        )
+        session.add(system_identity)
+        await session.commit()
+        await session.refresh(system_identity)
+        return system_identity
+
+    return _create_system_identity

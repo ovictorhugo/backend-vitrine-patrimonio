@@ -674,12 +674,10 @@ class SystemIdentity:
         init=False, primary_key=True, default=uuid4
     )
 
-    # Chave estrangeira para User. unique=True garante que um usuário só pode estar em uma linha.
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey('users.id'), unique=True, nullable=False
     )
 
-    # Chave estrangeira para LegalGuardian. unique=True garante que um tutor só pode estar em uma linha.
     legal_guardian_id: Mapped[UUID] = mapped_column(
         ForeignKey('legal_guardians.id'), unique=True, nullable=False
     )

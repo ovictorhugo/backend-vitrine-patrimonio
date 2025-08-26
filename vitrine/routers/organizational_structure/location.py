@@ -8,7 +8,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vitrine.database import get_session
-from vitrine.models import LegalGuardian, Location, Sector, User
+from vitrine.models import (
+    LegalGuardian,
+    Location,
+    Sector,
+    SystemIdentity,
+    User,
+)
 from vitrine.schemas import (
     FilterLocation,
     LocationList,
@@ -94,6 +100,41 @@ async def read_locations(
         query = query.where(
             Location.legal_guardian_id == filters.legal_guardian_id
         )
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    locations = result.all()
+
+    return {'locations': locations}
+
+
+@router.get('/my', response_model=LocationList)
+async def read_my_locations(
+    session: Session,
+    current_user: CurrentUser,
+    filters: Annotated[FilterLocation, Depends()],
+):
+    query = (
+        select(Location)
+        .join(LegalGuardian, Location.legal_guardian_id == LegalGuardian.id)
+        .join(
+            SystemIdentity,
+            LegalGuardian.id == SystemIdentity.legal_guardian_id,
+        )
+        .where(
+            SystemIdentity.user_id == current_user.id,
+            Location.deleted_at.is_(None),
+        )
+    )
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(Location.tsv.op('@@')(ts_query))
+
+    if filters.sector_id:
+        query = query.where(Location.sector_id == filters.sector_id)
 
     query = query.offset(filters.offset).limit(filters.limit)
 

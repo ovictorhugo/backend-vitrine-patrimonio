@@ -1,5 +1,3 @@
-# tests/test_locations.py (versão atualizada e completa)
-
 import uuid
 from datetime import datetime
 from http import HTTPStatus
@@ -240,3 +238,160 @@ async def test_delete_location_already_deleted(
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     assert response.json()['detail'] == 'Esta localização já está desativada.'
+
+
+@pytest.mark.asyncio
+async def test_read_my_locations_success(
+    client,
+    create_user,
+    create_token,
+    create_legal_guardian,
+    create_location,
+    create_system_identity,
+):
+    user_responsible = await create_user(
+        username='responsavel', email='resp@example.com'
+    )
+    token_responsible = create_token(user_responsible)
+    guardian_responsible = await create_legal_guardian(
+        user_id=user_responsible.id,
+        legal_guardians_name='Guardião Responsável',
+        legal_guardians_code='GR01',
+    )
+    await create_system_identity(
+        user_id=user_responsible.id, legal_guardian_id=guardian_responsible.id
+    )
+
+    location1_resp = await create_location(
+        legal_guardian_id=guardian_responsible.id,
+        location_name='Sala do Responsável 1',
+    )
+    location2_resp = await create_location(
+        legal_guardian_id=guardian_responsible.id,
+        location_name='Sala do Responsável 2',
+    )
+
+    user_other = await create_user(username='outro', email='outro@example.com')
+    guardian_other = await create_legal_guardian(
+        user_id=user_other.id,
+        legal_guardians_name='Outro Guardião',
+        legal_guardians_code='OG02',
+    )
+    await create_system_identity(
+        user_id=user_other.id, legal_guardian_id=guardian_other.id
+    )
+    await create_location(
+        legal_guardian_id=guardian_other.id, location_name='Sala do Outro'
+    )
+
+    response = client.get(
+        '/locations/my',
+        headers={'Authorization': f'Bearer {token_responsible}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['locations']) == 2
+
+    returned_ids = {loc['id'] for loc in data['locations']}
+    expected_ids = {str(location1_resp.id), str(location2_resp.id)}
+    assert returned_ids == expected_ids
+
+
+@pytest.mark.asyncio
+async def test_read_my_locations_empty_for_user_with_no_responsibilities(
+    client, create_user, create_token, create_location
+):
+    user_no_locations = await create_user()
+    token = create_token(user_no_locations)
+
+    await create_location()
+
+    response = client.get(
+        '/locations/my', headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {'locations': []}
+
+
+@pytest.mark.asyncio
+async def test_read_my_locations_unauthorized(client):
+    response = client.get('/locations/my')
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_read_my_locations_with_filters(
+    client,
+    create_user,
+    create_token,
+    create_legal_guardian,
+    create_location,
+    create_system_identity,
+):
+    user = await create_user()
+    token = create_token(user)
+    guardian = await create_legal_guardian(user_id=user.id)
+    await create_system_identity(
+        user_id=user.id, legal_guardian_id=guardian.id
+    )
+
+    await create_location(
+        legal_guardian_id=guardian.id,
+        location_name='Sala de Reuniões Grifinória',
+    )
+    await create_location(
+        legal_guardian_id=guardian.id, location_name='Cozinha da Lufa-Lufa'
+    )
+    await create_location(location_name='Sala de Reuniões Corvinal')
+
+    response = client.get(
+        '/locations/my?q=Grifinória',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['locations']) == 1
+    assert (
+        data['locations'][0]['location_name'] == 'Sala de Reuniões Grifinória'
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_my_locations_ignores_deleted_ones(
+    client,
+    session,
+    create_user,
+    create_token,
+    create_legal_guardian,
+    create_location,
+    create_system_identity,
+):
+    user = await create_user()
+    token = create_token(user)
+    guardian = await create_legal_guardian(user_id=user.id)
+    await create_system_identity(
+        user_id=user.id, legal_guardian_id=guardian.id
+    )
+
+    location_active = await create_location(
+        legal_guardian_id=guardian.id, location_name='Ativa'
+    )
+    location_to_delete = await create_location(
+        legal_guardian_id=guardian.id, location_name='Inativa'
+    )
+
+    location_to_delete.deleted_at = datetime.now()
+    session.add(location_to_delete)
+    await session.commit()
+
+    response = client.get(
+        '/locations/my', headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['locations']) == 1
+    assert data['locations'][0]['id'] == str(location_active.id)
