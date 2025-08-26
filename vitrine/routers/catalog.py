@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from vitrine.database import get_session
 from vitrine.models import (
@@ -32,6 +33,7 @@ from vitrine.schemas import (
     LegalGuardianList,
     MaterialList,
     Message,
+    RequestTransferSchema,
 )
 from vitrine.security import get_current_user
 from vitrine.service import apply_catalog_filters
@@ -214,6 +216,75 @@ async def update_catalog_entry(
     await session.refresh(db_catalog)
 
     return db_catalog
+
+
+@router.post(
+    '/{catalog_id}/transfer',
+    status_code=HTTPStatus.OK,
+    summary='Solicita ou cancela a transferência de um item',
+)
+async def toggle_transfer_request(
+    catalog_id: UUID,
+    request: RequestTransferSchema,
+    session: Session,
+    current_user: CurrentUser,
+):
+    db_catalog = await session.get(
+        Catalog,
+        catalog_id,
+        options=[selectinload(Catalog.workflow_history)],
+    )
+
+    if not db_catalog or db_catalog.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
+        )
+
+    if not db_catalog.workflow_history:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Item has no workflow history.',
+        )
+
+    latest_workflow_entry = max(
+        db_catalog.workflow_history, key=lambda wf: wf.created_at
+    )
+
+    if latest_workflow_entry.workflow_status != 'VITRINE':
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Item not available for transfer. Current status is '{latest_workflow_entry.workflow_status}'.",
+        )
+
+    request_details = {
+        'user_id': str(current_user.id),
+        'location_id': str(request.location_id),
+    }
+
+    if latest_workflow_entry.detail is None:
+        latest_workflow_entry.detail = {}
+
+    transfer_requests = latest_workflow_entry.detail.setdefault(
+        'transfer_requests', []
+    )
+
+    action: str
+    message: str
+
+    if request_details in transfer_requests:
+        transfer_requests.remove(request_details)
+        action = 'cancelled'
+        message = 'Transfer request cancelled successfully.'
+    else:
+        transfer_requests.append(request_details)
+        action = 'submitted'
+        message = 'Transfer request submitted successfully.'
+
+    flag_modified(latest_workflow_entry, 'detail')
+
+    await session.commit()
+
+    return {'message': message, 'action': action}
 
 
 @router.delete('/{catalog_id}', response_model=Message)

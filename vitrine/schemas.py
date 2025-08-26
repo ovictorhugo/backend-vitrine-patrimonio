@@ -297,6 +297,10 @@ class FilterAsset(BaseModel):
     )
 
 
+class RequestTransferSchema(BaseModel):
+    location_id: UUID
+
+
 class CatalogSchema(BaseModel):
     asset_id: UUID
     location_id: UUID
