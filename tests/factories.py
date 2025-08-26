@@ -19,6 +19,8 @@ from vitrine.models import (
     Unit,
     User,
     WorkFlowStatus,
+    WorkflowTransfer,
+    WorkflowTransferStatus,
 )
 
 fake = Faker('pt_BR')
@@ -160,3 +162,13 @@ class FavoriteCatalogFactory(factory.Factory):
 
     user_id = None
     catalog_id = None
+
+
+class WorkflowTransferFactory(factory.Factory):
+    class Meta:
+        model = WorkflowTransfer
+
+    workflow_id = factory.SubFactory(CatalogWorkFlowFactory)
+    user_id = factory.SubFactory(UserFactory)
+    location_id = factory.SubFactory(LocationFactory)
+    status = WorkflowTransferStatus.PENDING

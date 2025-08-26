@@ -18,6 +18,12 @@ from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
 table_registry = registry()
 
 
+class WorkflowTransferStatus(str, PythonEnum):
+    PENDING = 'PENDING'
+    DECLINED = 'DECLINED'
+    ACCEPTABLE = 'ACCEPTABLE'
+
+
 class InventoryAssetStatus(str, PythonEnum):
     FOUND = 'FOUND'
     NOT_FOUND = 'NOT_FOUND'
@@ -85,6 +91,12 @@ class User:
         cascade='all, delete-orphan',
         uselist=False,
     )
+    transfer_requests: Mapped[list['WorkflowTransfer']] = relationship(
+        back_populates='user',
+        init=False,
+        cascade='all, delete-orphan',
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -274,6 +286,11 @@ class Location:
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
     )
+    incoming_transfers: Mapped[list['WorkflowTransfer']] = relationship(
+        back_populates='location',
+        init=False,
+        cascade='all, delete-orphan',
+    )
 
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
@@ -389,16 +406,15 @@ class Asset:
         init=False, primary_key=True, default=uuid4
     )
 
-    location_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey('locations.id'), nullable=True
-    )
     material_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('materials.id'), nullable=True
     )
     legal_guardian_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('legal_guardians.id'), nullable=True
     )
-
+    location_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey('locations.id'), nullable=True
+    )
     location: Mapped[Location] = relationship(init=False, lazy='joined')
 
     material: Mapped[Material] = relationship(init=False, lazy='joined')
@@ -546,9 +562,60 @@ class CatalogWorkFlow:
     )
 
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    transfer_requests: Mapped[list['WorkflowTransfer']] = relationship(
+        back_populates='workflow',
+        init=False,
+        cascade='all, delete-orphan',
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+
+
+@table_registry.mapped_as_dataclass
+class WorkflowTransfer:
+    __tablename__ = 'workflow_transfer'
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+
+    workflow_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('catalog_workflow.id'), nullable=False, index=True
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('users.id'), nullable=False, index=True
+    )
+
+    location_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('locations.id'), nullable=False, index=True
+    )
+
+    status: Mapped[str] = mapped_column(
+        nullable=False, index=True, default='PENDING'
+    )
+
+    workflow: Mapped['CatalogWorkFlow'] = relationship(
+        back_populates='transfer_requests', init=False
+    )
+
+    user: Mapped['User'] = relationship(
+        back_populates='transfer_requests', init=False, lazy='joined'
+    )
+
+    location: Mapped['Location'] = relationship(
+        back_populates='incoming_transfers', init=False, lazy='joined'
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True, onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
     )
 
 

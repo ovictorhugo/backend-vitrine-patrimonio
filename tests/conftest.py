@@ -22,6 +22,7 @@ from tests.factories import (
     SectorFactory,
     UnitFactory,
     UserFactory,
+    WorkflowTransferFactory,
 )
 from vitrine.app import app
 from vitrine.database import get_session
@@ -30,6 +31,7 @@ from vitrine.models import (
     InventoryOwner,
     SystemIdentity,
     User,
+    WorkflowTransferStatus,
     table_registry,
 )
 from vitrine.security import get_password_hash
@@ -425,3 +427,33 @@ def create_system_identity(session: AsyncSession):
         return system_identity
 
     return _create_system_identity
+
+
+@pytest_asyncio.fixture
+def create_workflow_transfer(
+    session, create_workflow_step, create_user, create_location
+):
+    async def _create_workflow_transfer(**kwargs):
+        if 'workflow_id' not in kwargs:
+            workflow_step = await create_workflow_step(
+                workflow_status=WorkflowTransferStatus.PENDING
+            )
+            kwargs['workflow_id'] = workflow_step.id
+
+        if 'user_id' not in kwargs:
+            user = await create_user()
+            kwargs['user_id'] = user.id
+
+        if 'location_id' not in kwargs:
+            location = await create_location()
+            kwargs['location_id'] = location.id
+
+        transfer = WorkflowTransferFactory.build(**kwargs)
+
+        session.add(transfer)
+        await session.commit()
+        await session.refresh(transfer)
+
+        return transfer
+
+    return _create_workflow_transfer

@@ -603,3 +603,206 @@ async def test_list_catalog_by_legal_guardian_id(
     response = client.get(f'/catalog?legal_guardian_id={guardian1.id}')
     assert response.status_code == HTTPStatus.OK
     assert len(response.json()['catalog_entries']) == 1
+
+
+@pytest.mark.asyncio
+async def test_submit_transfer_request_success(
+    client, create_workflow_step, create_user, create_token, create_location
+):
+    workflow_step = await create_workflow_step(
+        workflow_status=WorkFlowStatus.VITRINE.value, detail={}
+    )
+    user = await create_user()
+    location = await create_location()
+    payload = {'location_id': str(location.id)}
+    response = client.post(
+        f'/catalog/{workflow_step.catalog_id}/transfer',
+        json=payload,
+        headers={'Authorization': f'Bearer {create_token(user)}'},
+    )
+    assert response.json() == {'message': 'transfer requested successfully'}
+    response = client.get(
+        f'/catalog/{workflow_step.catalog_id}',
+        headers={'Authorization': f'Bearer {create_token(user)}'},
+    )
+
+
+@pytest.mark.asyncio
+async def test_transfer_request_fails_if_location_not_found(
+    client, create_workflow_step, create_user, create_token
+):
+    workflow_step = await create_workflow_step(
+        workflow_status=WorkFlowStatus.VITRINE.value, detail={}
+    )
+    user = await create_user()
+    token = create_token(user)
+    fake_location_id = str(uuid.uuid4())
+
+    response = client.post(
+        f'/catalog/{workflow_step.catalog_id}/transfer',
+        json={'location_id': fake_location_id},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert 'Location not found' in response.json()['detail']
+
+
+@pytest.mark.asyncio
+async def test_submit_transfer_request_persists_in_detail(
+    client, create_workflow_step, create_user, create_token, create_location
+):
+    workflow_step = await create_workflow_step(
+        workflow_status=WorkFlowStatus.VITRINE.value, detail={}
+    )
+    user = await create_user()
+    location = await create_location()
+    payload = {'location_id': str(location.id)}
+    client.post(
+        f'/catalog/{workflow_step.catalog_id}/transfer',
+        json=payload,
+        headers={'Authorization': f'Bearer {create_token(user)}'},
+    )
+
+    response = client.get(
+        f'/catalog/{workflow_step.catalog_id}',
+        headers={'Authorization': f'Bearer {create_token(user)}'},
+    )
+
+    data = response.json()
+    workflow_entry = data['workflow_history'][0]
+    assert 'transfer_requests' in workflow_entry['detail']
+    transfer = workflow_entry['detail']['transfer_requests'][0]
+    assert transfer['location']['id'] == str(location.id)
+    assert transfer['user']['id'] == str(user.id)
+    assert transfer['status'] == 'PENDING'
+
+
+@pytest.mark.asyncio
+async def test_multiple_users_can_request_transfer(
+    client, create_workflow_step, create_user, create_token, create_location
+):
+    workflow_step = await create_workflow_step(
+        workflow_status=WorkFlowStatus.VITRINE.value, detail={}
+    )
+    location = await create_location()
+
+    user1 = await create_user()
+    user2 = await create_user()
+
+    client.post(
+        f'/catalog/{workflow_step.catalog_id}/transfer',
+        json={'location_id': str(location.id)},
+        headers={'Authorization': f'Bearer {create_token(user1)}'},
+    )
+    client.post(
+        f'/catalog/{workflow_step.catalog_id}/transfer',
+        json={'location_id': str(location.id)},
+        headers={'Authorization': f'Bearer {create_token(user2)}'},
+    )
+
+    response = client.get(
+        f'/catalog/{workflow_step.catalog_id}',
+        headers={'Authorization': f'Bearer {create_token(user1)}'},
+    )
+    transfers = response.json()['workflow_history'][0]['detail'][
+        'transfer_requests'
+    ]
+    assert len(transfers) == 2
+    assert {t['user']['id'] for t in transfers} == {
+        str(user1.id),
+        str(user2.id),
+    }
+
+
+@pytest.mark.asyncio
+async def test_list_transfer_requests(
+    client, create_workflow_transfer, create_user, create_token
+):
+    user = await create_user()
+    token = create_token(user)
+
+    pending_transfer = await create_workflow_transfer(status='PENDING')
+    acceptable_transfer = await create_workflow_transfer(status='ACCEPTABLE')
+    declined_transfer = await create_workflow_transfer(status='DECLINED')
+
+    response_all = client.get(
+        '/catalog/transfer', headers={'Authorization': f'Bearer {token}'}
+    )
+    assert response_all.status_code == HTTPStatus.OK
+    data_all = response_all.json()
+    assert len(data_all['transfer_requests']) == 3
+
+    # Test filtering by PENDING status
+    response_pending = client.get(
+        '/catalog/transfer?status=PENDING',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert response_pending.status_code == HTTPStatus.OK
+    data_pending = response_pending.json()
+    assert len(data_pending['transfer_requests']) == 1
+    assert data_pending['transfer_requests'][0]['id'] == str(
+        pending_transfer.id
+    )
+
+    # Test filtering by ACCEPTABLE status
+    response_acceptable = client.get(
+        '/catalog/transfer?status=ACCEPTABLE',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert response_acceptable.status_code == HTTPStatus.OK
+    data_acceptable = response_acceptable.json()
+    assert len(data_acceptable['transfer_requests']) == 1
+    assert data_acceptable['transfer_requests'][0]['id'] == str(
+        acceptable_transfer.id
+    )
+
+    # Test filtering by DECLINED status
+    response_declined = client.get(
+        '/catalog/transfer?status=DECLINED',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert response_declined.status_code == HTTPStatus.OK
+    data_declined = response_declined.json()
+    assert len(data_declined['transfer_requests']) == 1
+    assert data_declined['transfer_requests'][0]['id'] == str(
+        declined_transfer.id
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_transfer_request_status_success(
+    client, create_workflow_transfer, create_user, create_token
+):
+    user = await create_user()
+    token = create_token(user)
+
+    transfer_request = await create_workflow_transfer(status='PENDING')
+
+    response = client.put(
+        f'/catalog/transfer/{transfer_request.id}?new_status=ACCEPTABLE',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    updated_transfer = response.json()
+    assert updated_transfer['status'] == 'ACCEPTABLE'
+    assert updated_transfer['id'] == str(transfer_request.id)
+
+
+@pytest.mark.asyncio
+async def test_update_transfer_request_status_not_found(
+    client, create_user, create_token
+):
+    user = await create_user()
+    token = create_token(user)
+    fake_transfer_id = str(uuid.uuid4())
+
+    # Attempt to update a non-existent transfer request
+    response = client.put(
+        f'/catalog/transfer/{fake_transfer_id}?new_status=DECLINED',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert 'Transfer request not found' in response.json()['detail']

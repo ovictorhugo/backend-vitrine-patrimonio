@@ -1,9 +1,15 @@
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from vitrine.models import AssetSituation, InventoryAssetStatus, WorkFlowStatus
+from vitrine.models import (
+    AssetSituation,
+    InventoryAssetStatus,
+    WorkFlowStatus,
+    WorkflowTransferStatus,
+)
 
 
 class Message(BaseModel):
@@ -316,6 +322,25 @@ class RequestTransferSchema(BaseModel):
     location_id: UUID
 
 
+class RequestTransferPublic(RequestTransferSchema):
+    id: UUID
+    status: str
+    location_id: UUID = Field(exclude=True)
+    user: UserPublic
+    location: LocationPublic
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RequestTransferList(BaseModel):
+    transfer_requests: List[RequestTransferPublic]
+
+
+class FilterTransfer(FilterPage):
+    user_id: UUID | None = None
+    workflow_id: UUID | None = None
+    status: Optional[WorkflowTransferStatus] = None
+
+
 class CatalogSchema(BaseModel):
     asset_id: UUID
     location_id: UUID
@@ -334,6 +359,7 @@ class CatalogWorkFlowPublic(CatalogWorkFlowSchema):
     user_id: UUID = Field(exclude=True)
     user: UserPublic
     catalog_id: UUID
+    created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
 

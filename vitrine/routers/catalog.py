@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy.orm.attributes import flag_modified
 
 from vitrine.database import get_session
 from vitrine.models import (
@@ -17,9 +16,12 @@ from vitrine.models import (
     CatalogImage,
     CatalogWorkFlow,
     LegalGuardian,
+    Location,
     Material,
     User,
     WorkFlowStatus,
+    WorkflowTransfer,
+    WorkflowTransferStatus,
 )
 from vitrine.schemas import (
     CatalogImagePublic,
@@ -30,9 +32,12 @@ from vitrine.schemas import (
     CatalogWorkFlowSchema,
     FilterCatalog,
     FilterSearchCatalog,
+    FilterTransfer,
     LegalGuardianList,
     MaterialList,
     Message,
+    RequestTransferList,
+    RequestTransferPublic,
     RequestTransferSchema,
 )
 from vitrine.security import get_current_user
@@ -170,6 +175,32 @@ async def read_catalog_entries(
     return {'catalog_entries': entries}
 
 
+@router.get(
+    '/transfer',
+    response_model=RequestTransferList,
+    status_code=HTTPStatus.OK,
+)
+async def list_transfer_requests(
+    session: Session,
+    filters: Annotated[FilterTransfer, Depends()],
+):
+    query = select(WorkflowTransfer)
+
+    if filters.status:
+        query = query.where(WorkflowTransfer.status == filters.status)
+
+    if filters.user_id:
+        query = query.where(WorkflowTransfer.user_id == filters.user_id)
+
+    if filters.workflow_id:
+        query = query.where(
+            WorkflowTransfer.workflow_id == filters.workflow_id
+        )
+
+    result = await session.scalars(query)
+    return {'transfer_requests': result.all()}
+
+
 @router.get('/{catalog_id}', response_model=CatalogPublic)
 async def read_catalog_entry(catalog_id: UUID, session: Session):
     options = [
@@ -218,32 +249,33 @@ async def update_catalog_entry(
     return db_catalog
 
 
-@router.post(
-    '/{catalog_id}/transfer',
-    status_code=HTTPStatus.OK,
-    summary='Solicita ou cancela a transferência de um item',
-)
+@router.post('/{catalog_id}/transfer', response_model=Message)
 async def toggle_transfer_request(
     catalog_id: UUID,
     request: RequestTransferSchema,
     session: Session,
     current_user: CurrentUser,
 ):
-    db_catalog = await session.get(
-        Catalog,
-        catalog_id,
-        options=[selectinload(Catalog.workflow_history)],
-    )
+    options = [
+        selectinload(Catalog.images),
+        selectinload(Catalog.workflow_history).options(
+            selectinload(CatalogWorkFlow.user),
+            selectinload(CatalogWorkFlow.transfer_requests).options(
+                selectinload(WorkflowTransfer.user),
+                selectinload(WorkflowTransfer.location),
+            ),
+        ),
+    ]
+    db_catalog = await session.get(Catalog, catalog_id, options=options)
 
     if not db_catalog or db_catalog.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
         )
-
-    if not db_catalog.workflow_history:
+    db_location = await session.get(Location, request.location_id)
+    if not db_location or db_location.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail='Item has no workflow history.',
+            status_code=HTTPStatus.NOT_FOUND, detail='Location not found'
         )
 
     latest_workflow_entry = max(
@@ -253,38 +285,36 @@ async def toggle_transfer_request(
     if latest_workflow_entry.workflow_status != 'VITRINE':
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=f"Item not available for transfer. Current status is '{latest_workflow_entry.workflow_status}'.",
+            detail=(
+                'Item not available for transfer. Current status is '
+                f"'{latest_workflow_entry.workflow_status}'."
+            ),
         )
 
-    request_details = {
-        'user_id': str(current_user.id),
-        'location_id': str(request.location_id),
-    }
-
-    if latest_workflow_entry.detail is None:
-        latest_workflow_entry.detail = {}
-
-    transfer_requests = latest_workflow_entry.detail.setdefault(
-        'transfer_requests', []
+    new_transfer_request = WorkflowTransfer(
+        workflow_id=latest_workflow_entry.id,
+        user_id=current_user.id,
+        location_id=request.location_id,
+        status='PENDING',
     )
 
-    action: str
-    message: str
-
-    if request_details in transfer_requests:
-        transfer_requests.remove(request_details)
-        action = 'cancelled'
-        message = 'Transfer request cancelled successfully.'
-    else:
-        transfer_requests.append(request_details)
-        action = 'submitted'
-        message = 'Transfer request submitted successfully.'
-
-    flag_modified(latest_workflow_entry, 'detail')
-
+    session.add(new_transfer_request)
     await session.commit()
 
-    return {'message': message, 'action': action}
+    await session.refresh(latest_workflow_entry, ['transfer_requests'])
+    transfer_list = RequestTransferList(
+        transfer_requests=[
+            RequestTransferPublic.model_validate(tr)
+            for tr in latest_workflow_entry.transfer_requests
+        ]
+    )
+
+    latest_workflow_entry.detail = transfer_list.model_dump(mode='json')
+
+    await session.commit()
+    await session.refresh(db_catalog)
+
+    return {'message': 'transfer requested successfully'}
 
 
 @router.delete('/{catalog_id}', response_model=Message)
@@ -410,3 +440,26 @@ async def list_catalog_legal_guardians(
     legal_guardians = result.all()
 
     return {'legal_guardians': legal_guardians}
+
+
+@router.put(
+    '/transfer/{transfer_id}',
+    response_model=RequestTransferPublic,
+    status_code=HTTPStatus.OK,
+)
+async def update_transfer_status(
+    transfer_id: UUID,
+    new_status: WorkflowTransferStatus,
+    session: Session,
+    current_user: CurrentUser,
+):
+    db_transfer = await session.get(WorkflowTransfer, transfer_id)
+    if not db_transfer:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Transfer request not found',
+        )
+    db_transfer.status = new_status
+    await session.commit()
+    await session.refresh(db_transfer)
+    return db_transfer

@@ -86,10 +86,10 @@ async def read_me(current_user: CurrentUser):
     return current_user
 
 
-@router.put('/{user_id}', response_model=UserUpdateSchema)
+@router.put('/{user_id}', response_model=UserPublic)
 async def update_user(
     user_id: UUID,
-    user: UserSchema,
+    user: UserUpdateSchema,
     session: Session,
     current_user: CurrentUser,
 ):
@@ -99,9 +99,11 @@ async def update_user(
         )
 
     try:
-        current_user.username = user.username
-        current_user.password = get_password_hash(user.password)
-        current_user.email = user.email
+        update_data = user.dict(exclude_unset=True)
+
+        for field, value in update_data.items():
+            setattr(current_user, field, value)
+
         await session.commit()
         await session.refresh(current_user)
 
