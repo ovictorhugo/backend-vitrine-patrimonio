@@ -16,6 +16,7 @@ from vitrine.schemas import (
     UserList,
     UserPublic,
     UserSchema,
+    UserUpdateSchema,
 )
 from vitrine.security import (
     get_current_user,
@@ -85,7 +86,7 @@ async def read_me(current_user: CurrentUser):
     return current_user
 
 
-@router.put('/{user_id}', response_model=UserPublic)
+@router.put('/{user_id}', response_model=UserUpdateSchema)
 async def update_user(
     user_id: UUID,
     user: UserSchema,
