@@ -24,6 +24,7 @@ from vitrine.models import (
     WorkflowTransferStatus,
 )
 from vitrine.schemas import (
+    CatalogAssetIdentifierList,
     CatalogImagePublic,
     CatalogList,
     CatalogPublic,
@@ -463,3 +464,29 @@ async def update_transfer_status(
     await session.commit()
     await session.refresh(db_transfer)
     return db_transfer
+
+
+@router.get(
+    '/search/asset-identifier',
+    response_model=CatalogAssetIdentifierList,
+)
+async def search_catalog_by_asset_identifier(session: Session, q: str = str()):
+    q = q.replace('-', '')
+    query = (
+        select(
+            Catalog.id.label('catalog_id'),
+            func.concat(Asset.asset_code, '-', Asset.asset_check_digit).label(
+                'asset_identifier'
+            ),
+        )
+        .join(Asset, Catalog.asset_id == Asset.id)
+        .where(
+            Catalog.deleted_at.is_(None),
+            Asset.deleted_at.is_(None),
+            func.concat(Asset.asset_code, Asset.asset_check_digit).ilike(
+                f'{q}%'
+            ),
+        )
+    )
+    result = await session.execute(query)
+    return result.mappings().all()

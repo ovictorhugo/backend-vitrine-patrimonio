@@ -798,7 +798,6 @@ async def test_update_transfer_request_status_not_found(
     token = create_token(user)
     fake_transfer_id = str(uuid.uuid4())
 
-    # Attempt to update a non-existent transfer request
     response = client.put(
         f'/catalog/transfer/{fake_transfer_id}?new_status=DECLINED',
         headers={'Authorization': f'Bearer {token}'},
@@ -806,3 +805,39 @@ async def test_update_transfer_request_status_not_found(
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert 'Transfer request not found' in response.json()['detail']
+
+
+@pytest.mark.asyncio
+async def test_search_catalog_by_asset_identifier(
+    client, create_asset, create_catalog_entry
+):
+    asset1 = await create_asset(asset_code='102030', asset_check_digit='1')
+    asset2 = await create_asset(asset_code='102040', asset_check_digit='2')
+    asset3 = await create_asset(asset_code='555666', asset_check_digit='3')
+
+    catalog1 = await create_catalog_entry(asset_id=asset1.id)
+    await create_catalog_entry(asset_id=asset2.id)
+    await create_catalog_entry(asset_id=asset3.id)
+
+    response = client.get('/catalog/search/asset-identifier?q=1020')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()) == 2
+
+    response = client.get('/catalog/search/asset-identifier')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()) == 3
+
+    response = client.get('/catalog/search/asset-identifier?q=555')
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]['asset_identifier'] == '555666-3'
+    assert data[0]['catalog_id'] == str(catalog1.id)
+
+    response = client.get('/catalog/search/asset-identifier?q=102030-1')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()) == 1
+
+    response = client.get('/catalog/search/asset-identifier?q=999999')
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()) == 0

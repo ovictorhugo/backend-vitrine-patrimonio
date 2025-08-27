@@ -259,27 +259,36 @@ class AssetList(BaseModel):
     assets: List[AssetPublic]
 
 
-class AssetCode(BaseModel):
+class AssetCodeList(BaseModel):
     asset_code: List[str]
 
 
-class AssetCheckDigit(BaseModel):
+class AssetCheckDigitList(BaseModel):
     asset_check_digit: List[str]
 
 
-class AtmNumber(BaseModel):
+class AtmNumberList(BaseModel):
     atm_number: List[str]
 
 
-class AssetIdentifier(BaseModel):
+class AssetIdentifierList(BaseModel):
     asset_identifier: list[str]
 
 
-class MaterialNameResponse(BaseModel):
+class MaterialNameResponseList(BaseModel):
     material_name: List[str] = None
 
 
-class LegalGuardianNameResponse(BaseModel):
+class CatalogAssetIdentifier(BaseModel):
+    catalog_id: UUID
+    asset_identifier: str
+
+
+class CatalogAssetIdentifierList(BaseModel):
+    asset_identifier: list[CatalogAssetIdentifier]
+
+
+class LegalGuardianNameResponseList(BaseModel):
     legal_guardians_name: List[str] = None
 
 

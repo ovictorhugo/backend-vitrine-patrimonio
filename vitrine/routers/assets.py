@@ -12,13 +12,13 @@ from vitrine import service
 from vitrine.database import get_session
 from vitrine.models import Agency, Asset, Location, Sector, User
 from vitrine.schemas import (
-    AssetCheckDigit,
-    AssetCode,
-    AssetIdentifier,
+    AssetCheckDigitList,
+    AssetCodeList,
+    AssetIdentifierList,
     AssetList,
     AssetPublic,
     AssetSchema,
-    AtmNumber,
+    AtmNumberList,
     FilterAsset,
     Message,
 )
@@ -165,7 +165,7 @@ async def delete_asset(
     return {'message': 'Asset deleted'}
 
 
-@router.get('/search/asset-code', response_model=AssetCode)
+@router.get('/search/asset-code', response_model=AssetCodeList)
 async def search_by_asset_code(
     q: str,
     session: Session,
@@ -179,7 +179,7 @@ async def search_by_asset_code(
     return {'asset_code': result.all()}
 
 
-@router.get('/search/asset-check-digit', response_model=AssetCheckDigit)
+@router.get('/search/asset-check-digit', response_model=AssetCheckDigitList)
 async def search_by_asset_check_digit(
     session: Session,
     q: str = str(),
@@ -193,7 +193,7 @@ async def search_by_asset_check_digit(
     return {'asset_check_digit': result.all()}
 
 
-@router.get('/search/atm-number', response_model=AtmNumber)
+@router.get('/search/atm-number', response_model=AtmNumberList)
 async def search_by_atm_number(
     session: Session,
     q: str = str(),
@@ -207,7 +207,7 @@ async def search_by_atm_number(
     return {'atm_number': result.all()}
 
 
-@router.get('/search/asset-identifier', response_model=AssetIdentifier)
+@router.get('/search/asset-identifier', response_model=AssetIdentifierList)
 async def search_by_asset_identifier(
     session: Session,
     q: str = str(),
