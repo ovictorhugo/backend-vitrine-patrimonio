@@ -58,6 +58,7 @@ async def refresh_access_token(user: CurrentUser):
 @router.get('/shibboleth/login')
 async def shibboleth_login(request: Request, session: Session):
     shib_data = request.headers
+    print(shib_data)
     eppn = shib_data.get('eppn')
     if not eppn:
         raise HTTPException(
