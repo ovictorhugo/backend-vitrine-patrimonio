@@ -821,23 +821,23 @@ async def test_search_catalog_by_asset_identifier(
 
     response = client.get('/catalog/search/asset-identifier?q=1020')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()) == 2
+    assert len(response.json()['catalogs']) == 2
 
     response = client.get('/catalog/search/asset-identifier')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()) == 3
+    assert len(response.json()['catalogs']) == 3
 
     response = client.get('/catalog/search/asset-identifier?q=555')
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert len(data) == 1
-    assert data[0]['asset_identifier'] == '555666-3'
-    assert data[0]['catalog_id'] == str(catalog1.id)
+    assert data['catalogs'][0]['asset_identifier'] == '555666-3'
+    assert data['catalogs'][0]['catalog_id'] == str(catalog1.id)
 
     response = client.get('/catalog/search/asset-identifier?q=102030-1')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()) == 1
+    assert len(response.json()['catalogs']) == 1
 
     response = client.get('/catalog/search/asset-identifier?q=999999')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()) == 0
+    assert len(response.json()['catalogs']) == 0

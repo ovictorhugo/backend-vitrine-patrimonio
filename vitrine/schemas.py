@@ -285,7 +285,7 @@ class CatalogAssetIdentifier(BaseModel):
 
 
 class CatalogAssetIdentifierList(BaseModel):
-    asset_identifier: list[CatalogAssetIdentifier]
+    catalogs: list[CatalogAssetIdentifier]
 
 
 class LegalGuardianNameResponseList(BaseModel):

@@ -489,4 +489,4 @@ async def search_catalog_by_asset_identifier(session: Session, q: str = str()):
         )
     )
     result = await session.execute(query)
-    return result.mappings().all()
+    return {'catalogs': result.mappings().all()}

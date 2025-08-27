@@ -13,6 +13,7 @@ from vitrine.routers.organizational_structure import (
     sectors,
     units,
 )
+from vitrine.routers.statistics import catalog_statistics
 
 BASE_DIR = os.path.dirname(__file__)
 STORAGE_DIR = os.path.join(BASE_DIR, 'storage')
@@ -49,6 +50,8 @@ app.include_router(sectors.router)
 app.include_router(location.router)
 app.include_router(legal_guardians.router)
 app.include_router(materials.router)
+
+app.include_router(catalog_statistics.router)
 
 
 @app.get('/')
