@@ -200,3 +200,70 @@ async def test_shibboleth_login_fails_without_eppn(client):
             'Provedor de Identidade. Acesso negado.'
         )
     }
+
+
+@pytest.mark.asyncio
+async def test_shibboleth_login_block_student_only(client):
+    headers = {
+        **MOCK_SHIB_HEADERS,
+        'shib-ep-affiliation': 'student',
+    }
+
+    response = client.get(
+        '/auth/shibboleth/login',
+        headers=headers,
+        follow_redirects=False,
+    )
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert response.json()['detail'] == (
+        'Perfil cadastrado apenas como discente pelo Provedor de Identidade. Acesso negado.'
+    )
+
+
+@pytest.mark.asyncio
+async def test_shibboleth_login_student_only_with_spaces_and_case(client):
+    headers = {
+        **MOCK_SHIB_HEADERS,
+        'shib-ep-affiliation': ' Student ',
+    }
+
+    response = client.get(
+        '/auth/shibboleth/login', headers=headers, follow_redirects=False
+    )
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_shibboleth_login_allow_non_student_profiles(
+    client, session: AsyncSession
+):
+    headers = {
+        **MOCK_SHIB_HEADERS,
+        'shib-ep-affiliation': 'faculty',
+    }
+
+    response = client.get(
+        '/auth/shibboleth/login', headers=headers, follow_redirects=False
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+
+
+@pytest.mark.asyncio
+async def test_shibboleth_login_allow_faculty_and_student(
+    client, session: AsyncSession
+):
+    headers = {
+        **MOCK_SHIB_HEADERS,
+        'shib-ep-affiliation': 'faculty;student',
+    }
+
+    response = client.get(
+        '/auth/shibboleth/login', headers=headers, follow_redirects=False
+    )
+
+    assert response.status_code == HTTPStatus.FOUND  # 302
+    redirect_location = response.headers.get('location')
+    assert redirect_location.startswith(Settings().CLIENT)
