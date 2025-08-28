@@ -24,7 +24,8 @@ class CatalogWorkflowCount(BaseModel):
 
 
 @router.get(
-    '/count-by-workflow-status', response_model=list[CatalogWorkflowCount]
+    '/catalog/count-by-workflow-status',
+    response_model=list[CatalogWorkflowCount],
 )
 async def get_catalog_count_by_workflow_status(session: Session):
     latest_workflow_subquery = (

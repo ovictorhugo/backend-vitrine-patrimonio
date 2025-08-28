@@ -816,23 +816,29 @@ async def test_search_catalog_by_asset_identifier(
     asset3 = await create_asset(asset_code='555666', asset_check_digit='3')
 
     catalog1 = await create_catalog_entry(asset_id=asset1.id)
-    await create_catalog_entry(asset_id=asset2.id)
-    await create_catalog_entry(asset_id=asset3.id)
+    catalog_with_asset2 = await create_catalog_entry(asset_id=asset2.id)
+    catalog_with_asset3 = await create_catalog_entry(asset_id=asset3.id)
 
+    # Teste de busca por '1020'
     response = client.get('/catalog/search/asset-identifier?q=1020')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()['catalogs']) == 2
+    data = response.json()
+    assert len(data['catalogs']) == 2
+    # Você pode adicionar mais verificações aqui, se desejar.
 
+    # Teste de busca sem parâmetro
     response = client.get('/catalog/search/asset-identifier')
     assert response.status_code == HTTPStatus.OK
-    assert len(response.json()['catalogs']) == 3
+    data = response.json()
+    assert len(data['catalogs']) == 3
 
+    # Teste de busca por '555'
     response = client.get('/catalog/search/asset-identifier?q=555')
     assert response.status_code == HTTPStatus.OK
     data = response.json()
-    assert len(data) == 1
+    assert len(data['catalogs']) == 1
     assert data['catalogs'][0]['asset_identifier'] == '555666-3'
-    assert data['catalogs'][0]['catalog_id'] == str(catalog1.id)
+    assert data['catalogs'][0]['catalog_id'] == str(catalog_with_asset3.id)
 
     response = client.get('/catalog/search/asset-identifier?q=102030-1')
     assert response.status_code == HTTPStatus.OK
