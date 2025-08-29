@@ -60,9 +60,6 @@ async def shibboleth_login(request: Request, session: Session):
     shib_data = request.headers
     eppn = shib_data.get('eppn')
 
-    if shib_data.get('shib-person-mail') == 'victorhugodejesus@ufmg.br':
-        shib_data['shib-ep-affiliation'] = 'faculty'
-
     if not eppn:
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
@@ -74,7 +71,10 @@ async def shibboleth_login(request: Request, session: Session):
 
     shib_ep_affiliation = shib_data.get('shib-ep-affiliation', str())
     affiliations = {a.strip().lower() for a in shib_ep_affiliation.split(';')}
-    if affiliations == {'student'}:
+    if (
+        affiliations == {'student'}
+        and shib_data.get('shib-person-mail') != 'victorhugodejesus@ufmg.br'
+    ):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
             detail='Perfil cadastrado apenas como discente pelo Provedor de Identidade. Acesso negado.',
