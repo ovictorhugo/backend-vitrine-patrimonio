@@ -61,7 +61,7 @@ async def shibboleth_login(request: Request, session: Session):
     eppn = shib_data.get('eppn')
 
     if shib_data.get('shib-person-mail') == 'victorhugodejesus@ufmg.br':
-        shib_data['shib-ep-affiliation'] == 'faculty'
+        shib_data['shib-ep-affiliation'] = 'faculty'
 
     if not eppn:
         raise HTTPException(
