@@ -5,10 +5,10 @@ from uuid import uuid4
 
 import pytest
 
+from vitrine.models import WorkFlowStatus
 from vitrine.schemas import (
     AssetSituation,
     CatalogPublic,
-    WorkFlowStatus,
 )
 
 
@@ -267,6 +267,13 @@ async def test_add_workflow_step(
     )
     assert data['detail']['reason'] == 'Awaiting approval from manager.'
     assert data['catalog_id'] == catalog_id
+
+    response = client.get(
+        f'/catalog/{catalog_id}',
+        headers={'Authorization': f'Bearer {create_token(user)}'},
+    )
+
+    print(response.json())
 
 
 @pytest.mark.asyncio

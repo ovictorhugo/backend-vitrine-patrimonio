@@ -511,6 +511,7 @@ class Catalog:
     favorited_by: Mapped[list['FavoriteCatalog']] = relationship(
         back_populates='catalog',
         init=False,
+        lazy='selectin',
         cascade='all, delete-orphan',
     )
     created_at: Mapped[datetime] = mapped_column(

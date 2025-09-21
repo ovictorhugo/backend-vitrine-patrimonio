@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from vitrine.models import (
     AssetSituation,
     InventoryAssetStatus,
-    WorkFlowStatus,
     WorkflowTransferStatus,
 )
 
@@ -359,7 +358,7 @@ class CatalogSchema(BaseModel):
 
 
 class CatalogWorkFlowSchema(BaseModel):
-    workflow_status: WorkFlowStatus
+    workflow_status: str
     detail: Optional[dict] = None
 
 
@@ -369,6 +368,7 @@ class CatalogWorkFlowPublic(CatalogWorkFlowSchema):
     user: UserPublic
     catalog_id: UUID
     created_at: datetime
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -404,13 +404,13 @@ class FilterCatalog(FilterPage):
     material_id: UUID | None = None
     legal_guardian_id: UUID | None = None
     user_id: UUID | None = None
-    workflow_status: Optional[WorkFlowStatus] = None
+    workflow_status: Optional[str] = None
 
 
 class FilterSearchCatalog(FilterPage):
     q: str | None = Field(default=None)
     user_id: UUID | None = None
-    workflow_status: Optional[WorkFlowStatus] = None
+    workflow_status: Optional[str] = None
 
 
 class InventorySchema(BaseModel):

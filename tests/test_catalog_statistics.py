@@ -2,9 +2,7 @@ from http import HTTPStatus
 
 import pytest
 
-# Adicione WorkFlowStatus aos seus imports, caso ainda não esteja lá.
-# Certifique-se que o nome do enum está correto (ex: WorkFlowStatus).
-from vitrine.schemas import WorkFlowStatus
+from vitrine.models import WorkFlowStatus
 
 
 @pytest.mark.asyncio
