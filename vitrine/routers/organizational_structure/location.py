@@ -109,19 +109,6 @@ async def read_locations(
     return {'locations': locations}
 
 
-@router.get('/{location_id}', response_model=LocationPublic)
-async def read_location(location_id: int, session: Session):
-    query = select(Location).where(
-        Location.id == location_id, Location.deleted_at.is_(None)
-    )
-    result = await session.scalar(query)
-
-    if not result:
-        raise HTTPException(status_code=404, detail='Location not found')
-
-    return result
-
-
 @router.get('/my', response_model=LocationList)
 async def read_my_locations(
     session: Session,
@@ -155,6 +142,19 @@ async def read_my_locations(
     locations = result.all()
 
     return {'locations': locations}
+
+
+@router.get('/{location_id}', response_model=LocationPublic)
+async def read_location(location_id: UUID, session: Session):
+    query = select(Location).where(
+        Location.id == location_id, Location.deleted_at.is_(None)
+    )
+    result = await session.scalar(query)
+
+    if not result:
+        raise HTTPException(status_code=404, detail='Location not found')
+
+    return result
 
 
 @router.delete('/{location_id}', response_model=Message)
