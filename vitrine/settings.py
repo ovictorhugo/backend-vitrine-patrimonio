@@ -9,3 +9,4 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     CLIENT: str = 'http://localhost:8080'
     SECRET_KEY: str = 'SECRET_KEY'
+    ROOT_PATH: str = str()

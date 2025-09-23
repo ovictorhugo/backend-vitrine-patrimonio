@@ -14,6 +14,7 @@ from vitrine.routers.organizational_structure import (
     units,
 )
 from vitrine.routers.statistics import catalog_statistics
+from vitrine.settings import Settings
 
 BASE_DIR = os.path.dirname(__file__)
 STORAGE_DIR = os.path.join(BASE_DIR, 'storage')
@@ -25,7 +26,7 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 TEMP_DIR = os.path.join(STORAGE_DIR, 'temp')
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-app = FastAPI()
+app = FastAPI(root_path=Settings().ROOT_PATH)
 
 app.mount('/uploads', StaticFiles(directory=UPLOADS_DIR), name='uploads')
 
