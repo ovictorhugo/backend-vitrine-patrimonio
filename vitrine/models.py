@@ -595,7 +595,9 @@ class WorkflowTransfer:
     )
 
     workflow: Mapped['CatalogWorkFlow'] = relationship(
-        back_populates='transfer_requests', init=False
+        back_populates='transfer_requests',
+        init=False,
+        lazy='selectin',
     )
 
     user: Mapped['User'] = relationship(

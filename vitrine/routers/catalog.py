@@ -459,19 +459,40 @@ async def update_transfer_status(
     session: Session,
     current_user: CurrentUser,
 ):
-    db_transfer = await session.get(WorkflowTransfer, transfer_id)
+    db_transfer = await session.get(
+        WorkflowTransfer,
+        transfer_id,
+        options=[
+            selectinload(WorkflowTransfer.workflow),
+            selectinload(WorkflowTransfer.user),
+            selectinload(WorkflowTransfer.location),
+        ],
+    )
     if not db_transfer:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail='Transfer request not found',
         )
-
     if new_status == WorkflowTransferStatus.ACCEPTABLE:
         await session.execute(
             update(WorkflowTransfer)
             .where(WorkflowTransfer.workflow_id == db_transfer.workflow_id)
             .values(status='DECLINED')
         )
+        new_workflow_entry = CatalogWorkFlow(
+            catalog_id=db_transfer.workflow.catalog_id,  # Erro explode aqui
+            user_id=current_user.id,
+            workflow_status='AGUARDANDO_ASSINATURAS',
+            detail={
+                'transfer_request': RequestTransferPublic.model_validate(
+                    db_transfer
+                ).model_dump(mode='json'),
+                'asset_owner_signed': False,
+                'requester_signed': False,
+                'department_signed': False,
+            },
+        )
+        session.add(new_workflow_entry)
 
     db_transfer.status = new_status
     await session.commit()

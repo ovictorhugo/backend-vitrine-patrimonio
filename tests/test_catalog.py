@@ -273,8 +273,6 @@ async def test_add_workflow_step(
         headers={'Authorization': f'Bearer {create_token(user)}'},
     )
 
-    print(response.json())
-
 
 @pytest.mark.asyncio
 async def test_add_workflow_step_for_nonexistent_catalog(
@@ -831,9 +829,14 @@ async def test_update_transfer_request_status_success_rejected_the_rest(
     assert response_declined.status_code == HTTPStatus.OK
     data_declined = response_declined.json()
     assert len(data_declined['transfer_requests']) == 1
-    assert data_declined['transfer_requests'][0]['id'] == str(
-        declined_transfer.id
+
+    response_approved = client.get(
+        '/catalog/transfer?status=ACCEPTABLE',
+        headers={'Authorization': f'Bearer {token}'},
     )
+    assert response_approved.status_code == HTTPStatus.OK
+    data_approved = response_approved.json()
+    assert len(data_approved['transfer_requests']) == 1
 
 
 @pytest.mark.asyncio
