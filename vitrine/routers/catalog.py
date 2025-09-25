@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -465,6 +465,14 @@ async def update_transfer_status(
             status_code=HTTPStatus.NOT_FOUND,
             detail='Transfer request not found',
         )
+
+    if new_status == WorkflowTransferStatus.ACCEPTABLE:
+        await session.execute(
+            update(WorkflowTransfer)
+            .where(WorkflowTransfer.workflow_id == db_transfer.workflow_id)
+            .values(status='DECLINED')
+        )
+
     db_transfer.status = new_status
     await session.commit()
     await session.refresh(db_transfer)

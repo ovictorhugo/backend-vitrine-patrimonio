@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from vitrine.models import WorkFlowStatus
+from vitrine.models import WorkFlowStatus, WorkflowTransferStatus
 from vitrine.schemas import (
     AssetSituation,
     CatalogPublic,
@@ -740,7 +740,6 @@ async def test_list_transfer_requests(
     data_all = response_all.json()
     assert len(data_all['transfer_requests']) == 3
 
-    # Test filtering by PENDING status
     response_pending = client.get(
         '/catalog/transfer?status=PENDING',
         headers={'Authorization': f'Bearer {token}'},
@@ -752,7 +751,6 @@ async def test_list_transfer_requests(
         pending_transfer.id
     )
 
-    # Test filtering by ACCEPTABLE status
     response_acceptable = client.get(
         '/catalog/transfer?status=ACCEPTABLE',
         headers={'Authorization': f'Bearer {token}'},
@@ -764,7 +762,6 @@ async def test_list_transfer_requests(
         acceptable_transfer.id
     )
 
-    # Test filtering by DECLINED status
     response_declined = client.get(
         '/catalog/transfer?status=DECLINED',
         headers={'Authorization': f'Bearer {token}'},
@@ -795,6 +792,48 @@ async def test_update_transfer_request_status_success(
     updated_transfer = response.json()
     assert updated_transfer['status'] == 'ACCEPTABLE'
     assert updated_transfer['id'] == str(transfer_request.id)
+
+
+@pytest.mark.asyncio
+async def test_update_transfer_request_status_success_rejected_the_rest(
+    client,
+    create_workflow_step,
+    create_workflow_transfer,
+    create_user,
+    create_token,
+):
+    user = await create_user()
+    token = create_token(user)
+    workflow_step = await create_workflow_step(
+        workflow_status=WorkflowTransferStatus.PENDING
+    )
+    declined_transfer = await create_workflow_transfer(
+        workflow_id=workflow_step.id, status='PENDING'
+    )
+    transfer_request = await create_workflow_transfer(
+        workflow_id=workflow_step.id, status='PENDING'
+    )
+
+    response = client.put(
+        f'/catalog/transfer/{transfer_request.id}?new_status=ACCEPTABLE',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    updated_transfer = response.json()
+    assert updated_transfer['status'] == 'ACCEPTABLE'
+    assert updated_transfer['id'] == str(transfer_request.id)
+
+    response_declined = client.get(
+        '/catalog/transfer?status=DECLINED',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert response_declined.status_code == HTTPStatus.OK
+    data_declined = response_declined.json()
+    assert len(data_declined['transfer_requests']) == 1
+    assert data_declined['transfer_requests'][0]['id'] == str(
+        declined_transfer.id
+    )
 
 
 @pytest.mark.asyncio
