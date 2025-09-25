@@ -352,6 +352,7 @@ class CatalogWorkFlowPublic(CatalogWorkFlowSchema):
     id: UUID
     user_id: UUID = Field(exclude=True)
     user: UserPublic
+    transfer_requests: List[RequestTransferPublic]
     catalog_id: UUID
     created_at: datetime
 

@@ -97,7 +97,8 @@ async def create_catalog_entry(
         .options(
             selectinload(Catalog.images),
             selectinload(Catalog.workflow_history).options(
-                selectinload(CatalogWorkFlow.user)
+                selectinload(CatalogWorkFlow.user),
+                selectinload(CatalogWorkFlow.transfer_requests),
             ),
         )
     )
@@ -131,7 +132,9 @@ async def add_workflow_step(
 
     session.add(new_workflow_entry)
     await session.commit()
-    await session.refresh(new_workflow_entry)
+    await session.refresh(
+        new_workflow_entry, attribute_names=['transfer_requests']
+    )
 
     return new_workflow_entry
 
@@ -164,7 +167,8 @@ async def read_catalog_entries(
     query = query.options(
         selectinload(Catalog.images),
         selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user)
+            selectinload(CatalogWorkFlow.user),
+            selectinload(CatalogWorkFlow.transfer_requests),
         ),
     )
 
@@ -207,7 +211,8 @@ async def read_catalog_entry(catalog_id: UUID, session: Session):
     options = [
         selectinload(Catalog.images),
         selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user)
+            selectinload(CatalogWorkFlow.user),
+            selectinload(CatalogWorkFlow.transfer_requests),
         ),
     ]
     db_catalog = await session.get(Catalog, catalog_id, options=options)
