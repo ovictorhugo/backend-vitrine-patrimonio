@@ -595,3 +595,31 @@ async def test_search_assets_by_atm_number(
     assert 'ATM100' in data['atm_number']
     assert 'ATM101' in data['atm_number']
     assert 'BANK001' not in data['atm_number']
+
+
+@pytest.mark.asyncio
+async def test_filter_assets_by_is_ofissial(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    await create_asset(
+        asset_description='Notebook Dell i7',
+        is_official=True,
+    )
+    await create_asset(
+        asset_description='Monitor LG Ultrawide',
+        is_official=False,
+    )
+    params = {'is_official': True}
+    response = client.get(
+        '/assets',
+        params=params,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['asset_description'] == 'Notebook Dell i7'

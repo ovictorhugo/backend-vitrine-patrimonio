@@ -119,6 +119,9 @@ async def read_assets(
             Asset.legal_guardian_id == filters.legal_guardian_id
         )
 
+    if filters.is_official:
+        query = query.where(Asset.is_official == filters.is_official)
+
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)

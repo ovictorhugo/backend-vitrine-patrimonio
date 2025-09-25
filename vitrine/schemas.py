@@ -300,30 +300,16 @@ class FilterAsset(BaseModel):
 
     asset_identifier: Optional[str] = Field(
         default=None,
-        description='Filtrar por Asset Code + Check Digit (formato: código-dígito)',
     )
-    atm_number: Optional[str] = Field(
-        default=None, description='Filtrar por número do ATM'
-    )
+    atm_number: Optional[str] = Field(default=None)
 
-    agency_id: Optional[UUID] = Field(
-        default=None, description='Filtrar por ID da Agência'
-    )
-    unit_id: Optional[UUID] = Field(
-        default=None, description='Filtrar por ID da Unidade'
-    )
-    sector_id: Optional[UUID] = Field(
-        default=None, description='Filtrar por ID do Setor'
-    )
-    location_id: Optional[UUID] = Field(
-        default=None, description='Filtrar por ID da Sala'
-    )
-    material_id: Optional[UUID] = Field(
-        default=None, description='Filtrar por ID do Material'
-    )
-    legal_guardian_id: Optional[UUID] = Field(
-        default=None, description='Filtrar por ID do Responsavel pelo bem'
-    )
+    agency_id: Optional[UUID] = Field(default=None)
+    unit_id: Optional[UUID] = Field(default=None)
+    sector_id: Optional[UUID] = Field(default=None)
+    location_id: Optional[UUID] = Field(default=None)
+    material_id: Optional[UUID] = Field(default=None)
+    legal_guardian_id: Optional[UUID] = Field(default=None)
+    is_official: Optional[bool] = Field(default=None)
 
 
 class RequestTransferSchema(BaseModel):
