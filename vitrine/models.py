@@ -70,10 +70,7 @@ class User:
     lattes_id: Mapped[str | None] = mapped_column(nullable=True, init=False)
     orcid: Mapped[str | None] = mapped_column(nullable=True, init=False)
     ramal: Mapped[str | None] = mapped_column(nullable=True, init=False)
-    photo_url: Mapped[str | None] = mapped_column(nullable=True, init=False)
-    background_url: Mapped[str | None] = mapped_column(
-        nullable=True, init=False
-    )
+
     matricula: Mapped[str | None] = mapped_column(nullable=True, init=False)
 
     verify: Mapped[bool] = mapped_column(default=False)
