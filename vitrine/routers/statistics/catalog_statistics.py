@@ -1,21 +1,13 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import and_, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from vitrine.database import get_session
+from vitrine.dependencies import Session
 from vitrine.models import (
     CatalogWorkFlow,
-    User,
 )
-from vitrine.security import get_current_user
 
 router = APIRouter(prefix='/statistics', tags=['estatisticas - patrimonio'])
-
-Session = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 class CatalogWorkflowCount(BaseModel):

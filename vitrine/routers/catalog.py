@@ -6,10 +6,9 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from vitrine.database import get_session
+from vitrine.dependencies import CurrentUser, Session
 from vitrine.models import (
     Asset,
     Catalog,
@@ -41,15 +40,11 @@ from vitrine.schemas import (
     RequestTransferPublic,
     RequestTransferSchema,
 )
-from vitrine.security import get_current_user
-from vitrine.service import apply_catalog_filters
+from vitrine.services import filter_service, mail_service
 
 router = APIRouter(
     prefix='/catalog', tags=['vitrine - patrimônios anunciados']
 )
-
-Session = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=CatalogPublic)
@@ -162,7 +157,7 @@ async def read_catalog_entries(
             Asset.legal_guardian_id == filters.legal_guardian_id
         )
 
-    query = apply_catalog_filters(query, filters)
+    query = filter_service.apply_filters(query, filters)
 
     query = query.options(
         selectinload(Catalog.images),
@@ -407,7 +402,7 @@ async def list_catalog_materials(
         .where(Catalog.deleted_at.is_(None))
     )
 
-    query = apply_catalog_filters(query, filters)
+    query = filter_service.apply_filters(query, filters)
 
     if filters.q:
         query = query.where(
@@ -435,7 +430,7 @@ async def list_catalog_legal_guardians(
         .where(Catalog.deleted_at.is_(None))
     )
 
-    query = apply_catalog_filters(query, filters)
+    query = filter_service.apply_filters(query, filters)
 
     if filters.q:
         query = query.where(
@@ -480,7 +475,7 @@ async def update_transfer_status(
             .values(status='DECLINED')
         )
         new_workflow_entry = CatalogWorkFlow(
-            catalog_id=db_transfer.workflow.catalog_id,  # Erro explode aqui
+            catalog_id=db_transfer.workflow.catalog_id,
             user_id=current_user.id,
             workflow_status='AGUARDANDO_ASSINATURAS',
             detail={
@@ -492,6 +487,14 @@ async def update_transfer_status(
                 'department_signed': False,
             },
         )
+        catalog_owner = await session.get(User, new_workflow_entry.user_id)
+        requester = await session.get(
+            User, new_workflow_entry.detail['transfer_request']['user']['id']
+        )
+
+        await mail_service.send_email(catalog_owner, None)
+        await mail_service.send_email(requester, None)
+
         session.add(new_workflow_entry)
 
     db_transfer.status = new_status

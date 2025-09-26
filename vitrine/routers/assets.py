@@ -6,11 +6,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import ValidationError
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from vitrine import service
-from vitrine.database import get_session
-from vitrine.models import Agency, Asset, Location, Sector, User
+from vitrine.dependencies import CurrentUser, Session
+from vitrine.models import Agency, Asset, Location, Sector
 from vitrine.schemas import (
     AssetCheckDigitList,
     AssetCodeList,
@@ -22,11 +20,9 @@ from vitrine.schemas import (
     FilterAsset,
     Message,
 )
-from vitrine.security import get_current_user
+from vitrine.services import service
 
 router = APIRouter(prefix='/assets', tags=['vitrine - patrimônio'])
-Session = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=AssetPublic)

@@ -5,10 +5,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from vitrine.database import get_session
-from vitrine.models import Agency, Location, Sector, User
+from vitrine.dependencies import CurrentUser, Session
+from vitrine.models import Agency, Location, Sector
 from vitrine.schemas import (
     FilterSector,
     Message,
@@ -16,14 +15,10 @@ from vitrine.schemas import (
     SectorPublic,
     SectorSchema,
 )
-from vitrine.security import get_current_user
 
 router = APIRouter(
     prefix='/sectors', tags=['estrutura organizacional - setores']
 )
-
-Session = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=SectorPublic)

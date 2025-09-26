@@ -1,14 +1,12 @@
 from datetime import datetime
 from http import HTTPStatus
-from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from vitrine.database import get_session
-from vitrine.models import Unit, User
+from vitrine.dependencies import CurrentUser, Session
+from vitrine.models import Unit
 from vitrine.schemas import (
     FilterUnit,
     Message,
@@ -16,14 +14,10 @@ from vitrine.schemas import (
     UnitPublic,
     UnitSchema,
 )
-from vitrine.security import get_current_user
 
 router = APIRouter(
     prefix='/units', tags=['estrutura organizacional - unidades']
 )
-
-Session = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=UnitPublic)

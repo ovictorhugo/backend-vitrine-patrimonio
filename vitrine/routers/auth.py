@@ -1,29 +1,21 @@
 from http import HTTPStatus
 from secrets import token_hex
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import RedirectResponse
 
-from vitrine.database import get_session
+from vitrine.dependencies import CurrentUser, OAuth2Form, Session
 from vitrine.models import LegalGuardian, SystemIdentity, User
 from vitrine.schemas import Token
 from vitrine.security import (
     create_access_token,
-    get_current_user,
     get_password_hash,
     verify_password,
 )
 from vitrine.settings import Settings
 
 router = APIRouter(prefix='/auth', tags=['autenticação'])
-
-OAuth2Form = Annotated[OAuth2PasswordRequestForm, Depends()]
-Session = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post('/token', response_model=Token)

@@ -1,22 +1,17 @@
 import glob
 import os
 from http import HTTPStatus
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from vitrine.database import get_session
+from vitrine.dependencies import CurrentUser, Session
 from vitrine.models import User
-from vitrine.security import get_current_user
 
 router = APIRouter(prefix='/user/upload', tags=['usuários'])
 
-Session = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 UPLOAD_DIR = 'vitrine/storage/uploads/users_visuals'
 

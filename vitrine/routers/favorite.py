@@ -1,21 +1,15 @@
 from http import HTTPStatus
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from vitrine.database import get_session
-from vitrine.models import Catalog, CatalogWorkFlow, FavoriteCatalog, User
+from vitrine.dependencies import CurrentUser, Session
+from vitrine.models import Catalog, CatalogWorkFlow, FavoriteCatalog
 from vitrine.schemas import FavoriteList, Message
-from vitrine.security import get_current_user
 
 router = APIRouter(prefix='/favorites', tags=['vitrine - favoritos'])
-
-Session = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post(

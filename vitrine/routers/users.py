@@ -6,9 +6,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from vitrine.database import get_session
+from vitrine.dependencies import CurrentUser, Session
 from vitrine.models import User
 from vitrine.schemas import (
     FilterPage,
@@ -24,8 +23,6 @@ from vitrine.security import (
 )
 
 router = APIRouter(prefix='/users', tags=['usuários'])
-Session = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=UserPublic)
