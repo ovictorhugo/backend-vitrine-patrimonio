@@ -118,6 +118,9 @@ async def read_assets(
     if filters.is_official:
         query = query.where(Asset.is_official == filters.is_official)
 
+    if filters.user_id:
+        query = query.where(Asset.created_by_id == filters.user_id)
+
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)

@@ -598,7 +598,7 @@ async def test_search_assets_by_atm_number(
 
 
 @pytest.mark.asyncio
-async def test_filter_assets_by_is_ofissial(
+async def test_filter_assets_by_is_official(
     client, create_user, create_token, create_asset
 ):
     user = await create_user()
@@ -613,6 +613,30 @@ async def test_filter_assets_by_is_ofissial(
         is_official=False,
     )
     params = {'is_official': True}
+    response = client.get(
+        '/assets',
+        params=params,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == 1
+    assert data['assets'][0]['asset_description'] == 'Notebook Dell i7'
+
+
+@pytest.mark.asyncio
+async def test_filter_assets_by_user_id(
+    client, create_user, create_token, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+
+    await create_asset(
+        asset_description='Notebook Dell i7', created_by_id=user.id
+    )
+    await create_asset(asset_description='Monitor LG Ultrawide')
+    params = {'user_id': str(user.id)}
     response = client.get(
         '/assets',
         params=params,

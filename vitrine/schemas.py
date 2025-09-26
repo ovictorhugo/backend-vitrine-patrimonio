@@ -2,7 +2,12 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+)
 
 from vitrine.models import (
     AssetSituation,
@@ -310,6 +315,7 @@ class FilterAsset(BaseModel):
     material_id: Optional[UUID] = Field(default=None)
     legal_guardian_id: Optional[UUID] = Field(default=None)
     is_official: Optional[bool] = Field(default=None)
+    user_id: Optional[UUID] = Field(default=None)
 
 
 class RequestTransferSchema(BaseModel):

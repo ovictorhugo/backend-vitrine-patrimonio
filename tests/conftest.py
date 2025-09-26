@@ -276,9 +276,7 @@ def create_user(session):
 @pytest_asyncio.fixture
 def create_asset(
     session,
-    create_agency,
-    create_unit,
-    create_sector,
+    create_user,
     create_location,
     create_material,
     create_legal_guardian,
@@ -293,6 +291,9 @@ def create_asset(
         if 'legal_guardian_id' not in kwargs:
             legal_guardian = await create_legal_guardian()
             kwargs['legal_guardian_id'] = legal_guardian.id
+        if 'created_by_id' not in kwargs:
+            user = await create_user()
+            kwargs['created_by_id'] = user.id
 
         asset = AssetFactory.build(**kwargs)
 

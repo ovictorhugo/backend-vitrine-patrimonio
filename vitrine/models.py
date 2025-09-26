@@ -93,7 +93,13 @@ class User:
         init=False,
         cascade='all, delete-orphan',
     )
-
+    created_assets: Mapped[list['Asset']] = relationship(
+        'Asset',
+        back_populates='created_by',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -413,7 +419,6 @@ class Asset:
         ForeignKey('locations.id'), nullable=True
     )
     location: Mapped[Location] = relationship(init=False, lazy='joined')
-
     material: Mapped[Material] = relationship(init=False, lazy='joined')
     legal_guardian: Mapped[LegalGuardian] = relationship(
         init=False, lazy='joined'
@@ -436,6 +441,11 @@ class Asset:
     group_code: Mapped[str | None] = mapped_column(nullable=True)
     expense_element_code: Mapped[str | None] = mapped_column(nullable=True)
     subelement_code: Mapped[str | None] = mapped_column(nullable=True)
+
+    created_by_id: Mapped[UUID] = mapped_column(
+        ForeignKey('users.id'), nullable=False
+    )
+    created_by: Mapped[User] = relationship('User', lazy='joined', init=False)
 
     is_official: Mapped[bool] = mapped_column(default=False)
 
@@ -464,6 +474,7 @@ class Asset:
         init=False,
         index=False,
     )
+
     __table_args__ = (
         Index('ix_assets_tsv', tsv, postgresql_using='gin'),
         UniqueConstraint('asset_code', 'asset_check_digit'),
