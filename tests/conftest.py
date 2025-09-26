@@ -291,9 +291,9 @@ def create_asset(
         if 'legal_guardian_id' not in kwargs:
             legal_guardian = await create_legal_guardian()
             kwargs['legal_guardian_id'] = legal_guardian.id
-        if 'created_by_id' not in kwargs:
+        if 'user_id' not in kwargs:
             user = await create_user()
-            kwargs['created_by_id'] = user.id
+            kwargs['user_id'] = user.id
 
         asset = AssetFactory.build(**kwargs)
 

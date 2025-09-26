@@ -632,9 +632,7 @@ async def test_filter_assets_by_user_id(
     user = await create_user()
     token = create_token(user)
 
-    await create_asset(
-        asset_description='Notebook Dell i7', created_by_id=user.id
-    )
+    await create_asset(asset_description='Notebook Dell i7', user_id=user.id)
     await create_asset(asset_description='Monitor LG Ultrawide')
     params = {'user_id': str(user.id)}
     response = client.get(

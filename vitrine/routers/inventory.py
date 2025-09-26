@@ -16,6 +16,7 @@ from vitrine.models import (
     User,
 )
 from vitrine.schemas import (
+    FilterAsset,
     FilterInventory,
     InventoryAssetList,
     InventoryAssetPublic,
@@ -24,6 +25,7 @@ from vitrine.schemas import (
     InventoryPublic,
     InventorySchema,
 )
+from vitrine.services import filter_service
 
 router = APIRouter(prefix='/inventories', tags=['inventário'])
 
@@ -201,6 +203,7 @@ async def list_assets_in_inventory(
     inventory_id: UUID,
     session: Session,
     current_user: CurrentUser,
+    filters: FilterAsset,
 ):
     query = (
         select(InventoryAsset)
@@ -208,10 +211,10 @@ async def list_assets_in_inventory(
         .where(
             InventoryOwner.inventory_id == inventory_id,
             InventoryOwner.user_id == current_user.id,
-            InventoryAsset.deleted_at.is_(None),
         )
     )
-    query = select(InventoryOwner)
+    query = filter_service.apply_asset_filters(query, filters)
+
     assets_db = await session.scalars(query)
     return {'assets': assets_db.all()}
 

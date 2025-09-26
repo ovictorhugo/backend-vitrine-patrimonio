@@ -61,11 +61,11 @@ def file_to_list(file: UploadFile):
     return dataframe.to_dicts()
 
 
-def align_assets(assets: list[dict]):
+def align_assets(assets: list[dict], user_id):
     db_assets = list()
     for dict_asset in assets:
         assets_schema = AssetSchema(**dict_asset)
-        db_assets.append(Asset(**assets_schema.model_dump()))
+        db_assets.append(Asset(**assets_schema.model_dump(), user_id=user_id))
     return db_assets
 
 

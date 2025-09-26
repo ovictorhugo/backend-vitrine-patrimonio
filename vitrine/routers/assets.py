@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import Agency, Asset, Location, Sector
+from vitrine.models import Asset
 from vitrine.schemas import (
     AssetCheckDigitList,
     AssetCodeList,
@@ -20,7 +20,7 @@ from vitrine.schemas import (
     FilterAsset,
     Message,
 )
-from vitrine.services import service
+from vitrine.services import filter_service, service
 
 router = APIRouter(prefix='/assets', tags=['vitrine - patrimônio'])
 
@@ -31,7 +31,7 @@ async def create_asset(
     session: Session,
     current_user: CurrentUser,
 ):
-    db_asset = Asset(**asset.model_dump())
+    db_asset = Asset(**asset.model_dump(), user_id=current_user.id)
     session.add(db_asset)
     await session.commit()
     await session.refresh(db_asset)
@@ -54,7 +54,7 @@ async def create_assets_from_file(
     assets = await service.find_relationships(assets, session, current_user.id)
 
     try:
-        db_assets = service.align_assets(assets)
+        db_assets = service.align_assets(assets, current_user.id)
     except ValidationError as E:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -70,58 +70,9 @@ async def create_assets_from_file(
 async def read_assets(
     session: Session, filters: Annotated[FilterAsset, Depends()]
 ):
-    query = select(Asset).where(Asset.deleted_at.is_(None))
+    query = select(Asset)
 
-    if filters.q:
-        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
-        ts_query = func.to_tsquery('portuguese', prefix_query)
-        query = query.where(Asset.tsv.op('@@')(ts_query))
-
-    if filters.asset_identifier:
-        query = query.where(
-            func.concat(Asset.asset_code, Asset.asset_check_digit)
-            == filters.asset_identifier.replace('-', '')
-        )
-    if filters.atm_number:
-        query = query.where(Asset.atm_number == filters.atm_number)
-    if filters.material_id:
-        query = query.where(Asset.material_id == filters.material_id)
-
-    if filters.unit_id:
-        query = (
-            query.join(Asset.location)
-            .join(Location.sector)
-            .join(Sector.agency)
-            .where(Agency.unit_id == filters.unit_id)
-        )
-
-    if filters.agency_id:
-        query = (
-            query.join(Asset.location)
-            .join(Location.sector)
-            .where(Sector.agency_id == filters.agency_id)
-        )
-
-    if filters.sector_id:
-        query = query.join(Asset.location).where(
-            Location.sector_id == filters.sector_id
-        )
-
-    if filters.location_id:
-        query = query.where(Asset.location_id == filters.location_id)
-
-    if filters.legal_guardian_id:
-        query = query.where(
-            Asset.legal_guardian_id == filters.legal_guardian_id
-        )
-
-    if filters.is_official:
-        query = query.where(Asset.is_official == filters.is_official)
-
-    if filters.user_id:
-        query = query.where(Asset.created_by_id == filters.user_id)
-
-    query = query.offset(filters.offset).limit(filters.limit)
+    query = filter_service.apply_asset_filters(query, filters)
 
     result = await session.scalars(query)
     assets = result.all()

@@ -93,13 +93,6 @@ class User:
         init=False,
         cascade='all, delete-orphan',
     )
-    created_assets: Mapped[list['Asset']] = relationship(
-        'Asset',
-        back_populates='created_by',
-        init=False,
-        cascade='all, delete-orphan',
-        lazy='selectin',
-    )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -442,10 +435,8 @@ class Asset:
     expense_element_code: Mapped[str | None] = mapped_column(nullable=True)
     subelement_code: Mapped[str | None] = mapped_column(nullable=True)
 
-    created_by_id: Mapped[UUID] = mapped_column(
-        ForeignKey('users.id'), nullable=False
-    )
-    created_by: Mapped[User] = relationship('User', lazy='joined', init=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user: Mapped[User] = relationship(init=False, lazy='joined')
 
     is_official: Mapped[bool] = mapped_column(default=False)
 

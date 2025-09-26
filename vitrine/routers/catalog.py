@@ -157,7 +157,7 @@ async def read_catalog_entries(
             Asset.legal_guardian_id == filters.legal_guardian_id
         )
 
-    query = filter_service.apply_filters(query, filters)
+    query = filter_service.apply_catalog_filters(query, filters)
 
     query = query.options(
         selectinload(Catalog.images),
@@ -402,7 +402,7 @@ async def list_catalog_materials(
         .where(Catalog.deleted_at.is_(None))
     )
 
-    query = filter_service.apply_filters(query, filters)
+    query = filter_service.apply_catalog_filters(query, filters)
 
     if filters.q:
         query = query.where(
@@ -430,7 +430,7 @@ async def list_catalog_legal_guardians(
         .where(Catalog.deleted_at.is_(None))
     )
 
-    query = filter_service.apply_filters(query, filters)
+    query = filter_service.apply_catalog_filters(query, filters)
 
     if filters.q:
         query = query.where(
