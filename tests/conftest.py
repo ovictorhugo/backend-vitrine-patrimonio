@@ -386,21 +386,18 @@ def create_inventory(session, create_user):
             user = await create_user()
             kwargs['created_by_id'] = user.id
 
+        inventory_db = InventoryFactory(**kwargs)
+        session.add(inventory_db)
+        await session.flush()
+
         query = select(User).where(User.deleted_at.is_(None))
         users_db = await session.scalars(query)
         users_db = users_db.all()
 
-        inventory_db = InventoryFactory(**kwargs)
-
-        session.add(inventory_db)
-        await session.flush()
-
-        owners = []
-        for user in users_db:
-            i = InventoryOwner(inventory_id=inventory_db.id, user_id=user.id)
-            owners.append(i)
-
-        session.add(inventory_db)
+        owners = [
+            InventoryOwner(inventory_id=inventory_db.id, user_id=u.id)
+            for u in users_db
+        ]
         session.add_all(owners)
 
         await session.commit()

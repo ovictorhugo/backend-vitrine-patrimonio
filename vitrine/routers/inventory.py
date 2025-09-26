@@ -160,7 +160,7 @@ async def add_asset_to_inventory(
     session: Session,
     current_user: CurrentUser,
 ):
-    inventory = session.get(Inventory, inventory_id)
+    inventory = await session.get(Inventory, inventory_id)
     if not inventory:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Inventory not found'

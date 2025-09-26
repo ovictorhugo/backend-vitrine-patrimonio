@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from vitrine.models import Inventory
+from vitrine.models import Inventory, InventoryAssetStatus
 
 
 @pytest.mark.asyncio
@@ -230,3 +230,119 @@ async def test_read_inventory(
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert inv1.key == data['key']
+
+
+@pytest.mark.asyncio
+async def test_add_asset_to_inventory_success(
+    client, session, create_user, create_token, create_inventory, create_asset
+):
+    user = await create_user()
+    token = create_token(user)
+    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+    asset = await create_asset()
+
+    payload = {
+        'asset_id': str(asset.id),
+        'status': InventoryAssetStatus.FOUND,
+        'comment': 'Test comment',
+    }
+
+    response = client.post(
+        f'/inventories/{inventory.id}/assets',
+        json=payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    data = response.json()
+    assert data['asset']['id'] == str(asset.id)
+    assert data['status'] == InventoryAssetStatus.FOUND.value
+    assert data['comment'] == 'Test comment'
+
+
+@pytest.mark.asyncio
+async def test_add_asset_inventory_not_found(
+    client, create_user, create_token
+):
+    user = await create_user()
+    token = create_token(user)
+
+    payload = {'asset_id': str(uuid4()), 'status': InventoryAssetStatus.FOUND}
+
+    response = client.post(
+        f'/inventories/{uuid4()}/assets',  # Inventário inexistente
+        json=payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()['detail'] == 'Inventory not found'
+
+
+@pytest.mark.asyncio
+async def test_add_asset_inventory_closed(
+    client, create_user, create_token, create_inventory
+):
+    user = await create_user()
+    token = create_token(user)
+    inventory = await create_inventory(key=f'KEY-{uuid4()}', avaliable=False)
+
+    payload = {'asset_id': str(uuid4()), 'status': InventoryAssetStatus.FOUND}
+
+    response = client.post(
+        f'/inventories/{inventory.id}/assets',
+        json=payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert (
+        response.json()['detail'] == 'Inventory is no longer accepting assets'
+    )
+
+
+@pytest.mark.asyncio
+async def test_add_asset_user_not_owner(
+    client, create_user, create_token, create_inventory, create_asset
+):
+    await create_user()
+    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+    user = await create_user()
+    token = create_token(user)
+    asset = await create_asset()
+
+    payload = {'asset_id': str(asset.id), 'status': InventoryAssetStatus.FOUND}
+
+    response = client.post(
+        f'/inventories/{inventory.id}/assets',
+        json=payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert (
+        response.json()['detail'] == 'User is not an owner of this inventory'
+    )
+
+
+@pytest.mark.asyncio
+async def test_add_asset_not_found(
+    client, create_user, create_token, create_inventory
+):
+    user = await create_user()
+    token = create_token(user)
+    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+
+    payload = {
+        'asset_id': str(uuid4()),
+        'status': InventoryAssetStatus.FOUND,
+    }
+
+    response = client.post(
+        f'/inventories/{inventory.id}/assets',
+        json=payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()['detail'] == 'Asset not found'
