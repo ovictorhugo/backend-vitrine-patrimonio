@@ -211,3 +211,22 @@ async def test_put_inventory_not_found(client, create_user, create_token):
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()['detail'] == 'Inventory not found'
+
+
+@pytest.mark.asyncio
+async def test_read_inventory(
+    client, create_user, create_token, create_inventory
+):
+    user = await create_user()
+    token = create_token(user)
+
+    inv1 = await create_inventory(key=f'KEY-{uuid4()}')
+
+    response = client.get(
+        f'/inventories/{inv1.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert inv1.key == data['key']

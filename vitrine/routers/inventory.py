@@ -89,6 +89,14 @@ async def read_inventories(
     return {'inventories': inventories}
 
 
+@router.get('/{inventory_id}', response_model=InventoryPublic)
+async def read_inventory(session: Session, inventory_id: UUID):
+    inventory = await session.get(Inventory, inventory_id)
+    if not inventory or inventory.deleted_at is not None:
+        raise HTTPException(status_code=404, detail='Inventory not found')
+    return inventory
+
+
 @router.put('/{inventory_id}', response_model=InventoryPublic)
 async def update_inventory(
     inventory_id: UUID,
