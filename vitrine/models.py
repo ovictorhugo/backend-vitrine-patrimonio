@@ -630,7 +630,6 @@ class Inventory:
         init=False, primary_key=True, default=uuid.uuid4
     )
     key: Mapped[str] = mapped_column(nullable=False)
-
     owners: Mapped[list['InventoryOwner']] = relationship(
         back_populates='inventory',
         init=False,
@@ -640,7 +639,7 @@ class Inventory:
 
     created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     created_by: Mapped[User] = relationship(init=False, lazy='joined')
-    available: Mapped[bool] = mapped_column(default=True, init=False)
+    avaliable: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )

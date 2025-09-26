@@ -408,6 +408,7 @@ class FilterSearchCatalog(FilterPage):
 
 class InventorySchema(BaseModel):
     key: str
+    avaliable: Optional[bool] = True
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -419,6 +420,7 @@ class InventoryOwnerPublic(BaseModel):
 
 class InventoryPublic(InventorySchema):
     id: UUID
+    avaliable: bool
     created_by: UserPublic
     owners: list[InventoryOwnerPublic]
     model_config = ConfigDict(from_attributes=True)

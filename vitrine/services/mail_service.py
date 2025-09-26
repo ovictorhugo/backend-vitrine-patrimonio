@@ -15,6 +15,5 @@ async def send_email(mail: Mail, user: User, content: Any):
 
     try:
         mail.send_message(msg)
-        print('SUCESSO')
     except Exception:
         pass

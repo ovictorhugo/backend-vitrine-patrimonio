@@ -146,6 +146,7 @@ class InventoryFactory(factory.Factory):
         model = Inventory
 
     key = factory.Faker('slug')
+    avaliable = True
 
 
 class InventoryOwnerFactory(factory.Factory):

@@ -57,6 +57,7 @@ async def create_inventory(
     inventory_db = Inventory(
         key=inventory.key,
         created_by_id=current_user.id,
+        avaliable=inventory.avaliable,
     )
 
     session.add(inventory_db)
@@ -72,7 +73,6 @@ async def create_inventory(
 
     await session.commit()
     await session.refresh(inventory_db)
-
     return inventory_db
 
 
@@ -118,6 +118,7 @@ async def update_inventory(
 
     try:
         inventory.key = data.key
+        inventory.avaliable = data.avaliable
         await session.commit()
         await session.refresh(inventory)
         return inventory
@@ -159,6 +160,16 @@ async def add_asset_to_inventory(
     session: Session,
     current_user: CurrentUser,
 ):
+    inventory = session.get(Inventory, inventory_id)
+    if not inventory:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Inventory not found'
+        )
+    if not inventory.avaliable:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Inventory is no longer accepting assets',
+        )
     query = select(InventoryOwner).where(
         InventoryOwner.inventory_id == inventory_id,
         InventoryOwner.user_id == current_user.id,
