@@ -1,3 +1,4 @@
+import smtplib
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -7,6 +8,7 @@ from faker import Faker
 from fastapi.testclient import TestClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from testcontainers.mailpit import MailpitContainer
 from testcontainers.postgres import PostgresContainer
 
 from tests.factories import (
@@ -26,6 +28,7 @@ from tests.factories import (
 )
 from vitrine.app import app
 from vitrine.database import get_session
+from vitrine.mail import get_smtp
 from vitrine.models import (
     CatalogWorkFlow,
     InventoryOwner,
@@ -40,15 +43,32 @@ fake = Faker('pt_BR')
 
 
 @pytest.fixture
-def client(session):
+def client(session, mailpit):
     def get_session_override():
         return session
 
+    def get_smtp_override():
+        smtp_connection = smtplib.SMTP(mailpit['host'], mailpit['smtp_port'])
+        try:
+            yield smtp_connection
+        finally:
+            smtp_connection.quit()
+
     with TestClient(app) as client:
         app.dependency_overrides[get_session] = get_session_override
+        app.dependency_overrides[get_smtp] = get_smtp_override
         yield client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope='session')
+def mailpit():
+    with MailpitContainer(image='axllent/mailpit:v1.21') as mailpit:
+        host = mailpit.get_container_host_ip()
+        smtp_port = mailpit.get_exposed_smtp_port()
+        ui_port = mailpit.get_exposed_ui_port()
+        yield {'host': host, 'smtp_port': smtp_port, 'ui_port': ui_port}
 
 
 @pytest.fixture(scope='session')

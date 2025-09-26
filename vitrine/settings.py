@@ -9,4 +9,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     CLIENT: str = 'http://localhost:8080'
     SECRET_KEY: str = 'SECRET_KEY'
-    ROOT_PATH: str = str()
+    ROOT_PATH: str = ''
+
+    SMTP_HOST: str
+    SMTP_PORT: int
+    SMTP_USER: str
+    SMTP_PASS: str

@@ -1,8 +1,20 @@
+from email.message import EmailMessage
 from typing import Any
 
-from vitrine.models import (
-    User,
-)
+from vitrine.dependencies import Mail
+from vitrine.models import User
+from vitrine.settings import Settings
 
 
-async def send_email(user: User, content: Any): ...
+async def send_email(mail: Mail, user: User, content: Any):
+    msg = EmailMessage()
+    msg['Subject'] = 'ASSUNTO'
+    msg['From'] = Settings().SMTP_USER
+    msg['To'] = user.email
+    msg.set_content('CONTEUDO')
+
+    try:
+        mail.send_message(msg)
+        print('SUCESSO')
+    except Exception:
+        pass

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
-from vitrine.dependencies import CurrentUser, Session
+from vitrine.dependencies import CurrentUser, Mail, Session
 from vitrine.models import (
     Asset,
     Catalog,
@@ -453,6 +453,7 @@ async def update_transfer_status(
     new_status: WorkflowTransferStatus,
     session: Session,
     current_user: CurrentUser,
+    mail: Mail,
 ):
     db_transfer = await session.get(
         WorkflowTransfer,
@@ -492,8 +493,8 @@ async def update_transfer_status(
             User, new_workflow_entry.detail['transfer_request']['user']['id']
         )
 
-        await mail_service.send_email(catalog_owner, None)
-        await mail_service.send_email(requester, None)
+        await mail_service.send_email(mail, catalog_owner, None)
+        await mail_service.send_email(mail, requester, None)
 
         session.add(new_workflow_entry)
 

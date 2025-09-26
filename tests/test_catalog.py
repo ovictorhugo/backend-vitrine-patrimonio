@@ -3,6 +3,7 @@ import uuid
 from http import HTTPStatus
 from uuid import uuid4
 
+import httpx
 import pytest
 
 from vitrine.models import WorkFlowStatus, WorkflowTransferStatus
@@ -896,3 +897,31 @@ async def test_search_catalog_by_asset_identifier(
     response = client.get('/catalog/search/asset-identifier?q=999999')
     assert response.status_code == HTTPStatus.OK
     assert len(response.json()['catalogs']) == 0
+
+
+@pytest.mark.asyncio
+async def test_email_after_update_transfer_request_status_success(
+    client, mailpit, create_workflow_transfer, create_user, create_token
+):
+    user = await create_user()
+    token = create_token(user)
+
+    transfer_request = await create_workflow_transfer(status='PENDING')
+
+    client.put(
+        f'/catalog/transfer/{transfer_request.id}?new_status=ACCEPTABLE',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    api_url = f'http://{mailpit["host"]}:{mailpit["ui_port"]}/api/v1/messages'
+    async with httpx.AsyncClient() as http_client:
+        resp = await http_client.get(api_url)
+
+    data = resp.json()
+    assert data['total'] >= 1
+    message = data['messages'][0]
+
+    msgs = data['messages']
+    assert any(msg['To'][0]['Address'] == user.email for msg in msgs)
+    # assert message['Subject'] == 'ASSUNTO'
+    # assert 'CONTEUDO' in message['Text']
