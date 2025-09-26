@@ -639,7 +639,7 @@ class Inventory:
 
     created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     created_by: Mapped[User] = relationship(init=False, lazy='joined')
-    avaliable: Mapped[bool] = mapped_column(default=True)
+    avaliable: Mapped[bool] = mapped_column(default=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
