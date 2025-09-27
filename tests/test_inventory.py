@@ -408,8 +408,10 @@ async def test_add_assets_batch_success(
 
     assert response.status_code == HTTPStatus.CREATED
     data = response.json()
-    assert len(data['assets']) == 2
-    response_asset_ids = {item['asset']['id'] for item in data['assets']}
+    assert len(data['inventoried_asset']) == 2
+    response_asset_ids = {
+        item['asset']['id'] for item in data['inventoried_asset']
+    }
     assert str(asset1.id) in response_asset_ids
     assert str(asset2.id) in response_asset_ids
 
@@ -517,7 +519,7 @@ async def test_add_assets_batch_empty_list(
 
     assert response.status_code == HTTPStatus.CREATED
     data = response.json()
-    assert data['assets'] == []
+    assert data['inventoried_asset'] == []
 
 
 @pytest.mark.asyncio

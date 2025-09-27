@@ -13,6 +13,7 @@ from vitrine.models import (
     Inventory,
     InventoryAsset,
     InventoryOwner,
+    Location,
     User,
 )
 from vitrine.schemas import (
@@ -24,10 +25,28 @@ from vitrine.schemas import (
     InventoryList,
     InventoryPublic,
     InventorySchema,
+    LocationList,
 )
 from vitrine.services import filter_service
 
 router = APIRouter(prefix='/inventories', tags=['inventário'])
+
+
+@router.get('/locations', response_model=LocationList)
+async def list_inventory_locations(inventory_id: UUID, session: Session):
+    query = (
+        select(Location)
+        .join(InventoryAsset, InventoryAsset.location_id == Location.id)
+        .join(
+            InventoryOwner,
+            InventoryOwner.id == InventoryAsset.inventory_owner_id,
+        )
+        .where(InventoryOwner.inventory_id == inventory_id)
+        .distinct()
+    )
+
+    locations_db = await session.scalars(query)
+    return {'locations': locations_db.all()}
 
 
 @router.post(
@@ -150,6 +169,78 @@ async def delete_inventory(
 
 
 @router.post(
+    '/{inventory_id}/assets/batch',
+    status_code=HTTPStatus.CREATED,
+    response_model=InventoryAssetList,
+)
+async def add_assets_to_inventory_batch(
+    inventory_id: UUID,
+    inventory_assets_data: list[InventoryAssetSchema],
+    session: Session,
+    current_user: CurrentUser,
+):
+    inventory = await session.get(Inventory, inventory_id)
+    if not inventory:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Inventory not found'
+        )
+    if not inventory.avaliable:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Inventory is no longer accepting assets',
+        )
+    query = select(InventoryOwner).where(
+        InventoryOwner.inventory_id == inventory_id,
+        InventoryOwner.user_id == current_user.id,
+    )
+    owner = await session.scalar(query)
+    if not owner:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='User is not an owner of this inventory',
+        )
+
+    if not inventory_assets_data:
+        return {'inventoried_asset': []}
+
+    asset_ids_to_check = {data.asset_id for data in inventory_assets_data}
+    stmt = select(Asset.id).where(Asset.id.in_(asset_ids_to_check))
+    result = await session.execute(stmt)
+    existing_asset_ids = {res[0] for res in result}
+
+    if len(existing_asset_ids) != len(asset_ids_to_check):
+        not_found_ids = asset_ids_to_check - existing_asset_ids
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Assets not found: {", ".join(str(uid) for uid in not_found_ids)}',
+        )
+
+    new_inventory_assets = [
+        InventoryAsset(
+            inventory_owner_id=owner.id,
+            asset_id=data.asset_id,
+            status=data.status,
+            comment=data.comment,
+            location_id=data.location_id,
+        )
+        for data in inventory_assets_data
+    ]
+
+    session.add_all(new_inventory_assets)
+
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail='One or more assets have already been added to your inventory.',
+        )
+
+    return {'inventoried_asset': new_inventory_assets}
+
+
+@router.post(
     '/{inventory_id}/assets',
     status_code=HTTPStatus.CREATED,
     response_model=InventoryAssetPublic,
@@ -210,78 +301,6 @@ async def add_asset_to_inventory(
     return inventory_asset
 
 
-@router.post(
-    '/{inventory_id}/assets/batch',
-    status_code=HTTPStatus.CREATED,
-    response_model=InventoryAssetList,
-)
-async def add_assets_to_inventory_batch(
-    inventory_id: UUID,
-    inventory_assets_data: list[InventoryAssetSchema],
-    session: Session,
-    current_user: CurrentUser,
-):
-    inventory = await session.get(Inventory, inventory_id)
-    if not inventory:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Inventory not found'
-        )
-    if not inventory.avaliable:
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED,
-            detail='Inventory is no longer accepting assets',
-        )
-    query = select(InventoryOwner).where(
-        InventoryOwner.inventory_id == inventory_id,
-        InventoryOwner.user_id == current_user.id,
-    )
-    owner = await session.scalar(query)
-    if not owner:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='User is not an owner of this inventory',
-        )
-
-    if not inventory_assets_data:
-        return {'assets': []}
-
-    asset_ids_to_check = {data.asset_id for data in inventory_assets_data}
-    stmt = select(Asset.id).where(Asset.id.in_(asset_ids_to_check))
-    result = await session.execute(stmt)
-    existing_asset_ids = {res[0] for res in result}
-
-    if len(existing_asset_ids) != len(asset_ids_to_check):
-        not_found_ids = asset_ids_to_check - existing_asset_ids
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f'Assets not found: {", ".join(str(uid) for uid in not_found_ids)}',
-        )
-
-    new_inventory_assets = [
-        InventoryAsset(
-            inventory_owner_id=owner.id,
-            asset_id=data.asset_id,
-            status=data.status,
-            comment=data.comment,
-            location_id=data.location_id,
-        )
-        for data in inventory_assets_data
-    ]
-
-    session.add_all(new_inventory_assets)
-
-    try:
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail='One or more assets have already been added to your inventory.',
-        )
-
-    return {'inventoried_asset': new_inventory_assets}
-
-
 @router.get('/{inventory_id}/assets', response_model=InventoryAssetList)
 async def list_assets_in_inventory(
     inventory_id: UUID,
@@ -336,3 +355,22 @@ async def remove_asset_from_inventory(
 
     inventory_asset.deleted_at = datetime.now()
     await session.commit()
+
+
+@router.get('/{inventory_id}/locations', response_model=LocationList)
+async def list_inventory_locations_by_inventory(
+    inventory_id: UUID, session: Session
+):
+    query = (
+        select(Location)
+        .join(InventoryAsset, InventoryAsset.location_id == Location.id)
+        .join(
+            InventoryOwner,
+            InventoryOwner.id == InventoryAsset.inventory_owner_id,
+        )
+        .where(InventoryOwner.inventory_id == inventory_id)
+        .distinct()
+    )
+
+    locations_db = await session.scalars(query)
+    return {'locations': locations_db.all()}
