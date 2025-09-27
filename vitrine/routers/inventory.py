@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from vitrine.dependencies import CurrentUser, Session
@@ -203,6 +203,26 @@ async def add_assets_to_inventory_batch(
     if not inventory_assets_data:
         return {'inventoried_asset': []}
 
+    location_ids = {data.location_id for data in inventory_assets_data}
+    if len(location_ids) > 1:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='All assets in batch must have the same location_id',
+        )
+    location_id = location_ids.pop()
+
+    existing_assets_location = await session.scalar(
+        select(func.count(InventoryAsset.id)).where(
+            InventoryAsset.inventory_owner_id == owner.id,
+            InventoryAsset.location_id == location_id,
+        )
+    )
+    if existing_assets_location and existing_assets_location > 0:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail='This location already has assets attached to this inventory',
+        )
+
     asset_ids_to_check = {data.asset_id for data in inventory_assets_data}
     stmt = select(Asset.id).where(Asset.id.in_(asset_ids_to_check))
     result = await session.execute(stmt)
@@ -276,6 +296,18 @@ async def add_asset_to_inventory(
     if not asset:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Asset not found'
+        )
+
+    existing_assets_location = await session.scalar(
+        select(func.count(InventoryAsset.id)).where(
+            InventoryAsset.inventory_owner_id == owner.id,
+            InventoryAsset.location_id == inventory_asset_data.location_id,
+        )
+    )
+    if existing_assets_location and existing_assets_location > 0:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail='This location already has assets attached to this inventory',
         )
 
     inventory_asset = InventoryAsset(

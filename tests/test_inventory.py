@@ -672,3 +672,138 @@ async def test_list_inventory_locations_empty_for_inventory_with_no_assets(
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert data['locations'] == []
+
+
+@pytest.mark.asyncio
+async def test_add_asset_conflict_when_location_already_used(
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
+):
+    user = await create_user()
+    token = create_token(user)
+    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+    asset1 = await create_asset()
+    asset2 = await create_asset()
+    location = await create_location()
+
+    client.post(
+        f'/inventories/{inventory.id}/assets',
+        json={
+            'asset_id': str(asset1.id),
+            'status': InventoryAssetStatus.FOUND,
+            'location_id': str(location.id),
+        },
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    response = client.post(
+        f'/inventories/{inventory.id}/assets',
+        json={
+            'asset_id': str(asset2.id),
+            'status': InventoryAssetStatus.NOT_FOUND,
+            'location_id': str(location.id),
+        },
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert (
+        response.json()['detail']
+        == 'This location already has assets attached to this inventory'
+    )
+
+
+@pytest.mark.asyncio
+async def test_add_assets_batch_conflict_when_location_already_used(
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
+):
+    user = await create_user()
+    token = create_token(user)
+    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+    asset1 = await create_asset()
+    asset2 = await create_asset()
+    asset3 = await create_asset()
+    location = await create_location()
+
+    client.post(
+        f'/inventories/{inventory.id}/assets',
+        json={
+            'asset_id': str(asset1.id),
+            'status': InventoryAssetStatus.FOUND,
+            'location_id': str(location.id),
+        },
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    response = client.post(
+        f'/inventories/{inventory.id}/assets/batch',
+        json=[
+            {
+                'asset_id': str(asset2.id),
+                'status': InventoryAssetStatus.FOUND,
+                'location_id': str(location.id),
+            },
+            {
+                'asset_id': str(asset3.id),
+                'status': InventoryAssetStatus.NOT_FOUND,
+                'location_id': str(location.id),
+            },
+        ],
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert (
+        response.json()['detail']
+        == 'This location already has assets attached to this inventory'
+    )
+
+
+@pytest.mark.asyncio
+async def test_add_assets_batch_conflict_when_location_ids_differ(
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
+):
+    user = await create_user()
+    token = create_token(user)
+    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+    asset1 = await create_asset()
+    asset2 = await create_asset()
+    location1 = await create_location()
+    location2 = await create_location()
+
+    response = client.post(
+        f'/inventories/{inventory.id}/assets/batch',
+        json=[
+            {
+                'asset_id': str(asset1.id),
+                'status': InventoryAssetStatus.FOUND,
+                'location_id': str(location1.id),
+            },
+            {
+                'asset_id': str(asset2.id),
+                'status': InventoryAssetStatus.FOUND,
+                'location_id': str(location2.id),
+            },
+        ],
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert (
+        response.json()['detail']
+        == 'All assets in batch must have the same location_id'
+    )
