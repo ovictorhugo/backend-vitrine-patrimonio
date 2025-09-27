@@ -19,6 +19,7 @@ from vitrine.models import (
 from vitrine.schemas import (
     FilterAsset,
     FilterInventory,
+    FilterLocation,
     InventoryAssetList,
     InventoryAssetPublic,
     InventoryAssetSchema,
@@ -30,23 +31,6 @@ from vitrine.schemas import (
 from vitrine.services import filter_service
 
 router = APIRouter(prefix='/inventories', tags=['inventário'])
-
-
-@router.get('/locations', response_model=LocationList)
-async def list_inventory_locations(inventory_id: UUID, session: Session):
-    query = (
-        select(Location)
-        .join(InventoryAsset, InventoryAsset.location_id == Location.id)
-        .join(
-            InventoryOwner,
-            InventoryOwner.id == InventoryAsset.inventory_owner_id,
-        )
-        .where(InventoryOwner.inventory_id == inventory_id)
-        .distinct()
-    )
-
-    locations_db = await session.scalars(query)
-    return {'locations': locations_db.all()}
 
 
 @router.post(
@@ -391,7 +375,9 @@ async def remove_asset_from_inventory(
 
 @router.get('/{inventory_id}/locations', response_model=LocationList)
 async def list_inventory_locations_by_inventory(
-    inventory_id: UUID, session: Session
+    inventory_id: UUID,
+    session: Session,
+    filters: Annotated[FilterLocation, Depends()],
 ):
     query = (
         select(Location)
@@ -403,6 +389,21 @@ async def list_inventory_locations_by_inventory(
         .where(InventoryOwner.inventory_id == inventory_id)
         .distinct()
     )
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(Location.tsv.op('@@')(ts_query))
+
+    if filters.sector_id:
+        query = query.where(Location.sector_id == filters.sector_id)
+
+    if filters.legal_guardian_id:
+        query = query.where(
+            Location.legal_guardian_id == filters.legal_guardian_id
+        )
+
+    query = query.offset(filters.offset).limit(filters.limit)
 
     locations_db = await session.scalars(query)
     return {'locations': locations_db.all()}
