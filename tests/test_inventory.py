@@ -557,3 +557,118 @@ async def test_add_assets_batch_user_not_owner(
     assert (
         response.json()['detail'] == 'User is not an owner of this inventory'
     )
+
+
+@pytest.mark.asyncio
+async def test_list_inventory_locations_by_inventory_success(
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
+):
+    user = await create_user()
+    token = create_token(user)
+    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+
+    location1 = await create_location()
+    location2 = await create_location()
+    unused_location = await create_location()
+
+    asset1 = await create_asset()
+    asset2 = await create_asset()
+    asset3 = await create_asset()
+
+    for asset, loc in [
+        (asset1, location1),
+        (asset2, location2),
+        (asset3, location1),
+    ]:
+        client.post(
+            f'/inventories/{inventory.id}/assets',
+            json={
+                'asset_id': str(asset.id),
+                'status': InventoryAssetStatus.FOUND,
+                'location_id': str(loc.id),
+            },
+            headers={'Authorization': f'Bearer {token}'},
+        )
+
+    response = client.get(
+        f'/inventories/{inventory.id}/locations',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+
+    assert 'locations' in data
+    assert len(data['locations']) == 2
+
+    returned_location_ids = {loc['id'] for loc in data['locations']}
+    expected_location_ids = {str(location1.id), str(location2.id)}
+
+    assert returned_location_ids == expected_location_ids
+    assert str(unused_location.id) not in returned_location_ids
+
+
+@pytest.mark.asyncio
+async def test_list_inventory_locations_success_with_query_param(
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
+):
+    user = await create_user()
+    token = create_token(user)
+    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+
+    location1 = await create_location()
+    location2 = await create_location()
+
+    asset1 = await create_asset()
+    asset2 = await create_asset()
+
+    for asset, loc in [(asset1, location1), (asset2, location2)]:
+        client.post(
+            f'/inventories/{inventory.id}/assets',
+            json={
+                'asset_id': str(asset.id),
+                'status': InventoryAssetStatus.FOUND,
+                'location_id': str(loc.id),
+            },
+            headers={'Authorization': f'Bearer {token}'},
+        )
+
+    response = client.get(
+        f'/inventories/locations?inventory_id={inventory.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['locations']) == 2
+    returned_location_ids = {loc['id'] for loc in data['locations']}
+    expected_location_ids = {str(location1.id), str(location2.id)}
+    assert returned_location_ids == expected_location_ids
+
+
+@pytest.mark.asyncio
+async def test_list_inventory_locations_empty_for_inventory_with_no_assets(
+    client, create_user, create_token, create_inventory
+):
+    user = await create_user()
+    token = create_token(user)
+    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+
+    response = client.get(
+        f'/inventories/{inventory.id}/locations',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert data['locations'] == []
