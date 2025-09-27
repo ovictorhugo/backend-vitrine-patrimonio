@@ -297,6 +297,10 @@ async def list_assets_in_inventory(
             InventoryOwner.user_id == current_user.id,
         )
     )
+    if filters.location_id:
+        query = query.where(Asset.location_id == filters.location_id)
+        filters.location_id = None
+
     query = filter_service.apply_asset_filters(query, filters)
 
     assets_db = await session.scalars(query)
