@@ -4,29 +4,29 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
 from vitrine.models import (
     Asset,
     Inventory,
     InventoryAsset,
-    InventoryOwner,
     Location,
-    User,
+    LocationInventory,
 )
 from vitrine.schemas import (
     FilterAsset,
     FilterInventory,
-    FilterLocation,
+    FilterLocationInventory,
     InventoryAssetList,
     InventoryAssetPublic,
     InventoryAssetSchema,
     InventoryList,
     InventoryPublic,
     InventorySchema,
-    LocationList,
+    LocationInventoryList,
 )
 from vitrine.services import filter_service
 
@@ -53,9 +53,9 @@ async def create_inventory(
             detail='Inventory entry already exists',
         )
 
-    query = select(User).where(User.deleted_at.is_(None))
-    users_db = await session.scalars(query)
-    users_db = users_db.all()
+    query = select(Location).where(Location.deleted_at.is_(None))
+    location_db = await session.scalars(query)
+    location_db = location_db.all()
 
     inventory_db = Inventory(
         key=inventory.key,
@@ -66,13 +66,16 @@ async def create_inventory(
     session.add(inventory_db)
     await session.flush()
 
-    owners = []
-    for user in users_db:
-        i = InventoryOwner(inventory_id=inventory_db.id, user_id=user.id)
-        owners.append(i)
+    locations = []
+    for location in location_db:
+        i = LocationInventory(
+            inventory_id=inventory_db.id,
+            location_id=location.id,
+        )
+        locations.append(i)
 
     session.add(inventory_db)
-    session.add_all(owners)
+    session.add_all(locations)
 
     await session.commit()
     await session.refresh(inventory_db)
@@ -163,83 +166,92 @@ async def add_assets_to_inventory_batch(
     session: Session,
     current_user: CurrentUser,
 ):
-    inventory = await session.get(Inventory, inventory_id)
-    if not inventory:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Inventory not found'
-        )
-    if not inventory.avaliable:
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED,
-            detail='Inventory is no longer accepting assets',
-        )
-    query = select(InventoryOwner).where(
-        InventoryOwner.inventory_id == inventory_id,
-        InventoryOwner.user_id == current_user.id,
-    )
-    owner = await session.scalar(query)
-    if not owner:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='User is not an owner of this inventory',
-        )
-
     if not inventory_assets_data:
         return {'inventoried_asset': []}
 
-    location_ids = {data.location_id for data in inventory_assets_data}
+    inventory = await session.get(Inventory, inventory_id)
+    if not inventory:
+        raise HTTPException(HTTPStatus.NOT_FOUND, 'Inventory not found')
+    if not inventory.avaliable:
+        raise HTTPException(
+            HTTPStatus.FORBIDDEN, 'Inventory is no longer accepting assets'
+        )
+
+    asset_ids = {d.asset_id for d in inventory_assets_data}
+    location_ids = {d.location_id for d in inventory_assets_data}
+
+    if len(asset_ids) != len(inventory_assets_data):
+        raise HTTPException(
+            HTTPStatus.CONFLICT,
+            'One or more assets have already been added to your inventory.',
+        )
     if len(location_ids) > 1:
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail='All assets in batch must have the same location_id',
+            HTTPStatus.BAD_REQUEST,
+            'All assets in a batch must have the same location_id',
         )
-    location_id = location_ids.pop()
 
-    existing_assets_location = await session.scalar(
-        select(func.count(InventoryAsset.id)).where(
-            InventoryAsset.inventory_owner_id == owner.id,
-            InventoryAsset.location_id == location_id,
+    location_id = next(iter(location_ids))
+    location_inventory = await session.scalar(
+        select(LocationInventory).where(
+            and_(
+                LocationInventory.inventory_id == inventory_id,
+                LocationInventory.location_id == location_id,
+            )
         )
     )
-    if existing_assets_location and existing_assets_location > 0:
+    if not location_inventory:
         raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail='This location already has assets attached to this inventory',
+            HTTPStatus.NOT_FOUND,
+            f'Location {location_id} is not registered for this inventory.',
         )
 
-    asset_ids_to_check = {data.asset_id for data in inventory_assets_data}
-    stmt = select(Asset.id).where(Asset.id.in_(asset_ids_to_check))
-    result = await session.execute(stmt)
-    existing_asset_ids = {res[0] for res in result}
-
-    if len(existing_asset_ids) != len(asset_ids_to_check):
-        not_found_ids = asset_ids_to_check - existing_asset_ids
+    location = await session.get(Location, location_id)
+    if not location or location.user_id != current_user.id:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f'Assets not found: {", ".join(str(uid) for uid in not_found_ids)}',
+            HTTPStatus.FORBIDDEN,
+            'User is not an owner of this inventory',
+        )
+
+    found_asset_ids = set(
+        await session.scalars(select(Asset.id).where(Asset.id.in_(asset_ids)))
+    )
+    if not found_asset_ids.issuperset(asset_ids):
+        missing = asset_ids - found_asset_ids
+        raise HTTPException(
+            HTTPStatus.NOT_FOUND,
+            f'Assets not found: {", ".join(map(str, missing))}',
+        )
+
+    duplicate_asset_ids = await session.scalars(
+        select(InventoryAsset.asset_id).where(
+            and_(
+                InventoryAsset.location_inventory_id == location_inventory.id,
+                InventoryAsset.asset_id.in_(asset_ids),
+            )
+        )
+    )
+    if duplicate_asset_ids.first():
+        raise HTTPException(
+            HTTPStatus.CONFLICT,
+            'One or more assets have already been added to your inventory.',
         )
 
     new_inventory_assets = [
         InventoryAsset(
-            inventory_owner_id=owner.id,
-            asset_id=data.asset_id,
-            status=data.status,
-            comment=data.comment,
-            location_id=data.location_id,
+            location_inventory_id=location_inventory.id,
+            asset_id=d.asset_id,
+            status=d.status,
+            comment=d.comment,
+            location_id=location_id,
         )
-        for data in inventory_assets_data
+        for d in inventory_assets_data
     ]
-
     session.add_all(new_inventory_assets)
 
-    try:
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail='One or more assets have already been added to your inventory.',
-        )
+    location_inventory.filled = True
+
+    await session.commit()
 
     return {'inventoried_asset': new_inventory_assets}
 
@@ -258,19 +270,32 @@ async def add_asset_to_inventory(
     inventory = await session.get(Inventory, inventory_id)
     if not inventory:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Inventory not found'
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Inventory not found',
         )
+
     if not inventory.avaliable:
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
             detail='Inventory is no longer accepting assets',
         )
-    query = select(InventoryOwner).where(
-        InventoryOwner.inventory_id == inventory_id,
-        InventoryOwner.user_id == current_user.id,
+
+    query_location_inventory = select(LocationInventory).where(
+        and_(
+            LocationInventory.inventory_id == inventory_id,
+            LocationInventory.location_id == inventory_asset_data.location_id,
+        )
     )
-    owner = await session.scalar(query)
-    if not owner:
+    location_inventory = await session.scalar(query_location_inventory)
+
+    if not location_inventory:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='The specified location is not registered for this inventory.',
+        )
+
+    location = await session.get(Location, inventory_asset_data.location_id)
+    if not location or location.user_id != current_user.id:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail='User is not an owner of this inventory',
@@ -279,41 +304,37 @@ async def add_asset_to_inventory(
     asset = await session.get(Asset, inventory_asset_data.asset_id)
     if not asset:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Asset not found'
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Asset with id {inventory_asset_data.asset_id} not found.',
         )
 
-    existing_assets_location = await session.scalar(
-        select(func.count(InventoryAsset.id)).where(
-            InventoryAsset.inventory_owner_id == owner.id,
-            InventoryAsset.location_id == inventory_asset_data.location_id,
+    query_existing_asset = select(InventoryAsset).where(
+        and_(
+            InventoryAsset.location_inventory_id == location_inventory.id,
+            InventoryAsset.asset_id == inventory_asset_data.asset_id,
         )
     )
-    if existing_assets_location and existing_assets_location > 0:
+    existing_inventory_asset = await session.scalar(query_existing_asset)
+
+    if existing_inventory_asset:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='This location already has assets attached to this inventory',
+            detail='This asset has already been inventoried in this location.',
         )
 
     inventory_asset = InventoryAsset(
-        inventory_owner_id=owner.id,
+        location_inventory_id=location_inventory.id,
         asset_id=inventory_asset_data.asset_id,
         status=inventory_asset_data.status,
-        comment=inventory_asset_data.comment,
         location_id=inventory_asset_data.location_id,
+        comment=inventory_asset_data.comment,
     )
-
     session.add(inventory_asset)
 
-    try:
-        await session.commit()
-        await session.refresh(inventory_asset)
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail='This asset has already been added to your inventory',
-        )
+    location_inventory.filled = True
 
+    await session.commit()
+    await session.refresh(inventory_asset)
     return inventory_asset
 
 
@@ -326,10 +347,10 @@ async def list_assets_in_inventory(
 ):
     query = (
         select(InventoryAsset)
-        .join(InventoryOwner)
+        .join(LocationInventory)
         .where(
-            InventoryOwner.inventory_id == inventory_id,
-            InventoryOwner.user_id == current_user.id,
+            LocationInventory.inventory_id == inventory_id,
+            LocationInventory.user_id == current_user.id,
         )
     )
     if filters.location_id:
@@ -354,11 +375,11 @@ async def remove_asset_from_inventory(
 ):
     query = (
         select(InventoryAsset)
-        .join(InventoryOwner)
+        .join(LocationInventory)
         .where(
             InventoryAsset.id == inventory_asset_id,
-            InventoryOwner.user_id == current_user.id,
-            InventoryOwner.inventory_id == inventory_id,
+            LocationInventory.user_id == current_user.id,
+            LocationInventory.inventory_id == inventory_id,
         )
     )
     inventory_asset = await session.scalar(query)
@@ -373,27 +394,34 @@ async def remove_asset_from_inventory(
     await session.commit()
 
 
-@router.get('/{inventory_id}/locations', response_model=LocationList)
+@router.get('/{inventory_id}/locations', response_model=LocationInventoryList)
 async def list_inventory_locations_by_inventory(
     inventory_id: UUID,
     session: Session,
-    filters: Annotated[FilterLocation, Depends()],
+    filters: Annotated[FilterLocationInventory, Depends()],
 ):
     query = (
-        select(Location)
-        .join(InventoryAsset, InventoryAsset.location_id == Location.id)
-        .join(
-            InventoryOwner,
-            InventoryOwner.id == InventoryAsset.inventory_owner_id,
+        select(LocationInventory)
+        .join(LocationInventory.location)
+        .where(
+            LocationInventory.inventory_id == inventory_id,
+            Location.deleted_at.is_(None),
         )
-        .where(InventoryOwner.inventory_id == inventory_id)
-        .distinct()
+        .options(
+            selectinload(LocationInventory.location).selectinload(
+                Location.location_inventories
+            ),
+            selectinload(LocationInventory.assets),
+        )
     )
 
     if filters.q:
         prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Location.tsv.op('@@')(ts_query))
+
+    if filters.filled:
+        query = query.where(LocationInventory.filled == filters.filled)
 
     if filters.sector_id:
         query = query.where(Location.sector_id == filters.sector_id)
@@ -405,5 +433,7 @@ async def list_inventory_locations_by_inventory(
 
     query = query.offset(filters.offset).limit(filters.limit)
 
-    locations_db = await session.scalars(query)
-    return {'locations': locations_db.all()}
+    result = await session.scalars(query)
+    location_inventories = result.all()
+
+    return {'location_inventory': location_inventories}

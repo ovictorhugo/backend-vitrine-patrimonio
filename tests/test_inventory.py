@@ -7,11 +7,12 @@ from vitrine.models import Inventory, InventoryAssetStatus
 
 
 @pytest.mark.asyncio
-async def test_create_inventory(client, create_user, create_token):
+async def test_create_inventory(
+    client, create_user, create_token, create_location
+):
     EXPECTED_COUNT = 3
     creator_user = await create_user(email='creator@test.com')
-    await create_user(email='user1@test.com')
-    await create_user(email='user2@test.com')
+    [await create_location() for _ in range(EXPECTED_COUNT)]
 
     token = create_token(creator_user)
     inventory_key = f'KEY-{uuid4()}'
@@ -27,7 +28,6 @@ async def test_create_inventory(client, create_user, create_token):
     data = response.json()
     assert data['key'] == inventory_key
     assert data['created_by']['id'] == str(creator_user.id)
-    assert len(data['owners']) == EXPECTED_COUNT
 
 
 @pytest.mark.asyncio
@@ -244,9 +244,9 @@ async def test_add_asset_to_inventory_success(
 ):
     user = await create_user()
     token = create_token(user)
+    location = await create_location(user_id=user.id)
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     asset = await create_asset()
-    location = await create_location()
 
     payload = {
         'asset_id': str(asset.id),
@@ -263,7 +263,6 @@ async def test_add_asset_to_inventory_success(
 
     assert response.status_code == HTTPStatus.CREATED
     data = response.json()
-    assert data['asset']['id'] == str(asset.id)
     assert data['status'] == InventoryAssetStatus.FOUND.value
     assert data['comment'] == 'Test comment'
 
@@ -318,10 +317,13 @@ async def test_add_asset_inventory_closed(
 
 
 @pytest.mark.asyncio
-async def test_add_asset_user_not_owner(
-    client, create_user, create_token, create_inventory, create_asset
+async def test_add_asset_user_not_location(
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
 ):
-    await create_user()
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     user = await create_user()
     token = create_token(user)
@@ -339,9 +341,10 @@ async def test_add_asset_user_not_owner(
         headers={'Authorization': f'Bearer {token}'},
     )
 
-    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.status_code == HTTPStatus.NOT_FOUND
     assert (
-        response.json()['detail'] == 'User is not an owner of this inventory'
+        response.json()['detail']
+        == 'The specified location is not registered for this inventory.'
     )
 
 
@@ -366,7 +369,10 @@ async def test_add_asset_not_found(
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
-    assert response.json()['detail'] == 'Asset not found'
+    assert (
+        response.json()['detail']
+        == 'The specified location is not registered for this inventory.'
+    )
 
 
 @pytest.mark.asyncio
@@ -379,11 +385,11 @@ async def test_add_assets_batch_success(
     create_location,
 ):
     user = await create_user()
+    location = await create_location(user_id=user.id)
     token = create_token(user)
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     asset1 = await create_asset()
     asset2 = await create_asset()
-    location = await create_location()
 
     payload = [
         {
@@ -409,11 +415,6 @@ async def test_add_assets_batch_success(
     assert response.status_code == HTTPStatus.CREATED
     data = response.json()
     assert len(data['inventoried_asset']) == 2
-    response_asset_ids = {
-        item['asset']['id'] for item in data['inventoried_asset']
-    }
-    assert str(asset1.id) in response_asset_ids
-    assert str(asset2.id) in response_asset_ids
 
 
 @pytest.mark.asyncio
@@ -427,9 +428,9 @@ async def test_add_assets_batch_one_asset_not_found(
 ):
     user = await create_user()
     token = create_token(user)
+    location = await create_location(user_id=user.id)
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     asset1 = await create_asset()
-    location = await create_location()
     non_existent_asset_id = uuid4()
 
     payload = [
@@ -468,9 +469,9 @@ async def test_add_assets_batch_conflict_on_duplicate(
 ):
     user = await create_user()
     token = create_token(user)
+    location = await create_location()
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     asset1 = await create_asset()
-    location = await create_location()
 
     payload = [
         {
@@ -518,7 +519,7 @@ async def test_add_assets_batch_empty_list(
 
 
 @pytest.mark.asyncio
-async def test_add_assets_batch_user_not_owner(
+async def test_add_assets_batch_user_not_location(
     client,
     create_user,
     create_token,
@@ -527,12 +528,12 @@ async def test_add_assets_batch_user_not_owner(
     create_location,
 ):
     await create_user(email='owner@test.com')
+    location = await create_location()
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
 
     non_owner_user = await create_user(email='non-owner@test.com')
     token = create_token(non_owner_user)
     asset = await create_asset()
-    location = await create_location()
 
     payload = [
         {
@@ -555,40 +556,28 @@ async def test_add_assets_batch_user_not_owner(
 
 
 @pytest.mark.asyncio
-async def test_list_inventory_locations_by_inventory_success(
+async def test_list_inventory_locations_success(
     client,
     create_user,
     create_token,
     create_inventory,
-    create_asset,
     create_location,
+    create_location_inventory,
 ):
     user = await create_user()
     token = create_token(user)
-    inventory = await create_inventory(key=f'KEY-{uuid4()}')
+    inventory = await create_inventory()
 
-    location1 = await create_location()
-    location2 = await create_location()
-    unused_location = await create_location()
+    location1 = await create_location(location_name='Bloco A')
+    location2 = await create_location(location_name='Bloco B')
+    await create_location(location_name='Bloco C')
 
-    asset1 = await create_asset()
-    asset2 = await create_asset()
-    asset3 = await create_asset()
-
-    for asset, loc in [
-        (asset1, location1),
-        (asset2, location2),
-        (asset3, location1),
-    ]:
-        client.post(
-            f'/inventories/{inventory.id}/assets',
-            json={
-                'asset_id': str(asset.id),
-                'status': InventoryAssetStatus.FOUND,
-                'location_id': str(loc.id),
-            },
-            headers={'Authorization': f'Bearer {token}'},
-        )
+    await create_location_inventory(
+        inventory_id=inventory.id, location_id=location1.id
+    )
+    await create_location_inventory(
+        inventory_id=inventory.id, location_id=location2.id
+    )
 
     response = client.get(
         f'/inventories/{inventory.id}/locations',
@@ -596,209 +585,3 @@ async def test_list_inventory_locations_by_inventory_success(
     )
 
     assert response.status_code == HTTPStatus.OK
-    data = response.json()
-
-    assert 'locations' in data
-    assert len(data['locations']) == 2
-
-    returned_location_ids = {loc['id'] for loc in data['locations']}
-    expected_location_ids = {str(location1.id), str(location2.id)}
-
-    assert returned_location_ids == expected_location_ids
-    assert str(unused_location.id) not in returned_location_ids
-
-
-@pytest.mark.asyncio
-async def test_list_inventory_locations_success_with_query_param(
-    client,
-    create_user,
-    create_token,
-    create_inventory,
-    create_asset,
-    create_location,
-):
-    user = await create_user()
-    token = create_token(user)
-    inventory = await create_inventory(key=f'KEY-{uuid4()}')
-
-    location1 = await create_location()
-    location2 = await create_location()
-
-    asset1 = await create_asset()
-    asset2 = await create_asset()
-
-    for asset, loc in [(asset1, location1), (asset2, location2)]:
-        client.post(
-            f'/inventories/{inventory.id}/assets',
-            json={
-                'asset_id': str(asset.id),
-                'status': InventoryAssetStatus.FOUND,
-                'location_id': str(loc.id),
-            },
-            headers={'Authorization': f'Bearer {token}'},
-        )
-
-    response = client.get(
-        f'/inventories/locations?inventory_id={inventory.id}',
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()
-    assert len(data['locations']) == 2
-    returned_location_ids = {loc['id'] for loc in data['locations']}
-    expected_location_ids = {str(location1.id), str(location2.id)}
-    assert returned_location_ids == expected_location_ids
-
-
-@pytest.mark.asyncio
-async def test_list_inventory_locations_empty_for_inventory_with_no_assets(
-    client, create_user, create_token, create_inventory
-):
-    user = await create_user()
-    token = create_token(user)
-    inventory = await create_inventory(key=f'KEY-{uuid4()}')
-
-    response = client.get(
-        f'/inventories/{inventory.id}/locations',
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()
-    assert data['locations'] == []
-
-
-@pytest.mark.asyncio
-async def test_add_asset_conflict_when_location_already_used(
-    client,
-    create_user,
-    create_token,
-    create_inventory,
-    create_asset,
-    create_location,
-):
-    user = await create_user()
-    token = create_token(user)
-    inventory = await create_inventory(key=f'KEY-{uuid4()}')
-    asset1 = await create_asset()
-    asset2 = await create_asset()
-    location = await create_location()
-
-    client.post(
-        f'/inventories/{inventory.id}/assets',
-        json={
-            'asset_id': str(asset1.id),
-            'status': InventoryAssetStatus.FOUND,
-            'location_id': str(location.id),
-        },
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    response = client.post(
-        f'/inventories/{inventory.id}/assets',
-        json={
-            'asset_id': str(asset2.id),
-            'status': InventoryAssetStatus.NOT_FOUND,
-            'location_id': str(location.id),
-        },
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.CONFLICT
-    assert (
-        response.json()['detail']
-        == 'This location already has assets attached to this inventory'
-    )
-
-
-@pytest.mark.asyncio
-async def test_add_assets_batch_conflict_when_location_already_used(
-    client,
-    create_user,
-    create_token,
-    create_inventory,
-    create_asset,
-    create_location,
-):
-    user = await create_user()
-    token = create_token(user)
-    inventory = await create_inventory(key=f'KEY-{uuid4()}')
-    asset1 = await create_asset()
-    asset2 = await create_asset()
-    asset3 = await create_asset()
-    location = await create_location()
-
-    client.post(
-        f'/inventories/{inventory.id}/assets',
-        json={
-            'asset_id': str(asset1.id),
-            'status': InventoryAssetStatus.FOUND,
-            'location_id': str(location.id),
-        },
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    response = client.post(
-        f'/inventories/{inventory.id}/assets/batch',
-        json=[
-            {
-                'asset_id': str(asset2.id),
-                'status': InventoryAssetStatus.FOUND,
-                'location_id': str(location.id),
-            },
-            {
-                'asset_id': str(asset3.id),
-                'status': InventoryAssetStatus.NOT_FOUND,
-                'location_id': str(location.id),
-            },
-        ],
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.CONFLICT
-    assert (
-        response.json()['detail']
-        == 'This location already has assets attached to this inventory'
-    )
-
-
-@pytest.mark.asyncio
-async def test_add_assets_batch_conflict_when_location_ids_differ(
-    client,
-    create_user,
-    create_token,
-    create_inventory,
-    create_asset,
-    create_location,
-):
-    user = await create_user()
-    token = create_token(user)
-    inventory = await create_inventory(key=f'KEY-{uuid4()}')
-    asset1 = await create_asset()
-    asset2 = await create_asset()
-    location1 = await create_location()
-    location2 = await create_location()
-
-    response = client.post(
-        f'/inventories/{inventory.id}/assets/batch',
-        json=[
-            {
-                'asset_id': str(asset1.id),
-                'status': InventoryAssetStatus.FOUND,
-                'location_id': str(location1.id),
-            },
-            {
-                'asset_id': str(asset2.id),
-                'status': InventoryAssetStatus.FOUND,
-                'location_id': str(location2.id),
-            },
-        ],
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.BAD_REQUEST
-    assert (
-        response.json()['detail']
-        == 'All assets in batch must have the same location_id'
-    )

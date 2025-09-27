@@ -6,7 +6,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import Catalog, CatalogWorkFlow, FavoriteCatalog
+from vitrine.models import (
+    Asset,
+    Catalog,
+    CatalogWorkFlow,
+    FavoriteCatalog,
+    Location,
+    LocationInventory,
+    WorkflowTransfer,
+)
 from vitrine.schemas import FavoriteList, Message
 
 router = APIRouter(prefix='/favorites', tags=['vitrine - favoritos'])
@@ -48,6 +56,9 @@ async def create_favorite(
     return {'message': 'Asset favorited successfully'}
 
 
+from sqlalchemy.orm import joinedload
+
+
 @router.get('/', response_model=FavoriteList)
 async def read_user_favorites(
     session: Session,
@@ -60,8 +71,29 @@ async def read_user_favorites(
         .where(Catalog.deleted_at.is_(None))
         .options(
             selectinload(Catalog.images),
+            selectinload(Catalog.location).options(
+                selectinload(Location.location_inventories).selectinload(
+                    LocationInventory.inventory
+                )
+            ),
+            selectinload(Catalog.asset).options(
+                joinedload(Asset.material),
+                joinedload(Asset.legal_guardian),
+                selectinload(Asset.location).options(
+                    selectinload(Location.location_inventories).selectinload(
+                        LocationInventory.inventory
+                    )
+                ),
+            ),
             selectinload(Catalog.workflow_history).options(
-                selectinload(CatalogWorkFlow.user)
+                joinedload(CatalogWorkFlow.user),
+                selectinload(CatalogWorkFlow.transfer_requests).options(
+                    selectinload(WorkflowTransfer.location).options(
+                        selectinload(
+                            Location.location_inventories
+                        ).selectinload(LocationInventory.inventory)
+                    )
+                ),
             ),
         )
     )

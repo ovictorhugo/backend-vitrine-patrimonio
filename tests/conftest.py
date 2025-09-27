@@ -31,7 +31,8 @@ from vitrine.database import get_session
 from vitrine.mail import get_smtp
 from vitrine.models import (
     CatalogWorkFlow,
-    InventoryOwner,
+    Location,
+    LocationInventory,
     SystemIdentity,
     User,
     WorkflowTransferStatus,
@@ -390,19 +391,40 @@ def create_inventory(session, create_user):
         session.add(inventory_db)
         await session.flush()
 
-        query = select(User).where(User.deleted_at.is_(None))
-        users_db = await session.scalars(query)
-        users_db = users_db.all()
+        query = select(Location).where(Location.deleted_at.is_(None))
+        location_db = await session.scalars(query)
+        location_db = location_db.all()
 
-        owners = [
-            InventoryOwner(inventory_id=inventory_db.id, user_id=u.id)
-            for u in users_db
+        locations = [
+            LocationInventory(inventory_id=inventory_db.id, location_id=_.id)
+            for _ in location_db
         ]
-        session.add_all(owners)
+        session.add_all(locations)
 
         await session.commit()
         await session.refresh(inventory_db)
         return inventory_db
+
+    return _create
+
+
+@pytest_asyncio.fixture
+def create_location_inventory(session, create_inventory, create_location):
+    async def _create(**kwargs):
+        if 'inventory_id' not in kwargs:
+            inventory = await create_inventory()
+            kwargs['inventory_id'] = inventory.id
+
+        if 'location_id' not in kwargs:
+            location = await create_location()
+            kwargs['location_id'] = location.id
+
+        location_inventory_db = LocationInventory(**kwargs)
+        session.add(location_inventory_db)
+        await session.commit()
+        await session.refresh(location_inventory_db)
+
+        return location_inventory_db
 
     return _create
 

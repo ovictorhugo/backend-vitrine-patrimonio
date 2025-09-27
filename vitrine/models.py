@@ -239,8 +239,6 @@ class Sector:
         init=False,
         index=False,
     )
-
-    # 2. Adicionada a UniqueConstraint para (sector_name, agency_id)
     __table_args__ = (
         UniqueConstraint(
             'sector_name', 'agency_id', name='uq_sector_name_agency_id'
@@ -291,6 +289,12 @@ class Location:
         init=False,
         cascade='all, delete-orphan',
     )
+    location_inventories: Mapped[list['LocationInventory']] = relationship(
+        back_populates='location',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
 
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
@@ -301,7 +305,6 @@ class Location:
         init=False,
         index=False,
     )
-
     __table_args__ = (
         UniqueConstraint(
             'location_name',
@@ -634,7 +637,8 @@ class Inventory:
         init=False, primary_key=True, default=uuid.uuid4
     )
     key: Mapped[str] = mapped_column(nullable=False)
-    owners: Mapped[list['InventoryOwner']] = relationship(
+
+    inventoried_locations: Mapped[list['LocationInventory']] = relationship(
         back_populates='inventory',
         init=False,
         lazy='selectin',
@@ -656,10 +660,12 @@ class Inventory:
 
 
 @table_registry.mapped_as_dataclass
-class InventoryOwner:
-    __tablename__ = 'inventory_owners'
+class LocationInventory:
+    __tablename__ = 'location_inventory'
     __table_args__ = (
-        UniqueConstraint('inventory_id', 'user_id', name='uq_inventory_user'),
+        UniqueConstraint(
+            'inventory_id', 'location_id', name='uq_inventory_location'
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -667,18 +673,22 @@ class InventoryOwner:
     inventory_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('inventory.id'))
     inventory: Mapped['Inventory'] = relationship(
         init=False,
-        back_populates='owners',
+        back_populates='inventoried_locations',
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='joined')
+
+    location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('locations.id'))
+
+    location: Mapped['Location'] = relationship(
+        init=False, back_populates='location_inventories', lazy='joined'
+    )
 
     assets: Mapped[list['InventoryAsset']] = relationship(
-        back_populates='inventory_owner',
+        back_populates='location_inventory',
         init=False,
         cascade='all, delete-orphan',
         lazy='selectin',
     )
-
+    filled: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -689,16 +699,19 @@ class InventoryAsset:
     __tablename__ = 'inventory_assets'
     __table_args__ = (
         UniqueConstraint(
-            'inventory_owner_id', 'asset_id', name='uq_inventory_owner_asset'
+            'location_inventory_id',
+            'asset_id',
+            name='uq_location_inventory_asset',
         ),
     )
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
     )
-    inventory_owner_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey('inventory_owners.id')
+
+    location_inventory_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('location_inventory.id')
     )
-    inventory_owner: Mapped[InventoryOwner] = relationship(
+    location_inventory: Mapped[LocationInventory] = relationship(
         init=False, back_populates='assets'
     )
 

@@ -11,9 +11,9 @@ from vitrine.models import (
     CatalogWorkFlow,
     FavoriteCatalog,
     Inventory,
-    InventoryOwner,
     LegalGuardian,
     Location,
+    LocationInventory,
     Material,
     Sector,
     Unit,
@@ -149,9 +149,9 @@ class InventoryFactory(factory.Factory):
     avaliable = True
 
 
-class InventoryOwnerFactory(factory.Factory):
+class LocationInventoryFactory(factory.Factory):
     class Meta:
-        model = InventoryOwner
+        model = LocationInventory
 
     inventory = factory.SubFactory(InventoryFactory)
     user_id = factory.LazyFunction(uuid.uuid4)

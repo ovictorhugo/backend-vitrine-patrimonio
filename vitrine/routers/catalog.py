@@ -16,6 +16,7 @@ from vitrine.models import (
     CatalogWorkFlow,
     LegalGuardian,
     Location,
+    LocationInventory,
     Material,
     User,
     WorkFlowStatus,
@@ -95,6 +96,9 @@ async def create_catalog_entry(
                 selectinload(CatalogWorkFlow.user),
                 selectinload(CatalogWorkFlow.transfer_requests),
             ),
+            selectinload(Catalog.location)
+            .selectinload(Location.location_inventories)
+            .selectinload(LocationInventory.inventory),
         )
     )
     created_catalog = await session.scalar(query)
@@ -165,6 +169,9 @@ async def read_catalog_entries(
             selectinload(CatalogWorkFlow.user),
             selectinload(CatalogWorkFlow.transfer_requests),
         ),
+        selectinload(Catalog.location)
+        .selectinload(Location.location_inventories)
+        .selectinload(LocationInventory.inventory),
     )
 
     query = query.offset(filters.offset).limit(filters.limit)
@@ -209,6 +216,9 @@ async def read_catalog_entry(catalog_id: UUID, session: Session):
             selectinload(CatalogWorkFlow.user),
             selectinload(CatalogWorkFlow.transfer_requests),
         ),
+        selectinload(Catalog.location)
+        .selectinload(Location.location_inventories)
+        .selectinload(LocationInventory.inventory),
     ]
     db_catalog = await session.get(Catalog, catalog_id, options=options)
 
@@ -229,8 +239,12 @@ async def update_catalog_entry(
     options = [
         selectinload(Catalog.images),
         selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user)
+            selectinload(CatalogWorkFlow.user),
+            selectinload(CatalogWorkFlow.transfer_requests),
         ),
+        selectinload(Catalog.location)
+        .selectinload(Location.location_inventories)
+        .selectinload(LocationInventory.inventory),
     ]
     db_catalog = await session.get(Catalog, catalog_id, options=options)
 
@@ -259,6 +273,9 @@ async def toggle_transfer_request(
 ):
     options = [
         selectinload(Catalog.images),
+        selectinload(Catalog.location)
+        .selectinload(Location.location_inventories)
+        .selectinload(LocationInventory.inventory),
         selectinload(Catalog.workflow_history).options(
             selectinload(CatalogWorkFlow.user),
             selectinload(CatalogWorkFlow.transfer_requests).options(

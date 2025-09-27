@@ -5,11 +5,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
 from vitrine.models import (
     LegalGuardian,
     Location,
+    LocationInventory,
     Sector,
     SystemIdentity,
 )
@@ -80,7 +82,15 @@ async def create_location(
 async def read_locations(
     session: Session, filters: Annotated[FilterLocation, Depends()]
 ):
-    query = select(Location).where(Location.deleted_at.is_(None))
+    query = (
+        select(Location)
+        .where(Location.deleted_at.is_(None))
+        .options(
+            selectinload(Location.location_inventories).selectinload(
+                LocationInventory.inventory
+            )
+        )
+    )
 
     if filters.q:
         prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
@@ -120,6 +130,11 @@ async def read_my_locations(
             SystemIdentity.user_id == current_user.id,
             Location.deleted_at.is_(None),
         )
+        .options(
+            selectinload(Location.location_inventories).selectinload(
+                LocationInventory.inventory
+            )
+        )
     )
 
     if filters.q:
@@ -140,8 +155,14 @@ async def read_my_locations(
 
 @router.get('/{location_id}', response_model=LocationPublic)
 async def read_location(location_id: UUID, session: Session):
-    query = select(Location).where(
-        Location.id == location_id, Location.deleted_at.is_(None)
+    query = (
+        select(Location)
+        .where(Location.id == location_id, Location.deleted_at.is_(None))
+        .options(
+            selectinload(Location.location_inventories).selectinload(
+                LocationInventory.inventory
+            )
+        )
     )
     result = await session.scalar(query)
 

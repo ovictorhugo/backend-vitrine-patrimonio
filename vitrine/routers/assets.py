@@ -6,9 +6,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import ValidationError
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import Asset
+from vitrine.models import Asset, Location, LocationInventory
 from vitrine.schemas import (
     AssetCheckDigitList,
     AssetCodeList,
@@ -70,13 +71,16 @@ async def create_assets_from_file(
 async def read_assets(
     session: Session, filters: Annotated[FilterAsset, Depends()]
 ):
-    query = select(Asset)
+    query = select(Asset).options(
+        selectinload(Asset.location)
+        .selectinload(Location.location_inventories)
+        .joinedload(LocationInventory.inventory)
+    )
 
     query = filter_service.apply_asset_filters(query, filters)
 
     result = await session.scalars(query)
     assets = result.all()
-
     return {'assets': assets}
 
 

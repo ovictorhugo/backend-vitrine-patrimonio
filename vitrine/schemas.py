@@ -69,7 +69,7 @@ class UserDB(UserSchema):
 
 
 class UserList(BaseModel):
-    users: list[UserPublic]
+    users: List[UserPublic]
 
 
 class FilterPage(BaseModel):
@@ -90,7 +90,7 @@ class UnitPublic(UnitSchema):
 
 
 class UnitList(BaseModel):
-    units: list[UnitPublic]
+    units: List[UnitPublic]
 
 
 class FilterUnit(FilterPage):
@@ -113,7 +113,7 @@ class AgencyPublic(AgencySchema):
 
 
 class AgencyList(BaseModel):
-    agencies: list[AgencyPublic]
+    agencies: List[AgencyPublic]
 
 
 class FilterAgency(FilterPage):
@@ -135,7 +135,7 @@ class SectorPublic(SectorSchema):
 
 
 class SectorList(BaseModel):
-    sectors: list[SectorPublic]
+    sectors: List[SectorPublic]
 
 
 class FilterSector(FilterPage):
@@ -168,7 +168,7 @@ class LegalGuardianPublic(LegalGuardianSchema):
 
 
 class LegalGuardianList(BaseModel):
-    legal_guardians: list[LegalGuardianPublic]
+    legal_guardians: List[LegalGuardianPublic]
 
 
 class FilterLegalGuardian(FilterPage):
@@ -179,10 +179,11 @@ class LocationPublic(LocationSchema):
     id: UUID
     sector: SectorPublic
     legal_guardian: LegalGuardianPublic
+    location_inventories: List['LocationInventoryPublic']
 
 
 class LocationList(BaseModel):
-    locations: list[LocationPublic]
+    locations: List[LocationPublic]
 
 
 class FilterLocation(FilterPage):
@@ -193,6 +194,10 @@ class FilterLocation(FilterPage):
     legal_guardian_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID do responsável legal'
     )
+
+
+class FilterLocationInventory(FilterLocation):
+    filled: Optional[bool] = None
 
 
 class MaterialSchema(BaseModel):
@@ -208,7 +213,7 @@ class MaterialPublic(MaterialSchema):
 
 
 class MaterialList(BaseModel):
-    materials: list[MaterialPublic]
+    materials: List[MaterialPublic]
 
 
 class FilterMaterial(FilterPage):
@@ -276,7 +281,7 @@ class AtmNumberList(BaseModel):
 
 
 class AssetIdentifierList(BaseModel):
-    asset_identifier: list[str]
+    asset_identifier: List[str]
 
 
 class MaterialNameResponseList(BaseModel):
@@ -289,7 +294,7 @@ class CatalogAssetIdentifier(BaseModel):
 
 
 class CatalogAssetIdentifierList(BaseModel):
-    catalogs: list[CatalogAssetIdentifier]
+    catalogs: List[CatalogAssetIdentifier]
 
 
 class LegalGuardianNameResponseList(BaseModel):
@@ -381,15 +386,15 @@ class CatalogPublic(CatalogSchema):
     asset: AssetPublic
     user: UserPublic
     location: LocationPublic
-    images: list[CatalogImagePublic]
-    workflow_history: list[CatalogWorkFlowPublic]
+    images: List[CatalogImagePublic]
+    workflow_history: List[CatalogWorkFlowPublic]
 
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
 
 class CatalogList(BaseModel):
-    catalog_entries: list[CatalogPublic]
+    catalog_entries: List[CatalogPublic]
 
 
 class FilterCatalog(FilterPage):
@@ -412,22 +417,14 @@ class InventorySchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class InventoryOwnerPublic(BaseModel):
-    user_id: UUID = Field(exclude=True)
-    user: UserPublic
-    model_config = ConfigDict(from_attributes=True)
-
-
 class InventoryPublic(InventorySchema):
     id: UUID
-    avaliable: bool
     created_by: UserPublic
-    owners: list[InventoryOwnerPublic]
     model_config = ConfigDict(from_attributes=True)
 
 
 class InventoryList(BaseModel):
-    inventories: list[InventoryPublic]
+    inventories: List[InventoryPublic]
 
 
 class FilterInventory(FilterPage):
@@ -443,16 +440,27 @@ class InventoryAssetSchema(BaseModel):
 
 class InventoryAssetPublic(BaseModel):
     id: UUID
-    asset: AssetPublic
     status: InventoryAssetStatus
     comment: str | None
-    location: LocationPublic
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class InventoryAssetList(BaseModel):
-    inventoried_asset: list[InventoryAssetPublic]
+    inventoried_asset: List[InventoryAssetPublic]
+
+
+class LocationInventoryPublic(BaseModel):
+    id: UUID
+    assets: List[AssetPublic]
+    inventory: InventoryPublic
+    filled: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LocationInventoryList(BaseModel):
+    location_inventory: List[LocationInventoryPublic]
 
 
 class FavoriteSchema(BaseModel):
@@ -460,4 +468,4 @@ class FavoriteSchema(BaseModel):
 
 
 class FavoriteList(BaseModel):
-    favorites: list[CatalogPublic]
+    favorites: List[CatalogPublic]
