@@ -418,24 +418,30 @@ async def test_add_assets_batch_success(
 
 @pytest.mark.asyncio
 async def test_add_assets_batch_one_asset_not_found(
-    client, create_user, create_token, create_inventory, create_asset
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
 ):
     user = await create_user()
     token = create_token(user)
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     asset1 = await create_asset()
+    location = await create_location()
     non_existent_asset_id = uuid4()
 
     payload = [
         {
             'asset_id': str(asset1.id),
             'status': InventoryAssetStatus.FOUND,
-            'location_id': str(uuid4()),
+            'location_id': str(location.id),
         },
         {
             'asset_id': str(non_existent_asset_id),
             'status': InventoryAssetStatus.FOUND,
-            'location_id': str(uuid4()),
+            'location_id': str(location.id),
         },
     ]
 
@@ -464,18 +470,7 @@ async def test_add_assets_batch_conflict_on_duplicate(
     token = create_token(user)
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     asset1 = await create_asset()
-    asset2 = await create_asset()
     location = await create_location()
-
-    client.post(
-        f'/inventories/{inventory.id}/assets',
-        json={
-            'asset_id': str(asset1.id),
-            'status': InventoryAssetStatus.FOUND,
-            'location_id': str(location.id),
-        },
-        headers={'Authorization': f'Bearer {token}'},
-    )
 
     payload = [
         {
@@ -484,7 +479,7 @@ async def test_add_assets_batch_conflict_on_duplicate(
             'location_id': str(location.id),
         },
         {
-            'asset_id': str(asset2.id),
+            'asset_id': str(asset1.id),
             'status': InventoryAssetStatus.FOUND,
             'location_id': str(location.id),
         },
