@@ -437,6 +437,7 @@ class FilterInventory(FilterPage):
 class InventoryAssetSchema(BaseModel):
     asset_id: UUID
     status: InventoryAssetStatus = InventoryAssetStatus.FOUND.value
+    location_id: UUID
     comment: str | None = None
 
 

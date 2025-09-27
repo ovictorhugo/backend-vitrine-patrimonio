@@ -273,6 +273,10 @@ class Location:
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped['User'] = relationship(init=False, lazy='joined')
 
+    inventory_assets: Mapped[list['InventoryAsset']] = relationship(
+        back_populates='location', init=False
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -694,13 +698,21 @@ class InventoryAsset:
     inventory_owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('inventory_owners.id')
     )
-    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'))
     inventory_owner: Mapped[InventoryOwner] = relationship(
         init=False, back_populates='assets'
     )
+
+    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'))
     asset: Mapped[Asset] = relationship(init=False, lazy='joined')
+
     status: Mapped[str | None] = mapped_column(nullable=False, index=True)
     comment: Mapped[str | None] = mapped_column(nullable=True)
+
+    location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('locations.id'))
+    location: Mapped['Location'] = relationship(
+        init=False, lazy='joined', back_populates='inventory_assets'
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )

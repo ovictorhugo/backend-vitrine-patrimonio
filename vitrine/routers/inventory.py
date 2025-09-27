@@ -192,6 +192,7 @@ async def add_asset_to_inventory(
         asset_id=inventory_asset_data.asset_id,
         status=inventory_asset_data.status,
         comment=inventory_asset_data.comment,
+        location_id=inventory_asset_data.location_id,
     )
 
     session.add(inventory_asset)
@@ -262,6 +263,7 @@ async def add_assets_to_inventory_batch(
             asset_id=data.asset_id,
             status=data.status,
             comment=data.comment,
+            location_id=data.location_id,
         )
         for data in inventory_assets_data
     ]

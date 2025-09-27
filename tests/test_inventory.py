@@ -234,17 +234,25 @@ async def test_read_inventory(
 
 @pytest.mark.asyncio
 async def test_add_asset_to_inventory_success(
-    client, session, create_user, create_token, create_inventory, create_asset
+    client,
+    session,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
 ):
     user = await create_user()
     token = create_token(user)
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     asset = await create_asset()
+    location = await create_location()
 
     payload = {
         'asset_id': str(asset.id),
         'status': InventoryAssetStatus.FOUND,
         'comment': 'Test comment',
+        'location_id': str(location.id),
     }
 
     response = client.post(
@@ -267,10 +275,14 @@ async def test_add_asset_inventory_not_found(
     user = await create_user()
     token = create_token(user)
 
-    payload = {'asset_id': str(uuid4()), 'status': InventoryAssetStatus.FOUND}
+    payload = {
+        'asset_id': str(uuid4()),
+        'status': InventoryAssetStatus.FOUND,
+        'location_id': str(uuid4()),
+    }
 
     response = client.post(
-        f'/inventories/{uuid4()}/assets',  # Inventário inexistente
+        f'/inventories/{uuid4()}/assets',
         json=payload,
         headers={'Authorization': f'Bearer {token}'},
     )
@@ -287,7 +299,11 @@ async def test_add_asset_inventory_closed(
     token = create_token(user)
     inventory = await create_inventory(key=f'KEY-{uuid4()}', avaliable=False)
 
-    payload = {'asset_id': str(uuid4()), 'status': InventoryAssetStatus.FOUND}
+    payload = {
+        'asset_id': str(uuid4()),
+        'status': InventoryAssetStatus.FOUND,
+        'location_id': str(uuid4()),
+    }
 
     response = client.post(
         f'/inventories/{inventory.id}/assets',
@@ -311,7 +327,11 @@ async def test_add_asset_user_not_owner(
     token = create_token(user)
     asset = await create_asset()
 
-    payload = {'asset_id': str(asset.id), 'status': InventoryAssetStatus.FOUND}
+    payload = {
+        'asset_id': str(asset.id),
+        'status': InventoryAssetStatus.FOUND,
+        'location_id': str(uuid4()),
+    }
 
     response = client.post(
         f'/inventories/{inventory.id}/assets',
@@ -336,6 +356,7 @@ async def test_add_asset_not_found(
     payload = {
         'asset_id': str(uuid4()),
         'status': InventoryAssetStatus.FOUND,
+        'location_id': str(uuid4()),
     }
 
     response = client.post(
@@ -350,24 +371,32 @@ async def test_add_asset_not_found(
 
 @pytest.mark.asyncio
 async def test_add_assets_batch_success(
-    client, create_user, create_token, create_inventory, create_asset
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
 ):
     user = await create_user()
     token = create_token(user)
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     asset1 = await create_asset()
     asset2 = await create_asset()
+    location = await create_location()
 
     payload = [
         {
             'asset_id': str(asset1.id),
             'status': InventoryAssetStatus.FOUND,
             'comment': 'Item 1 ok',
+            'location_id': str(location.id),
         },
         {
             'asset_id': str(asset2.id),
             'status': InventoryAssetStatus.NOT_FOUND,
             'comment': 'Item 2 not found',
+            'location_id': str(location.id),
         },
     ]
 
@@ -396,10 +425,15 @@ async def test_add_assets_batch_one_asset_not_found(
     non_existent_asset_id = uuid4()
 
     payload = [
-        {'asset_id': str(asset1.id), 'status': InventoryAssetStatus.FOUND},
+        {
+            'asset_id': str(asset1.id),
+            'status': InventoryAssetStatus.FOUND,
+            'location_id': str(uuid4()),
+        },
         {
             'asset_id': str(non_existent_asset_id),
             'status': InventoryAssetStatus.FOUND,
+            'location_id': str(uuid4()),
         },
     ]
 
@@ -417,26 +451,41 @@ async def test_add_assets_batch_one_asset_not_found(
 
 @pytest.mark.asyncio
 async def test_add_assets_batch_conflict_on_duplicate(
-    client, create_user, create_token, create_inventory, create_asset
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
 ):
     user = await create_user()
     token = create_token(user)
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
     asset1 = await create_asset()
     asset2 = await create_asset()
+    location = await create_location()
 
     client.post(
         f'/inventories/{inventory.id}/assets',
         json={
             'asset_id': str(asset1.id),
             'status': InventoryAssetStatus.FOUND,
+            'location_id': str(location.id),
         },
         headers={'Authorization': f'Bearer {token}'},
     )
 
     payload = [
-        {'asset_id': str(asset1.id), 'status': InventoryAssetStatus.FOUND},
-        {'asset_id': str(asset2.id), 'status': InventoryAssetStatus.FOUND},
+        {
+            'asset_id': str(asset1.id),
+            'status': InventoryAssetStatus.FOUND,
+            'location_id': str(location.id),
+        },
+        {
+            'asset_id': str(asset2.id),
+            'status': InventoryAssetStatus.FOUND,
+            'location_id': str(location.id),
+        },
     ]
 
     response = client.post(
@@ -473,7 +522,12 @@ async def test_add_assets_batch_empty_list(
 
 @pytest.mark.asyncio
 async def test_add_assets_batch_user_not_owner(
-    client, create_user, create_token, create_inventory, create_asset
+    client,
+    create_user,
+    create_token,
+    create_inventory,
+    create_asset,
+    create_location,
 ):
     await create_user(email='owner@test.com')
     inventory = await create_inventory(key=f'KEY-{uuid4()}')
@@ -481,9 +535,14 @@ async def test_add_assets_batch_user_not_owner(
     non_owner_user = await create_user(email='non-owner@test.com')
     token = create_token(non_owner_user)
     asset = await create_asset()
+    location = await create_location()
 
     payload = [
-        {'asset_id': str(asset.id), 'status': InventoryAssetStatus.FOUND}
+        {
+            'asset_id': str(asset.id),
+            'status': InventoryAssetStatus.FOUND,
+            'location_id': str(location.id),
+        }
     ]
 
     response = client.post(
