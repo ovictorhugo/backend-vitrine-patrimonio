@@ -279,7 +279,7 @@ async def add_assets_to_inventory_batch(
             detail='One or more assets have already been added to your inventory.',
         )
 
-    return {'assets': new_inventory_assets}
+    return {'inventoried_asset': new_inventory_assets}
 
 
 @router.get('/{inventory_id}/assets', response_model=InventoryAssetList)
@@ -304,7 +304,7 @@ async def list_assets_in_inventory(
     query = filter_service.apply_asset_filters(query, filters)
 
     assets_db = await session.scalars(query)
-    return {'assets': assets_db.all()}
+    return {'inventoried_asset': assets_db.all()}
 
 
 @router.delete(

@@ -451,7 +451,7 @@ class InventoryAssetPublic(BaseModel):
 
 
 class InventoryAssetList(BaseModel):
-    assets: list[InventoryAssetPublic]
+    inventoried_asset: list[InventoryAssetPublic]
 
 
 class FavoriteSchema(BaseModel):
