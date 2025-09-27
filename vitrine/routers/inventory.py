@@ -209,6 +209,77 @@ async def add_asset_to_inventory(
     return inventory_asset
 
 
+@router.post(
+    '/{inventory_id}/assets/batch',
+    status_code=HTTPStatus.CREATED,
+    response_model=InventoryAssetList,
+)
+async def add_assets_to_inventory_batch(
+    inventory_id: UUID,
+    inventory_assets_data: list[InventoryAssetSchema],
+    session: Session,
+    current_user: CurrentUser,
+):
+    inventory = await session.get(Inventory, inventory_id)
+    if not inventory:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Inventory not found'
+        )
+    if not inventory.avaliable:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Inventory is no longer accepting assets',
+        )
+    query = select(InventoryOwner).where(
+        InventoryOwner.inventory_id == inventory_id,
+        InventoryOwner.user_id == current_user.id,
+    )
+    owner = await session.scalar(query)
+    if not owner:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='User is not an owner of this inventory',
+        )
+
+    if not inventory_assets_data:
+        return {'assets': []}
+
+    asset_ids_to_check = {data.asset_id for data in inventory_assets_data}
+    stmt = select(Asset.id).where(Asset.id.in_(asset_ids_to_check))
+    result = await session.execute(stmt)
+    existing_asset_ids = {res[0] for res in result}
+
+    if len(existing_asset_ids) != len(asset_ids_to_check):
+        not_found_ids = asset_ids_to_check - existing_asset_ids
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Assets not found: {", ".join(str(uid) for uid in not_found_ids)}',
+        )
+
+    new_inventory_assets = [
+        InventoryAsset(
+            inventory_owner_id=owner.id,
+            asset_id=data.asset_id,
+            status=data.status,
+            comment=data.comment,
+        )
+        for data in inventory_assets_data
+    ]
+
+    session.add_all(new_inventory_assets)
+
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail='One or more assets have already been added to your inventory.',
+        )
+
+    return {'assets': new_inventory_assets}
+
+
 @router.get('/{inventory_id}/assets', response_model=InventoryAssetList)
 async def list_assets_in_inventory(
     inventory_id: UUID,
