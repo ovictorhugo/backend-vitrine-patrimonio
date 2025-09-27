@@ -446,6 +446,7 @@ class InventoryAssetPublic(BaseModel):
     asset: AssetPublic
     status: InventoryAssetStatus
     comment: str | None
+    location: LocationPublic
 
     model_config = ConfigDict(from_attributes=True)
 
