@@ -923,5 +923,3 @@ async def test_email_after_update_transfer_request_status_success(
 
     msgs = data['messages']
     assert any(msg['To'][0]['Address'] == user.email for msg in msgs)
-    # assert message['Subject'] == 'ASSUNTO'
-    # assert 'CONTEUDO' in message['Text']

@@ -18,6 +18,19 @@ from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
 table_registry = registry()
 
 
+class CollectionItemType(str, PythonEnum):
+    ASSET = 'ASSET'
+    CATALOG = 'CATALOG'
+    USER = 'USER'
+    LOCATION = 'LOCATION'
+    AGENCIES = 'AGENCIES'
+    LEGAL_GUARDIAN = 'LEGAL_GUARDIAN'
+    MATERIAL = 'MATERIAL'
+    SECTOR = 'SECTOR'
+    UNIT = 'UNIT'
+    INVENTORY = 'INVENTORY'
+
+
 class WorkflowTransferStatus(str, PythonEnum):
     PENDING = 'PENDING'
     DECLINED = 'DECLINED'
@@ -91,7 +104,14 @@ class User:
     transfer_requests: Mapped[list['WorkflowTransfer']] = relationship(
         back_populates='user',
         init=False,
+        lazy='selectin',
         cascade='all, delete-orphan',
+    )
+    collections: Mapped[list['Collection']] = relationship(
+        back_populates='user',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
     )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -791,4 +811,74 @@ class SystemIdentity:
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class Collection:
+    __tablename__ = 'collections'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'name', name='uq_collection_user_name'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(nullable=False)
+    description: Mapped[str | None] = mapped_column(nullable=True)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('users.id'), nullable=False
+    )
+    user: Mapped['User'] = relationship(
+        back_populates='collections', init=False
+    )
+
+    items: Mapped[list['CollectionItem']] = relationship(
+        back_populates='collection',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True, onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class CollectionItem:
+    __tablename__ = 'collection_items'
+    __table_args__ = (
+        UniqueConstraint(
+            'collection_id',
+            'item_id',
+            'item_type',
+            name='uq_collection_item',
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+    collection_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('collections.id'), nullable=False
+    )
+
+    item_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+
+    item_type: Mapped[str] = mapped_column(nullable=False, index=True)
+
+    collection: Mapped['Collection'] = relationship(
+        back_populates='items', init=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
     )

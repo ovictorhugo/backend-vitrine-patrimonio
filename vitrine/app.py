@@ -8,6 +8,7 @@ from vitrine.routers import (
     assets,
     auth,
     catalog,
+    collection,
     favorite,
     inventory,
     users,
@@ -63,6 +64,7 @@ app.include_router(legal_guardians.router)
 app.include_router(materials.router)
 
 app.include_router(catalog_statistics.router)
+app.include_router(collection.router)
 
 
 @app.get('/')

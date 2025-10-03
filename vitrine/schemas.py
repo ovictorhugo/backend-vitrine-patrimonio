@@ -11,6 +11,7 @@ from pydantic import (
 
 from vitrine.models import (
     AssetSituation,
+    CollectionItemType,
     InventoryAssetStatus,
     WorkflowTransferStatus,
 )
@@ -308,11 +309,10 @@ class FilterAsset(BaseModel):
         default=None, description='Termo de busca (full-text search)'
     )
 
-    asset_identifier: Optional[str] = Field(
-        default=None,
-    )
+    asset_identifier: Optional[str] = Field(default=None)
     atm_number: Optional[str] = Field(default=None)
-
+    csv_code: Optional[str] = Field(default=None)
+    asset_status: Optional[str] = Field(default=None)
     agency_id: Optional[UUID] = Field(default=None)
     unit_id: Optional[UUID] = Field(default=None)
     sector_id: Optional[UUID] = Field(default=None)
@@ -419,6 +419,7 @@ class InventorySchema(BaseModel):
 
 class InventoryPublic(InventorySchema):
     id: UUID
+    created_at: datetime
     created_by: UserPublic
     model_config = ConfigDict(from_attributes=True)
 
@@ -469,3 +470,43 @@ class FavoriteSchema(BaseModel):
 
 class FavoriteList(BaseModel):
     favorites: List[CatalogPublic]
+
+
+class CollectionItemPublic(BaseModel):
+    id: UUID
+    item_id: UUID
+    item_type: CollectionItemType
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CollectionItemSchema(BaseModel):
+    item_id: UUID
+    item_type: CollectionItemType
+
+
+class CollectionSchema(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class CollectionUpdateSchema(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class CollectionPublic(BaseModel):
+    id: UUID
+    name: str
+    description: str | None
+    user_id: UUID
+    created_at: datetime
+    items: list[CollectionItemPublic] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Schema para a lista de coleções (resposta)
+class CollectionList(BaseModel):
+    collections: list[CollectionPublic]

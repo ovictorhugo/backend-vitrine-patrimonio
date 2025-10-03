@@ -31,6 +31,7 @@ from vitrine.database import get_session
 from vitrine.mail import get_smtp
 from vitrine.models import (
     CatalogWorkFlow,
+    Collection,
     Location,
     LocationInventory,
     SystemIdentity,
@@ -497,3 +498,29 @@ def create_workflow_transfer(
         return transfer
 
     return _create_workflow_transfer
+
+
+@pytest_asyncio.fixture
+async def create_collection(session, create_user):
+    """Factory para criar uma instância de Collection."""
+
+    async def _create_collection(
+        user_id=None,
+        name='Minha Coleção Padrão',
+        description='',
+    ):
+        if not user_id:
+            user = await create_user()
+            user_id = user.id
+
+        collection = Collection(
+            name=name,
+            description=description,
+            user_id=user_id,
+        )
+        session.add(collection)
+        await session.commit()
+        await session.refresh(collection)
+        return collection
+
+    return _create_collection

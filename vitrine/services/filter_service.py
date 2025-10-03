@@ -104,6 +104,12 @@ def apply_asset_filters(query, filters):
     if filters.user_id:
         query = query.where(Asset.user_id == filters.user_id)
 
+    if filters.asset_status:
+        query = query.where(Asset.asset_status == filters.asset_status)
+
+    if filters.csv_code:
+        query = query.where(Asset.csv_code == filters.csv_code)
+
     query = query.offset(filters.offset).limit(filters.limit)
 
     return query
