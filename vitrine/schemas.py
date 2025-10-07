@@ -11,7 +11,6 @@ from pydantic import (
 
 from vitrine.models import (
     AssetSituation,
-    CollectionItemType,
     InventoryAssetStatus,
     WorkflowTransferStatus,
 )
@@ -45,6 +44,7 @@ class UserUpdateSchema(BaseModel):
     matricula: str | None = None
     verify: bool | None = None
     institution_id: UUID | None = None
+    system_identity: Optional['LegalGuardianPublic']
 
 
 class UserPublic(BaseModel):
@@ -433,14 +433,14 @@ class FilterInventory(FilterPage):
 
 class InventoryAssetSchema(BaseModel):
     asset_id: UUID
-    status: InventoryAssetStatus = InventoryAssetStatus.OC.value
+    status: InventoryAssetStatus | None = InventoryAssetStatus.OC.value
     location_id: UUID
     comment: str | None = None
 
 
 class InventoryAssetPublic(BaseModel):
     id: UUID
-    status: InventoryAssetStatus
+    status: InventoryAssetStatus | None
     comment: str | None
     asset: AssetPublic
 
@@ -461,16 +461,14 @@ class FavoriteList(BaseModel):
 
 class CollectionItemPublic(BaseModel):
     id: UUID
-    item_id: UUID
-    item_type: CollectionItemType
-    created_at: datetime
-
+    status: bool
+    comment: str | None
+    catalog: CatalogPublic
     model_config = ConfigDict(from_attributes=True)
 
 
 class CollectionItemSchema(BaseModel):
-    item_id: UUID
-    item_type: CollectionItemType
+    catalog_id: UUID
     status: bool
     comment: str | None = None
 

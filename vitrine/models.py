@@ -18,19 +18,6 @@ from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
 table_registry = registry()
 
 
-class CollectionItemType(str, PythonEnum):
-    ASSET = 'ASSET'
-    CATALOG = 'CATALOG'
-    USER = 'USER'
-    LOCATION = 'LOCATION'
-    AGENCIES = 'AGENCIES'
-    LEGAL_GUARDIAN = 'LEGAL_GUARDIAN'
-    MATERIAL = 'MATERIAL'
-    SECTOR = 'SECTOR'
-    UNIT = 'UNIT'
-    INVENTORY = 'INVENTORY'
-
-
 class WorkflowTransferStatus(str, PythonEnum):
     PENDING = 'PENDING'
     DECLINED = 'DECLINED'
@@ -541,6 +528,12 @@ class Catalog:
         lazy='selectin',
         cascade='all, delete-orphan',
     )
+    collection_items: Mapped[list['CollectionItem']] = relationship(
+        back_populates='catalog',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='joined',
+    )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -860,9 +853,8 @@ class CollectionItem:
     __table_args__ = (
         UniqueConstraint(
             'collection_id',
-            'item_id',
-            'item_type',
-            name='uq_collection_item',
+            'catalog_id',
+            name='uq_collection_catalog_item',
         ),
     )
 
@@ -873,16 +865,19 @@ class CollectionItem:
         ForeignKey('collections.id'), nullable=False
     )
 
-    item_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
-
-    item_type: Mapped[str] = mapped_column(nullable=False, index=True)
+    catalog_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('catalog.id'), nullable=False, index=True
+    )
 
     status: Mapped[bool] = mapped_column(nullable=False)
-
-    comment: Mapped[str] = mapped_column(nullable=True)
+    comment: Mapped[str | None] = mapped_column(nullable=True)
 
     collection: Mapped['Collection'] = relationship(
         back_populates='items', init=False
+    )
+
+    catalog: Mapped['Catalog'] = relationship(
+        back_populates='collection_items', init=False, lazy='joined'
     )
 
     created_at: Mapped[datetime] = mapped_column(

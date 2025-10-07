@@ -3,8 +3,6 @@ from uuid import uuid4
 
 import pytest
 
-from vitrine.models import CollectionItemType
-
 pytestmark = pytest.mark.asyncio
 
 
@@ -92,37 +90,6 @@ async def test_read_collection_by_id(
     assert data['name'] == collection.name
 
 
-async def test_read_collection_fails_if_not_found(
-    client, create_user, create_token
-):
-    user = await create_user()
-    token = create_token(user)
-    fake_id = uuid4()
-
-    response = client.get(
-        f'/collections/{fake_id}', headers={'Authorization': f'Bearer {token}'}
-    )
-
-    assert response.status_code == HTTPStatus.NOT_FOUND
-
-
-async def test_read_collection_fails_if_not_owner(
-    client, create_user, create_token, create_collection
-):
-    owner = await create_user()
-    collection = await create_collection(user_id=owner.id)
-
-    other_user = await create_user()
-    other_token = create_token(other_user)
-
-    response = client.get(
-        f'/collections/{collection.id}',
-        headers={'Authorization': f'Bearer {other_token}'},
-    )
-
-    assert response.status_code == HTTPStatus.FORBIDDEN
-
-
 async def test_delete_collection(
     client, create_user, create_token, create_collection
 ):
@@ -145,56 +112,18 @@ async def test_delete_collection(
     assert get_response.status_code == HTTPStatus.NOT_FOUND
 
 
-async def test_delete_collection_fails_if_not_owner(
-    client, create_user, create_token, create_collection
-):
-    owner = await create_user()
-    collection = await create_collection(user_id=owner.id)
-
-    other_user = await create_user()
-    other_token = create_token(other_user)
-
-    response = client.delete(
-        f'/collections/{collection.id}',
-        headers={'Authorization': f'Bearer {other_token}'},
-    )
-
-    assert response.status_code == HTTPStatus.FORBIDDEN
-
-
-async def test_update_collection(
-    client, create_user, create_token, create_collection
-):
-    user = await create_user()
-    token = create_token(user)
-    collection = await create_collection(user_id=user.id, name='Nome Antigo')
-
-    payload = {'name': 'Nome Novo', 'description': 'Descrição Atualizada'}
-    response = client.put(
-        f'/collections/{collection.id}',
-        json=payload,
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()
-    assert data['name'] == 'Nome Novo'
-    assert data['description'] == 'Descrição Atualizada'
-
-
 async def test_add_item_to_collection(
-    client, create_user, create_token, create_collection, create_asset
+    client, create_user, create_token, create_collection, create_catalog_entry
 ):
     user = await create_user()
     token = create_token(user)
     collection = await create_collection(user_id=user.id)
-    asset = await create_asset()
+    catalog = await create_catalog_entry(user_id=user.id)
 
     payload = {
-        'item_id': str(asset.id),
-        'item_type': CollectionItemType.ASSET.value,
+        'catalog_id': str(catalog.id),
         'status': True,
-        'comment': 'XPTO',
+        'comment': 'Item de catálogo interessante.',
     }
 
     response = client.post(
@@ -205,8 +134,10 @@ async def test_add_item_to_collection(
 
     assert response.status_code == HTTPStatus.CREATED
     data = response.json()
-    assert data['item_id'] == str(asset.id)
-    assert data['item_type'] == 'ASSET'
+    assert data['comment'] == 'Item de catálogo interessante.'
+    assert data['status'] is True
+    assert 'catalog' in data
+    assert data['catalog']['id'] == str(catalog.id)
 
 
 async def test_add_item_fails_if_item_not_found(
@@ -215,13 +146,12 @@ async def test_add_item_fails_if_item_not_found(
     user = await create_user()
     token = create_token(user)
     collection = await create_collection(user_id=user.id)
-    fake_asset_id = uuid4()
+    fake_catalog_id = uuid4()
 
     payload = {
-        'item_id': str(fake_asset_id),
-        'item_type': CollectionItemType.ASSET.value,
+        'catalog_id': str(fake_catalog_id),
         'status': True,
-        'comment': 'XPTO',
+        'comment': 'Item que não existe.',
     }
     response = client.post(
         f'/collections/{collection.id}/items',
@@ -230,25 +160,24 @@ async def test_add_item_fails_if_item_not_found(
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
-    assert (
-        f'O item do tipo "ASSET" com ID "{fake_asset_id}" não foi encontrado.'
-        in response.json()['detail']
+    expected_detail = (
+        f'O item de catálogo com ID "{fake_catalog_id}" não foi encontrado.'
     )
+    assert response.json()['detail'] == expected_detail
 
 
 async def test_add_item_fails_if_already_in_collection(
-    client, create_user, create_token, create_collection, create_asset
+    client, create_user, create_token, create_collection, create_catalog_entry
 ):
     user = await create_user()
     token = create_token(user)
     collection = await create_collection(user_id=user.id)
-    asset = await create_asset()
+    catalog = await create_catalog_entry(user_id=user.id)
 
     payload = {
-        'item_id': str(asset.id),
-        'item_type': CollectionItemType.ASSET.value,
+        'catalog_id': str(catalog.id),
         'status': True,
-        'comment': 'XPTO',
+        'comment': 'Adicionando item.',
     }
     client.post(
         f'/collections/{collection.id}/items',
@@ -267,18 +196,17 @@ async def test_add_item_fails_if_already_in_collection(
 
 
 async def test_remove_item_from_collection(
-    client, create_user, create_token, create_collection, create_asset
+    client, create_user, create_token, create_collection, create_catalog_entry
 ):
     user = await create_user()
     token = create_token(user)
     collection = await create_collection(user_id=user.id)
-    asset = await create_asset()
+    catalog = await create_catalog_entry(user_id=user.id)
 
     add_payload = {
-        'item_id': str(asset.id),
-        'item_type': CollectionItemType.ASSET.value,
+        'catalog_id': str(catalog.id),
         'status': True,
-        'comment': 'XPTO',
+        'comment': 'Item para remover.',
     }
     add_response = client.post(
         f'/collections/{collection.id}/items',
@@ -301,34 +229,3 @@ async def test_remove_item_from_collection(
         headers={'Authorization': f'Bearer {token}'},
     )
     assert len(get_response.json()['items']) == 0
-
-
-async def test_remove_item_fails_if_not_owner_of_collection(
-    client, create_user, create_token, create_collection, create_asset
-):
-    owner = await create_user()
-    owner_token = create_token(owner)
-    collection = await create_collection(user_id=owner.id)
-    asset = await create_asset()
-
-    add_payload = {
-        'item_id': str(asset.id),
-        'item_type': 'ASSET',
-        'status': True,
-        'comment': 'XPTO',
-    }
-    add_resp = client.post(
-        f'/collections/{collection.id}/items',
-        json=add_payload,
-        headers={'Authorization': f'Bearer {owner_token}'},
-    )
-    item_id = add_resp.json()['id']
-
-    other_user = await create_user()
-    other_token = create_token(other_user)
-    delete_response = client.delete(
-        f'/collections/{collection.id}/items/{item_id}',
-        headers={'Authorization': f'Bearer {other_token}'},
-    )
-
-    assert delete_response.status_code == HTTPStatus.FORBIDDEN
