@@ -826,6 +826,7 @@ class Collection:
     )
     name: Mapped[str] = mapped_column(nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
+    type: Mapped[str | None] = mapped_column(nullable=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('users.id'), nullable=False
@@ -874,6 +875,10 @@ class CollectionItem:
     item_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
 
     item_type: Mapped[str] = mapped_column(nullable=False, index=True)
+
+    status: Mapped[bool] = mapped_column(nullable=False)
+
+    comment: Mapped[str] = mapped_column(nullable=True)
 
     collection: Mapped['Collection'] = relationship(
         back_populates='items', init=False

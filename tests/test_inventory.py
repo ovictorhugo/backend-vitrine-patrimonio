@@ -584,4 +584,5 @@ async def test_list_inventory_locations_success(
         headers={'Authorization': f'Bearer {token}'},
     )
 
+    print(response.json())
     assert response.status_code == HTTPStatus.OK

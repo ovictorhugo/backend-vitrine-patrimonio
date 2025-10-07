@@ -180,7 +180,6 @@ class LocationPublic(LocationSchema):
     id: UUID
     sector: SectorPublic
     legal_guardian: LegalGuardianPublic
-    location_inventories: List['LocationInventoryPublic']
 
 
 class LocationList(BaseModel):
@@ -443,25 +442,13 @@ class InventoryAssetPublic(BaseModel):
     id: UUID
     status: InventoryAssetStatus
     comment: str | None
+    asset: AssetPublic
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class InventoryAssetList(BaseModel):
     inventoried_asset: List[InventoryAssetPublic]
-
-
-class LocationInventoryPublic(BaseModel):
-    id: UUID
-    assets: List[AssetPublic]
-    inventory: InventoryPublic
-    filled: bool
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class LocationInventoryList(BaseModel):
-    location_inventory: List[LocationInventoryPublic]
 
 
 class FavoriteSchema(BaseModel):
@@ -484,11 +471,14 @@ class CollectionItemPublic(BaseModel):
 class CollectionItemSchema(BaseModel):
     item_id: UUID
     item_type: CollectionItemType
+    status: bool
+    comment: str | None = None
 
 
 class CollectionSchema(BaseModel):
     name: str
     description: str | None = None
+    type: str | None = None
 
 
 class CollectionUpdateSchema(BaseModel):
@@ -507,6 +497,5 @@ class CollectionPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# Schema para a lista de coleções (resposta)
 class CollectionList(BaseModel):
     collections: list[CollectionPublic]

@@ -502,12 +502,8 @@ def create_workflow_transfer(
 
 @pytest_asyncio.fixture
 async def create_collection(session, create_user):
-    """Factory para criar uma instância de Collection."""
-
     async def _create_collection(
-        user_id=None,
-        name='Minha Coleção Padrão',
-        description='',
+        user_id=None, name='Minha Coleção Padrão', description='', type='XPTO'
     ):
         if not user_id:
             user = await create_user()
@@ -517,6 +513,7 @@ async def create_collection(session, create_user):
             name=name,
             description=description,
             user_id=user_id,
+            type=type,
         )
         session.add(collection)
         await session.commit()

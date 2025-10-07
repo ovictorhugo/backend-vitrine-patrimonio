@@ -71,6 +71,7 @@ async def create_collection(
     db_collection = Collection(
         name=collection.name,
         description=collection.description,
+        type=collection.type,
         user_id=current_user.id,
     )
     session.add(db_collection)
@@ -216,6 +217,8 @@ async def add_item_to_collection(
         collection_id=collection_id,
         item_id=item.item_id,
         item_type=item.item_type,
+        status=item.status,
+        comment=item.comment,
     )
     session.add(db_item)
     await session.commit()

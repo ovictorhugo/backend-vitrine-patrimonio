@@ -6,7 +6,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
 from vitrine.models import (
@@ -26,7 +25,7 @@ from vitrine.schemas import (
     InventoryList,
     InventoryPublic,
     InventorySchema,
-    LocationInventoryList,
+    LocationList,
 )
 from vitrine.services import filter_service
 
@@ -394,46 +393,33 @@ async def remove_asset_from_inventory(
     await session.commit()
 
 
-@router.get('/{inventory_id}/locations', response_model=LocationInventoryList)
+# ... (outros imports)
+
+
+@router.get('/{inventory_id}/locations', response_model=LocationList)
 async def list_inventory_locations_by_inventory(
     inventory_id: UUID,
     session: Session,
     filters: Annotated[FilterLocationInventory, Depends()],
 ):
     query = (
-        select(LocationInventory)
-        .join(LocationInventory.location)
-        .where(
-            LocationInventory.inventory_id == inventory_id,
-            Location.deleted_at.is_(None),
-        )
-        .options(
-            selectinload(LocationInventory.location).selectinload(
-                Location.location_inventories
-            ),
-            selectinload(LocationInventory.assets),
-        )
+        select(Location)
+        .join(LocationInventory, Location.id == LocationInventory.location_id)
+        .where(LocationInventory.inventory_id == inventory_id)
+        .where(Location.deleted_at.is_(None))
     )
 
     if filters.q:
-        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        prefix_query = ' & '.join(f'{word}:*' for word in filters.q.split())
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Location.tsv.op('@@')(ts_query))
 
-    if filters.filled:
+    if hasattr(filters, 'filled') and filters.filled is not None:
         query = query.where(LocationInventory.filled == filters.filled)
-
-    if filters.sector_id:
-        query = query.where(Location.sector_id == filters.sector_id)
-
-    if filters.legal_guardian_id:
-        query = query.where(
-            Location.legal_guardian_id == filters.legal_guardian_id
-        )
 
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)
-    location_inventories = result.all()
+    locations = result.all()
 
-    return {'location_inventory': location_inventories}
+    return {'locations': locations}
