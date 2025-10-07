@@ -38,9 +38,10 @@ class WorkflowTransferStatus(str, PythonEnum):
 
 
 class InventoryAssetStatus(str, PythonEnum):
-    FOUND = 'FOUND'
-    NOT_FOUND = 'NOT_FOUND'
-    PENDING = 'PENDING'
+    OC = 'OC'
+    QB = 'QB'
+    NE = 'NE'
+    SP = 'SP'
 
 
 class AssetSituation(str, PythonEnum):

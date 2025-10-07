@@ -250,7 +250,7 @@ async def test_add_asset_to_inventory_success(
 
     payload = {
         'asset_id': str(asset.id),
-        'status': InventoryAssetStatus.FOUND,
+        'status': InventoryAssetStatus.OC,
         'comment': 'Test comment',
         'location_id': str(location.id),
     }
@@ -263,7 +263,7 @@ async def test_add_asset_to_inventory_success(
 
     assert response.status_code == HTTPStatus.CREATED
     data = response.json()
-    assert data['status'] == InventoryAssetStatus.FOUND.value
+    assert data['status'] == InventoryAssetStatus.OC.value
     assert data['comment'] == 'Test comment'
 
 
@@ -276,7 +276,7 @@ async def test_add_asset_inventory_not_found(
 
     payload = {
         'asset_id': str(uuid4()),
-        'status': InventoryAssetStatus.FOUND,
+        'status': InventoryAssetStatus.OC,
         'location_id': str(uuid4()),
     }
 
@@ -300,7 +300,7 @@ async def test_add_asset_inventory_closed(
 
     payload = {
         'asset_id': str(uuid4()),
-        'status': InventoryAssetStatus.FOUND,
+        'status': InventoryAssetStatus.OC,
         'location_id': str(uuid4()),
     }
 
@@ -331,7 +331,7 @@ async def test_add_asset_user_not_location(
 
     payload = {
         'asset_id': str(asset.id),
-        'status': InventoryAssetStatus.FOUND,
+        'status': InventoryAssetStatus.OC,
         'location_id': str(uuid4()),
     }
 
@@ -358,7 +358,7 @@ async def test_add_asset_not_found(
 
     payload = {
         'asset_id': str(uuid4()),
-        'status': InventoryAssetStatus.FOUND,
+        'status': InventoryAssetStatus.OC,
         'location_id': str(uuid4()),
     }
 
@@ -394,7 +394,7 @@ async def test_add_assets_batch_success(
     payload = [
         {
             'asset_id': str(asset1.id),
-            'status': InventoryAssetStatus.FOUND,
+            'status': InventoryAssetStatus.OC,
             'comment': 'Item 1 ok',
             'location_id': str(location.id),
         },
@@ -436,12 +436,12 @@ async def test_add_assets_batch_one_asset_not_found(
     payload = [
         {
             'asset_id': str(asset1.id),
-            'status': InventoryAssetStatus.FOUND,
+            'status': InventoryAssetStatus.OC,
             'location_id': str(location.id),
         },
         {
             'asset_id': str(non_existent_asset_id),
-            'status': InventoryAssetStatus.FOUND,
+            'status': InventoryAssetStatus.OC,
             'location_id': str(location.id),
         },
     ]
@@ -476,12 +476,12 @@ async def test_add_assets_batch_conflict_on_duplicate(
     payload = [
         {
             'asset_id': str(asset1.id),
-            'status': InventoryAssetStatus.FOUND,
+            'status': InventoryAssetStatus.OC,
             'location_id': str(location.id),
         },
         {
             'asset_id': str(asset1.id),
-            'status': InventoryAssetStatus.FOUND,
+            'status': InventoryAssetStatus.OC,
             'location_id': str(location.id),
         },
     ]
@@ -538,7 +538,7 @@ async def test_add_assets_batch_user_not_location(
     payload = [
         {
             'asset_id': str(asset.id),
-            'status': InventoryAssetStatus.FOUND,
+            'status': InventoryAssetStatus.OC,
             'location_id': str(location.id),
         }
     ]

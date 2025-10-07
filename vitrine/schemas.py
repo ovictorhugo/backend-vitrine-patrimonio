@@ -433,7 +433,7 @@ class FilterInventory(FilterPage):
 
 class InventoryAssetSchema(BaseModel):
     asset_id: UUID
-    status: InventoryAssetStatus = InventoryAssetStatus.FOUND.value
+    status: InventoryAssetStatus = InventoryAssetStatus.OC.value
     location_id: UUID
     comment: str | None = None
 
@@ -492,7 +492,7 @@ class CollectionPublic(BaseModel):
     description: str | None
     user_id: UUID
     created_at: datetime
-    items: list[CollectionItemPublic] = []
+    items: list[CollectionItemPublic]
 
     model_config = ConfigDict(from_attributes=True)
 
