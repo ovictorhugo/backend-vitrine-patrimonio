@@ -400,7 +400,7 @@ async def test_add_assets_batch_success(
         },
         {
             'asset_id': str(asset2.id),
-            'status': InventoryAssetStatus.NOT_FOUND,
+            'status': InventoryAssetStatus.NE,
             'comment': 'Item 2 not found',
             'location_id': str(location.id),
         },
@@ -584,5 +584,4 @@ async def test_list_inventory_locations_success(
         headers={'Authorization': f'Bearer {token}'},
     )
 
-    print(response.json())
     assert response.status_code == HTTPStatus.OK

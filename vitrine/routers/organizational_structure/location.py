@@ -40,7 +40,10 @@ async def create_location(
     if not db_sector or db_sector.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
-            detail=f'O setor com ID "{location.sector_id}" não foi encontrado ou está inativo.',
+            detail=(
+                f'O setor com ID "{location.sector_id}" não foi encontrado'
+                ' ou está inativo.'
+            ),
         )
 
     db_legal_guardian = await session.get(
@@ -49,7 +52,10 @@ async def create_location(
     if not db_legal_guardian or db_legal_guardian.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
-            detail=f'O responsável legal com ID "{location.legal_guardian_id}" não foi encontrado ou está inativo.',
+            detail=(
+                f'O responsável legal com ID "{location.legal_guardian_id}" '
+                'não foi encontrado ou está inativo.'
+            ),
         )
 
     query = select(Location).where(
@@ -61,7 +67,10 @@ async def create_location(
     if db_location:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='Uma localização com este nome já existe para este setor e responsável.',
+            detail=(
+                'Uma localização com este nome já existe para este setor e '
+                'responsável.'
+            ),
         )
 
     db_location = Location(
@@ -106,10 +115,8 @@ async def read_locations(
         )
 
     query = query.offset(filters.offset).limit(filters.limit)
-
     result = await session.scalars(query)
     locations = result.all()
-
     return {'locations': locations}
 
 

@@ -5,7 +5,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 
 from vitrine.dependencies import CurrentUser, Session
 from vitrine.models import User
@@ -40,7 +39,7 @@ async def create_user(
         if db_user.username == user.username:
             raise HTTPException(
                 status_code=HTTPStatus.CONFLICT,
-                detail='Username already exists',
+                detail='Username or Email already exists',
             )
         elif db_user.email == user.email:
             raise HTTPException(
@@ -86,7 +85,7 @@ async def read_me(current_user: CurrentUser):
 @router.put('/{user_id}', response_model=UserPublic)
 async def update_user(
     user_id: UUID,
-    user: UserUpdateSchema,
+    user_update: UserUpdateSchema,
     session: Session,
     current_user: CurrentUser,
 ):
@@ -95,22 +94,41 @@ async def update_user(
             status_code=HTTPStatus.FORBIDDEN, detail='Not enough permissions'
         )
 
-    try:
-        update_data = user.dict(exclude_unset=True)
+    update_data = user_update.model_dump(exclude_unset=True)
 
-        for field, value in update_data.items():
-            setattr(current_user, field, value)
-
-        await session.commit()
-        await session.refresh(current_user)
-
+    if not update_data:
         return current_user
 
-    except IntegrityError:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail='Username or Email already exists',
+    if 'username' in update_data:
+        query_username = select(User).where(
+            User.username == update_data['username'],
+            User.id != user_id,
         )
+        user_exists = await session.scalar(query_username)
+        if user_exists:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail='Username already exists',
+            )
+
+    if 'email' in update_data:
+        query_email = select(User).where(
+            User.email == update_data['email'],
+            User.id != user_id,
+        )
+        email_exists = await session.scalar(query_email)
+        if email_exists:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT, detail='Email already exists'
+            )
+
+    for field, value in update_data.items():
+        setattr(current_user, field, value)
+
+    await session.commit()
+    await session.refresh(current_user)
+
+    return current_user
 
 
 @router.delete('/{user_id}', response_model=Message)

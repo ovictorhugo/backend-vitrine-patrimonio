@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from vitrine.dependencies import CurrentUser, Session
 from vitrine.models import (
@@ -56,9 +56,6 @@ async def create_favorite(
     return {'message': 'Asset favorited successfully'}
 
 
-from sqlalchemy.orm import joinedload
-
-
 @router.get('/', response_model=FavoriteList)
 async def read_user_favorites(
     session: Session,
@@ -99,9 +96,9 @@ async def read_user_favorites(
     )
 
     result = await session.scalars(query)
-    user_favorites = result.all()
+    entries = result.unique().all()
 
-    return {'favorites': user_favorites}
+    return {'favorites': entries}
 
 
 @router.delete('/{catalog_id}', response_model=Message)

@@ -70,9 +70,7 @@ async def test_update_integrity_error(client, create_user, create_token):
         },
     )
     assert response_update.status_code == HTTPStatus.CONFLICT
-    assert response_update.json() == {
-        'detail': 'Username or Email already exists'
-    }
+    assert response_update.json() == {'detail': 'Username already exists'}
 
 
 @pytest.mark.asyncio

@@ -68,8 +68,8 @@ async def read_my_collections(session: Session, current_user: CurrentUser):
         )
         .order_by(Collection.name)
     )
-
-    collections = (await session.scalars(query)).all()
+    result = await session.scalars(query)
+    collections = result.all()
     return {'collections': collections}
 
 

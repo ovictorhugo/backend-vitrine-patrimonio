@@ -177,7 +177,7 @@ async def read_catalog_entries(
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)
-    entries = result.all()
+    entries = result.unique().all()
 
     return {'catalog_entries': entries}
 

@@ -87,6 +87,7 @@ class User:
         back_populates='user',
         init=False,
         cascade='all, delete-orphan',
+        lazy='joined',
         uselist=False,
     )
     transfer_requests: Mapped[list['WorkflowTransfer']] = relationship(

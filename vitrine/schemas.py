@@ -44,7 +44,6 @@ class UserUpdateSchema(BaseModel):
     matricula: str | None = None
     verify: bool | None = None
     institution_id: UUID | None = None
-    system_identity: Optional['LegalGuardianPublic']
 
 
 class UserPublic(BaseModel):
@@ -61,6 +60,7 @@ class UserPublic(BaseModel):
     matricula: str | None = None
     verify: bool | None = None
     institution_id: UUID | None = None
+    system_identity: Optional['LegalGuardianPublic']
 
     model_config = ConfigDict(from_attributes=True)
 
