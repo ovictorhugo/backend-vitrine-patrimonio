@@ -46,6 +46,13 @@ class UserUpdateSchema(BaseModel):
     institution_id: UUID | None = None
 
 
+class SystemIdentityPublic(BaseModel):
+    id: UUID
+    legal_guardian: 'LegalGuardianPublic'
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class UserPublic(BaseModel):
     id: UUID
     username: str
@@ -60,7 +67,7 @@ class UserPublic(BaseModel):
     matricula: str | None = None
     verify: bool | None = None
     institution_id: UUID | None = None
-    system_identity: Optional['LegalGuardianPublic']
+    system_identity: Optional[SystemIdentityPublic]
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -497,3 +504,8 @@ class CollectionPublic(BaseModel):
 
 class CollectionList(BaseModel):
     collections: list[CollectionPublic]
+
+
+class FilterCollection(FilterAsset):
+    q: str | None = Field(default=None)
+    type: Optional[str] = Field(default=None)

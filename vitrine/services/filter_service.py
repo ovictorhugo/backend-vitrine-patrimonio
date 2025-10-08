@@ -26,26 +26,14 @@ def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
         query = query.where(Catalog.user_id == filters.user_id)
 
     if filters.workflow_status:
-        latest_workflow_sq = select(
-            CatalogWorkFlow.catalog_id,
-            CatalogWorkFlow.workflow_status,
-            func.row_number()
-            .over(
-                partition_by=CatalogWorkFlow.catalog_id,
-                order_by=CatalogWorkFlow.created_at.desc(),
-            )
-            .label('rn'),
-        ).subquery('latest_workflow_sq')
-
-        query = query.join(
-            latest_workflow_sq,
-            Catalog.id == latest_workflow_sq.c.catalog_id,
+        latest_workflow_status = (
+            select(CatalogWorkFlow.workflow_status)
+            .where(CatalogWorkFlow.catalog_id == Catalog.id)
+            .order_by(CatalogWorkFlow.created_at.desc())
+            .limit(1)
+            .scalar_subquery()
         )
-
-        query = query.where(
-            latest_workflow_sq.c.rn == 1,
-            latest_workflow_sq.c.workflow_status == filters.workflow_status,
-        )
+        query = query.where(latest_workflow_status == filters.workflow_status)
 
     return query
 

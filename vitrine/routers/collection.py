@@ -1,12 +1,17 @@
 from http import HTTPStatus
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import Catalog, Collection, CollectionItem
+from vitrine.models import (
+    Catalog,
+    Collection,
+    CollectionItem,
+)
 from vitrine.schemas import (
     CollectionItemPublic,
     CollectionItemSchema,
@@ -14,6 +19,7 @@ from vitrine.schemas import (
     CollectionPublic,
     CollectionSchema,
     CollectionUpdateSchema,
+    FilterCollection,
     Message,
 )
 
@@ -36,7 +42,7 @@ async def create_collection(
     if await session.scalar(query):
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='Você já possui uma coleção com este nome.',
+            detail='You already have a collection with this name.',
         )
 
     db_collection = Collection(
@@ -54,20 +60,25 @@ async def create_collection(
 
 
 @router.get('/my', response_model=CollectionList)
-async def read_my_collections(session: Session, current_user: CurrentUser):
+async def read_my_collections(
+    session: Session,
+    current_user: CurrentUser,
+    filters: Annotated[FilterCollection, Depends()],
+):
     query = (
         select(Collection)
         .where(
-            Collection.user_id == current_user.id,
             Collection.deleted_at.is_(None),
+            Collection.user_id == current_user.id,
         )
         .options(
             selectinload(Collection.items).selectinload(CollectionItem.catalog)
         )
-        .order_by(Collection.name)
     )
+    query = query.offset(filters.offset).limit(filters.limit)
     result = await session.scalars(query)
     collections = result.all()
+
     return {'collections': collections}
 
 
@@ -85,17 +96,21 @@ async def read_collection(
             selectinload(Collection.items).selectinload(CollectionItem.catalog)
         )
     )
-    db_collection = (await session.scalars(query)).unique().one_or_none()
+
+    result = await session.execute(query)
+    db_collection = result.scalar_one_or_none()
 
     if not db_collection:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
+
     if db_collection.user_id != current_user.id:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
-            detail='Você não tem permissão para acessar esta coleção.',
+            detail='You do not have permission to access this collection.',
         )
+
     return db_collection
 
 
@@ -109,12 +124,12 @@ async def update_collection(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
     if db_collection.user_id != current_user.id:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
-            detail='Você não tem permissão para editar esta coleção.',
+            detail='You do not have permission to edit this collection.',
         )
     update_data = collection_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -131,16 +146,16 @@ async def delete_collection(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
     if db_collection.user_id != current_user.id:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
-            detail='Você não tem permissão para deletar esta coleção.',
+            detail='You do not have permission to delete this collection.',
         )
     db_collection.deleted_at = func.now()
     await session.commit()
-    return {'message': 'Coleção desativada com sucesso.'}
+    return {'message': 'Collection deactivated successfully.'}
 
 
 @router.post(
@@ -157,18 +172,18 @@ async def add_item_to_collection(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
     if db_collection.user_id != current_user.id:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
-            detail='Você não tem permissão para adicionar itens a esta coleção.',
+            detail='You do not have permission to add items to this collection.',
         )
 
     if not await session.get(Catalog, item.catalog_id):
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
-            detail=f'O item de catálogo com ID "{item.catalog_id}" não foi encontrado.',
+            detail=f'Catalog item with ID "{item.catalog_id}" not found.',
         )
 
     query = select(CollectionItem).where(
@@ -178,7 +193,7 @@ async def add_item_to_collection(
     if await session.scalar(query):
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='Este item já está na coleção.',
+            detail='This item is already in the collection.',
         )
 
     db_item = CollectionItem(
@@ -193,7 +208,9 @@ async def add_item_to_collection(
     return db_item
 
 
-@router.delete('/{collection_id}/items/{item_id}', response_model=Message)
+@router.delete(
+    '/{collection_id}/items/{item_id}', status_code=HTTPStatus.NOT_FOUND
+)
 async def remove_item_from_collection(
     collection_id: UUID,
     item_id: UUID,
@@ -203,16 +220,16 @@ async def remove_item_from_collection(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.user_id != current_user.id:
         raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN, detail='Ação não permitida.'
+            status_code=HTTPStatus.FORBIDDEN, detail='Action not allowed.'
         )
 
     db_item = await session.get(CollectionItem, item_id)
     if not db_item or db_item.collection_id != collection_id:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
-            detail='Item não encontrado nesta coleção.',
+            detail='Item not found in this collection.',
         )
 
     await session.delete(db_item)
     await session.commit()
-    return {'message': 'Item removido da coleção com sucesso.'}
+    return {'message': 'Item removed from the collection successfully.'}

@@ -18,6 +18,7 @@ from vitrine.models import (
     Location,
     LocationInventory,
     Material,
+    SystemIdentity,
     User,
     WorkFlowStatus,
     WorkflowTransfer,
@@ -166,7 +167,11 @@ async def read_catalog_entries(
     query = query.options(
         selectinload(Catalog.images),
         selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user),
+            selectinload(CatalogWorkFlow.user).options(
+                selectinload(User.system_identity).options(
+                    selectinload(SystemIdentity.legal_guardian)
+                )
+            ),
             selectinload(CatalogWorkFlow.transfer_requests),
         ),
         selectinload(Catalog.location)
