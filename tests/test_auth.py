@@ -126,7 +126,7 @@ async def test_shibboleth_login_new_user(client, session: AsyncSession):
         follow_redirects=False,
     )
 
-    assert response.status_code == HTTPStatus.FOUND  # 302
+    assert response.status_code == HTTPStatus.FOUND
 
     user_query = await session.execute(
         select(User).where(User.email == MOCK_SHIB_HEADERS['shib-person-mail'])
@@ -264,6 +264,6 @@ async def test_shibboleth_login_allow_faculty_and_student(
         '/auth/shibboleth/login', headers=headers, follow_redirects=False
     )
 
-    assert response.status_code == HTTPStatus.FOUND  # 302
+    assert response.status_code == HTTPStatus.FOUND
     redirect_location = response.headers.get('location')
     assert redirect_location.startswith(Settings().CLIENT)

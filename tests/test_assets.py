@@ -321,7 +321,6 @@ async def test_filter_assets_by_unit_id(
     create_location,
     create_asset,
 ):
-    # Arrange
     user = await create_user()
     token = create_token(user)
 
@@ -341,13 +340,11 @@ async def test_filter_assets_by_unit_id(
         asset_description='Projetor Multimídia', location_id=location_B.id
     )
 
-    # Act
     response = client.get(
         f'/assets?unit_id={unit_A.id}',
         headers={'Authorization': f'Bearer {token}'},
     )
 
-    # Assert
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert len(data['assets']) == 1
@@ -368,7 +365,6 @@ async def test_filter_assets_by_sector_id(
     create_location,
     create_asset,
 ):
-    # Arrange
     user = await create_user()
     token = create_token(user)
 
@@ -384,13 +380,11 @@ async def test_filter_assets_by_sector_id(
         asset_description='Arquivo de Aço', location_id=location_B.id
     )
 
-    # Act
     response = client.get(
         f'/assets?sector_id={sector_A.id}',
         headers={'Authorization': f'Bearer {token}'},
     )
 
-    # Assert
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert len(data['assets']) == 1

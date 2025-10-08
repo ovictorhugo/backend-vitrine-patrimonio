@@ -150,7 +150,6 @@ class Unit:
         index=False,
     )
 
-    # 2. Adicionada a UniqueConstraint para (unit_name, user_id)
     __table_args__ = (
         UniqueConstraint('unit_name', 'user_id', name='uq_unit_name_user_id'),
         Index('ix_units_tsv', tsv, postgresql_using='gin'),
@@ -199,7 +198,6 @@ class Agency:
         index=False,
     )
 
-    # 2. Adicionada a UniqueConstraint para (agency_name, unit_id)
     __table_args__ = (
         UniqueConstraint(
             'agency_name', 'unit_id', name='uq_agency_name_unit_id'

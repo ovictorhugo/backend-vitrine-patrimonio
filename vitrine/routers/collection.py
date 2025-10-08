@@ -6,8 +6,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
-
-# O mapa de modelos não é mais necessário aqui
 from vitrine.models import Catalog, Collection, CollectionItem
 from vitrine.schemas import (
     CollectionItemPublic,

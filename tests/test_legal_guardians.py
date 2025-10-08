@@ -1,5 +1,3 @@
-# Em tests/test_legal_guardians.py
-
 import uuid
 from http import HTTPStatus
 

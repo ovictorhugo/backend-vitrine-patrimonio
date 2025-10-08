@@ -393,9 +393,6 @@ async def remove_asset_from_inventory(
     await session.commit()
 
 
-# ... (outros imports)
-
-
 @router.get('/{inventory_id}/locations', response_model=LocationList)
 async def list_inventory_locations_by_inventory(
     inventory_id: UUID,
