@@ -26,8 +26,6 @@ async def test_create_collection(client, create_user, create_token):
     assert data['description'] == payload['description']
     assert data['user_id'] == str(user.id)
     assert 'id' in data
-    assert 'items' in data
-    assert data['items'] == []
 
 
 async def test_create_collection_fails_if_name_exists_for_same_user(

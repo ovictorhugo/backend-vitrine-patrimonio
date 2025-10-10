@@ -9,11 +9,13 @@ from vitrine.models import Catalog, Collection, CollectionItem
 from vitrine.schemas import (
     CollectionItemPublic,
     CollectionItemSchema,
+    CollectionItemsList,
     Message,
 )
 
 router = APIRouter(
-    prefix='/collections/{collection_id}/items', tags=['collection-items']
+    prefix='/collections/{collection_id}/items',
+    tags=['coleções - manipulação dos items'],
 )
 
 
@@ -67,9 +69,40 @@ async def add_item_to_collection(
     return db_item
 
 
+@router.get(
+    '/',
+    status_code=HTTPStatus.OK,
+    response_model=CollectionItemsList,
+)
+async def list_collection_items(
+    collection_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+):
+    db_collection = await session.get(Collection, collection_id)
+    if not db_collection or db_collection.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+        )
+
+    if db_collection.user_id != current_user.id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You do not have permission to view this collection.',
+        )
+
+    query = select(CollectionItem).where(
+        CollectionItem.collection_id == collection_id
+    )
+    result = await session.execute(query)
+    items = result.scalars().all()
+
+    return {'collection_items': items}
+
+
 @router.delete(
     '/{item_id}',
-    status_code=HTTPStatus.OK,  # Ajustado: 200 OK é mais apropriado para um delete bem-sucedido que retorna uma mensagem
+    status_code=HTTPStatus.OK,
     response_model=Message,
 )
 async def remove_item_from_collection(

@@ -474,6 +474,10 @@ class CollectionItemPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CollectionItemsList(BaseModel):
+    collection_items: List[CollectionItemPublic]
+
+
 class CollectionItemSchema(BaseModel):
     catalog_id: UUID
     status: bool
@@ -497,7 +501,6 @@ class CollectionPublic(BaseModel):
     description: str | None
     user_id: UUID
     created_at: datetime
-    items: list[CollectionItemPublic]
 
     model_config = ConfigDict(from_attributes=True)
 

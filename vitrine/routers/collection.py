@@ -4,10 +4,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import Collection, CollectionItem
+from vitrine.models import Collection
 from vitrine.schemas import (
     CollectionList,
     CollectionPublic,
@@ -17,7 +16,7 @@ from vitrine.schemas import (
     Message,
 )
 
-router = APIRouter(prefix='/collections', tags=['collections'])
+router = APIRouter(prefix='/collections', tags=['coleções - geral'])
 
 
 @router.post(
@@ -59,15 +58,9 @@ async def read_my_collections(
     current_user: CurrentUser,
     filters: Annotated[FilterCollection, Depends()],
 ):
-    query = (
-        select(Collection)
-        .where(
-            Collection.deleted_at.is_(None),
-            Collection.user_id == current_user.id,
-        )
-        .options(
-            selectinload(Collection.items).selectinload(CollectionItem.catalog)
-        )
+    query = select(Collection).where(
+        Collection.deleted_at.is_(None),
+        Collection.user_id == current_user.id,
     )
     query = query.offset(filters.offset).limit(filters.limit)
     result = await session.scalars(query)
@@ -80,15 +73,9 @@ async def read_my_collections(
 async def read_collection(
     collection_id: UUID, session: Session, current_user: CurrentUser
 ):
-    query = (
-        select(Collection)
-        .where(
-            Collection.id == collection_id,
-            Collection.deleted_at.is_(None),
-        )
-        .options(
-            selectinload(Collection.items).selectinload(CollectionItem.catalog)
-        )
+    query = select(Collection).where(
+        Collection.id == collection_id,
+        Collection.deleted_at.is_(None),
     )
 
     db_collection = await session.scalar(query)
@@ -114,13 +101,7 @@ async def update_collection(
     session: Session,
     current_user: CurrentUser,
 ):
-    # Usamos options para carregar os items e retorná-los na resposta
-    options = [
-        selectinload(Collection.items).selectinload(CollectionItem.catalog)
-    ]
-    db_collection = await session.get(
-        Collection, collection_id, options=options
-    )
+    db_collection = await session.get(Collection, collection_id)
 
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(

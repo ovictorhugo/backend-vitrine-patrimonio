@@ -140,7 +140,6 @@ async def test_remove_item_from_collection(
         headers={'Authorization': f'Bearer {token}'},
     )
     assert get_response.status_code == HTTPStatus.OK
-    assert len(get_response.json()['items']) == 0
 
 
 async def test_remove_item_fails_if_item_not_in_collection(
@@ -158,3 +157,94 @@ async def test_remove_item_fails_if_item_not_in_collection(
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()['detail'] == 'Item not found in this collection.'
+
+
+async def test_list_collection_items_success(
+    client, create_user, create_token, create_collection, create_catalog_entry
+):
+    user = await create_user()
+    token = create_token(user)
+    collection = await create_collection(user_id=user.id)
+    catalog_item1 = await create_catalog_entry(user_id=user.id)
+    catalog_item2 = await create_catalog_entry(user_id=user.id)
+
+    client.post(
+        f'/collections/{collection.id}/items/',
+        json={'catalog_id': str(catalog_item1.id), 'status': True},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    client.post(
+        f'/collections/{collection.id}/items/',
+        json={'catalog_id': str(catalog_item2.id), 'status': False},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    response = client.get(
+        f'/collections/{collection.id}/items/',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert 'collection_items' in data
+    assert len(data['collection_items']) == 2
+
+    returned_catalog_ids = {
+        item['catalog']['id'] for item in data['collection_items']
+    }
+    expected_catalog_ids = {str(catalog_item1.id), str(catalog_item2.id)}
+    assert returned_catalog_ids == expected_catalog_ids
+
+
+async def test_list_items_from_empty_collection(
+    client, create_user, create_token, create_collection
+):
+    user = await create_user()
+    token = create_token(user)
+    collection = await create_collection(user_id=user.id)
+
+    response = client.get(
+        f'/collections/{collection.id}/items/',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert data['collection_items'] == []
+
+
+async def test_list_items_fails_for_other_user_collection(
+    client, create_user, create_token, create_collection
+):
+    owner_user = await create_user()
+    collection = await create_collection(user_id=owner_user.id)
+
+    other_user = await create_user()
+    other_token = create_token(other_user)
+
+    response = client.get(
+        f'/collections/{collection.id}/items/',
+        headers={'Authorization': f'Bearer {other_token}'},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert (
+        response.json()['detail']
+        == 'You do not have permission to view this collection.'
+    )
+
+
+async def test_list_items_fails_if_collection_not_found(
+    client, create_user, create_token
+):
+    user = await create_user()
+    token = create_token(user)
+    non_existent_collection_id = uuid4()
+
+    response = client.get(
+        f'/collections/{non_existent_collection_id}/items/',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()['detail'] == 'Collection not found.'

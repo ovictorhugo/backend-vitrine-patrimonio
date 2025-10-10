@@ -87,7 +87,7 @@ class User:
         back_populates='user',
         init=False,
         cascade='all, delete-orphan',
-        lazy='joined',
+        lazy='selectin',
         uselist=False,
     )
     transfer_requests: Mapped[list['WorkflowTransfer']] = relationship(
@@ -128,7 +128,7 @@ class Unit:
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='joined')
+    user: Mapped['User'] = relationship(init=False, lazy='selectin')
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -168,7 +168,7 @@ class Agency:
 
     unit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('units.id'))
     unit: Mapped['Unit'] = relationship(
-        init=False, lazy='joined', back_populates='agencies'
+        init=False, lazy='selectin', back_populates='agencies'
     )
 
     sectors: Mapped[list['Sector']] = relationship(
@@ -176,7 +176,7 @@ class Agency:
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='joined')
+    user: Mapped['User'] = relationship(init=False, lazy='selectin')
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -217,11 +217,11 @@ class Sector:
 
     agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('agencys.id'))
     agency: Mapped['Agency'] = relationship(
-        init=False, lazy='joined', back_populates='sectors'
+        init=False, lazy='selectin', back_populates='sectors'
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='joined')
+    user: Mapped['User'] = relationship(init=False, lazy='selectin')
 
     locations: Mapped[list['Location']] = relationship(
         init=False, back_populates='sector'
@@ -267,16 +267,16 @@ class Location:
         ForeignKey('legal_guardians.id'), nullable=False
     )
     legal_guardian: Mapped['LegalGuardian'] = relationship(
-        init=False, lazy='joined', back_populates='locations'
+        init=False, lazy='selectin', back_populates='locations'
     )
 
     sector_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('sectors.id'))
     sector: Mapped['Sector'] = relationship(
-        init=False, lazy='joined', back_populates='locations'
+        init=False, lazy='selectin', back_populates='locations'
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='joined')
+    user: Mapped['User'] = relationship(init=False, lazy='selectin')
 
     inventory_assets: Mapped[list['InventoryAsset']] = relationship(
         back_populates='location', init=False
@@ -335,7 +335,7 @@ class LegalGuardian:
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='joined')
+    user: Mapped[User] = relationship(init=False, lazy='selectin')
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -383,7 +383,7 @@ class Material:
     material_name: Mapped[str] = mapped_column(nullable=False, unique=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='joined')
+    user: Mapped[User] = relationship(init=False, lazy='selectin')
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -425,10 +425,10 @@ class Asset:
     location_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('locations.id'), nullable=True
     )
-    location: Mapped[Location] = relationship(init=False, lazy='joined')
-    material: Mapped[Material] = relationship(init=False, lazy='joined')
+    location: Mapped[Location] = relationship(init=False, lazy='selectin')
+    material: Mapped[Material] = relationship(init=False, lazy='selectin')
     legal_guardian: Mapped[LegalGuardian] = relationship(
-        init=False, lazy='joined'
+        init=False, lazy='selectin'
     )
 
     asset_code: Mapped[str] = mapped_column(nullable=False, index=True)
@@ -450,7 +450,7 @@ class Asset:
     subelement_code: Mapped[str | None] = mapped_column(nullable=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='joined')
+    user: Mapped[User] = relationship(init=False, lazy='selectin')
 
     is_official: Mapped[bool] = mapped_column(default=False)
 
@@ -501,13 +501,13 @@ class Catalog:
     asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'))
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
 
-    asset: Mapped[Asset] = relationship(init=False, lazy='joined')
-    user: Mapped[User] = relationship(init=False, lazy='joined')
+    asset: Mapped[Asset] = relationship(init=False, lazy='selectin')
+    user: Mapped[User] = relationship(init=False, lazy='selectin')
 
     location_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('locations.id'), nullable=True
     )
-    location: Mapped[Location] = relationship(init=False, lazy='joined')
+    location: Mapped[Location] = relationship(init=False, lazy='selectin')
     images: Mapped[list['CatalogImage']] = relationship(
         back_populates='catalog',
         init=False,
@@ -531,7 +531,7 @@ class Catalog:
         back_populates='catalog',
         init=False,
         cascade='all, delete-orphan',
-        lazy='joined',
+        lazy='selectin',
     )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -573,7 +573,7 @@ class CatalogWorkFlow:
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='joined')
+    user: Mapped[User] = relationship(init=False, lazy='selectin')
     catalog: Mapped['Catalog'] = relationship(
         back_populates='workflow_history', init=False
     )
@@ -623,11 +623,11 @@ class WorkflowTransfer:
     )
 
     user: Mapped['User'] = relationship(
-        back_populates='transfer_requests', init=False, lazy='joined'
+        back_populates='transfer_requests', init=False, lazy='selectin'
     )
 
     location: Mapped['Location'] = relationship(
-        back_populates='incoming_transfers', init=False, lazy='joined'
+        back_populates='incoming_transfers', init=False, lazy='selectin'
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -659,7 +659,7 @@ class Inventory:
     )
 
     created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    created_by: Mapped[User] = relationship(init=False, lazy='joined')
+    created_by: Mapped[User] = relationship(init=False, lazy='selectin')
     avaliable: Mapped[bool] = mapped_column(default=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
@@ -692,7 +692,7 @@ class LocationInventory:
     location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('locations.id'))
 
     location: Mapped['Location'] = relationship(
-        init=False, back_populates='location_inventories', lazy='joined'
+        init=False, back_populates='location_inventories', lazy='selectin'
     )
 
     assets: Mapped[list['InventoryAsset']] = relationship(
@@ -729,14 +729,14 @@ class InventoryAsset:
     )
 
     asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'))
-    asset: Mapped[Asset] = relationship(init=False, lazy='joined')
+    asset: Mapped[Asset] = relationship(init=False, lazy='selectin')
 
     status: Mapped[str | None] = mapped_column(nullable=False, index=True)
     comment: Mapped[str | None] = mapped_column(nullable=True)
 
     location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('locations.id'))
     location: Mapped['Location'] = relationship(
-        init=False, lazy='joined', back_populates='inventory_assets'
+        init=False, lazy='selectin', back_populates='inventory_assets'
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -769,7 +769,7 @@ class FavoriteCatalog:
 
     user: Mapped['User'] = relationship(back_populates='favorites', init=False)
     catalog: Mapped['Catalog'] = relationship(
-        back_populates='favorited_by', init=False, lazy='joined'
+        back_populates='favorited_by', init=False, lazy='selectin'
     )
 
 
@@ -876,7 +876,7 @@ class CollectionItem:
     )
 
     catalog: Mapped['Catalog'] = relationship(
-        back_populates='collection_items', init=False, lazy='joined'
+        back_populates='collection_items', init=False, lazy='selectin'
     )
 
     created_at: Mapped[datetime] = mapped_column(
