@@ -118,3 +118,23 @@ async def test_delete_user_wrong_user(client, create_user, create_token):
     )
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json() == {'detail': 'Not enough permissions'}
+
+
+@pytest.mark.asyncio
+async def test_read_users_multiple(client, create_user):
+    await create_user(username='carlos', email='carlos@example.com')
+    await create_user(username='daniela', email='daniela@example.com')
+
+    response = client.get('/users/')
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+
+    assert 'users' in data
+    users_list = data['users']
+    assert isinstance(users_list, list)
+
+    assert len(users_list) == 2
+
+    for user_data in users_list:
+        UserPublic.model_validate(user_data)
