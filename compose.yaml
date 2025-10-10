@@ -1,7 +1,6 @@
 services:
   vitrine_db:
     image: pgvector/pgvector:pg17
-    container_name: vitrine_db
     volumes:
       - vitrine_db:/var/lib/postgresql/data
     environment:
@@ -12,12 +11,8 @@ services:
       - "5432:5432"
 
   vitrine_api:
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: gleidsoncosta/vitrine-api:latest
     entrypoint: ./entrypoint.sh
-    container_name: vitrine_api
     ports:
       - "5055:8000"
     depends_on:
