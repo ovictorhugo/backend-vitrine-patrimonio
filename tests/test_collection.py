@@ -24,7 +24,6 @@ async def test_create_collection(client, create_user, create_token):
     data = response.json()
     assert data['name'] == payload['name']
     assert data['description'] == payload['description']
-    assert data['user_id'] == str(user.id)
     assert 'id' in data
 
 

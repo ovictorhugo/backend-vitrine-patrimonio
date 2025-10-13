@@ -499,7 +499,6 @@ class CollectionPublic(BaseModel):
     id: UUID
     name: str
     description: str | None
-    user_id: UUID
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -512,3 +511,47 @@ class CollectionList(BaseModel):
 class FilterCollection(FilterAsset):
     q: str | None = Field(default=None)
     type: Optional[str] = Field(default=None)
+
+
+class NotificationCreateSchema(BaseModel):
+    target_user_id: UUID = Field(
+        ..., description='O ID do usuário que receberá a notificação.'
+    )
+    type: str = Field(
+        ...,
+        description='O tipo da notificação (ex: SYSTEM_ALERT, MAINTENANCE).',
+    )
+    detail: Optional[dict] = Field(
+        None, description='Metadados em JSON com detalhes da notificação.'
+    )
+
+
+class NotificationPublic(BaseModel):
+    id: UUID
+    type: str
+    detail: Optional[dict] = None
+    read_at: Optional[datetime] = None
+    created_at: datetime
+
+    source_user: Optional[UserPublic] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationList(BaseModel):
+    notifications: List[NotificationPublic]
+
+
+class NotificationUpdateSchema(BaseModel):
+    read: bool
+
+
+class FilterNotification(FilterPage):
+    read: Optional[bool] = Field(
+        default=None,
+        description='Filtrar por notificações lidas (true) ou não lidas (false).',
+    )
+    type: Optional[str] = Field(
+        default=None,
+        description='Filtrar por tipo de notificação (ex: NEW_TRANSFER_REQUEST).',
+    )

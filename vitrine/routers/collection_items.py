@@ -1,7 +1,8 @@
 from http import HTTPStatus
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -20,8 +21,10 @@ from vitrine.schemas import (
     CollectionItemPublic,
     CollectionItemSchema,
     CollectionItemsList,
+    FilterCatalog,
     Message,
 )
+from vitrine.services.filter_service import apply_catalog_filters
 
 router = APIRouter(
     prefix='/collections/{collection_id}/items',
@@ -110,6 +113,7 @@ async def list_collection_items(
     collection_id: UUID,
     session: Session,
     current_user: CurrentUser,
+    filters: Annotated[FilterCatalog, Depends()],
 ):
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
@@ -125,6 +129,7 @@ async def list_collection_items(
 
     query = (
         select(CollectionItem)
+        .join(CollectionItem.catalog)
         .where(CollectionItem.collection_id == collection_id)
         .options(
             selectinload(CollectionItem.catalog).options(
@@ -143,6 +148,7 @@ async def list_collection_items(
             )
         )
     )
+    query = apply_catalog_filters(query, filters)
 
     result = await session.execute(query)
     items = result.scalars().all()

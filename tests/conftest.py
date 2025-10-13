@@ -34,6 +34,7 @@ from vitrine.models import (
     Collection,
     Location,
     LocationInventory,
+    Notification,
     SystemIdentity,
     User,
     WorkflowTransferStatus,
@@ -521,3 +522,22 @@ async def create_collection(session, create_user):
         return collection
 
     return _create_collection
+
+
+@pytest_asyncio.fixture
+def create_notification(session):
+    async def _create_notification(
+        target_user: User, source_user: User | None = None, **kwargs
+    ):
+        notification = Notification(
+            target_user_id=target_user.id,
+            source_user_id=source_user.id if source_user else None,
+            type=kwargs.get('type', 'TEST_NOTIFICATION'),
+            detail=kwargs.get('detail', {'message': 'This is a test.'}),
+        )
+        session.add(notification)
+        await session.commit()
+        await session.refresh(notification)
+        return notification
+
+    return _create_notification

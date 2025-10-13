@@ -102,6 +102,20 @@ class User:
         cascade='all, delete-orphan',
         lazy='selectin',
     )
+    notifications_received: Mapped[list['Notification']] = relationship(
+        back_populates='target_user',
+        init=False,
+        cascade='all, delete-orphan',
+        foreign_keys='[Notification.target_user_id]',
+        lazy='selectin',
+    )
+    notifications_sent: Mapped[list['Notification']] = relationship(
+        back_populates='source_user',
+        init=False,
+        cascade='all, delete-orphan',
+        foreign_keys='[Notification.source_user_id]',
+        lazy='selectin',
+    )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -881,4 +895,44 @@ class CollectionItem:
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
+    )
+
+
+@table_registry.mapped_as_dataclass
+class Notification:
+    __tablename__ = 'notifications'
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+
+    target_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('users.id'), nullable=False
+    )
+    source_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('users.id'), nullable=True
+    )
+
+    type: Mapped[str] = mapped_column(nullable=False, index=True)
+
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    read_at: Mapped[datetime | None] = mapped_column(init=False, nullable=True)
+
+    target_user: Mapped['User'] = relationship(
+        init=False,
+        back_populates='notifications_received',
+        foreign_keys=[target_user_id],
+    )
+    source_user: Mapped[Optional['User']] = relationship(
+        init=False,
+        back_populates='notifications_sent',
+        foreign_keys=[source_user_id],
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
     )
