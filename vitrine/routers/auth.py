@@ -15,7 +15,9 @@ from vitrine.security import (
 )
 from vitrine.settings import Settings
 
-router = APIRouter(prefix='/auth', tags=['autenticação'])
+router = APIRouter(
+    prefix='/auth', tags=['autenticação e autorização - autenticação']
+)
 
 
 @router.post('/token', response_model=Token)

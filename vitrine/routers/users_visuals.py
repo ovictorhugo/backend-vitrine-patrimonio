@@ -10,8 +10,10 @@ from sqlalchemy import select
 from vitrine.dependencies import CurrentUser, Session
 from vitrine.models import User
 
-router = APIRouter(prefix='/user/upload', tags=['usuários'])
-
+router = APIRouter(
+    prefix='/user/upload',
+    tags=['autenticação e autorização - visuais dos usuários'],
+)
 
 UPLOAD_DIR = 'vitrine/storage/uploads/users_visuals'
 

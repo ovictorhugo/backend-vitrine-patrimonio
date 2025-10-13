@@ -22,7 +22,9 @@ from vitrine.security import (
     get_password_hash,
 )
 
-router = APIRouter(prefix='/users', tags=['usuários'])
+router = APIRouter(
+    prefix='/users', tags=['autenticação e autorização - usuários']
+)
 
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=UserPublic)
