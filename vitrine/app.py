@@ -51,11 +51,12 @@ app.add_middleware(
 
 app.include_router(users.router)
 app.include_router(users_visuals.router)
-app.include_router(favorite.router)
 app.include_router(auth.router)
+
 app.include_router(assets.router)
 app.include_router(catalog.router)
 app.include_router(inventory.router)
+app.include_router(favorite.router)
 
 app.include_router(agencies.router)
 app.include_router(units.router)
@@ -64,9 +65,10 @@ app.include_router(location.router)
 app.include_router(legal_guardians.router)
 app.include_router(materials.router)
 
-app.include_router(catalog_statistics.router)
 app.include_router(collection.router)
 app.include_router(collection_items.router)
+
+app.include_router(catalog_statistics.router)
 
 
 @app.get('/')

@@ -3,9 +3,19 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import Catalog, Collection, CollectionItem
+from vitrine.models import (
+    Catalog,
+    CatalogWorkFlow,
+    Collection,
+    CollectionItem,
+    Location,
+    LocationInventory,
+    SystemIdentity,
+    User,
+)
 from vitrine.schemas import (
     CollectionItemPublic,
     CollectionItemSchema,
@@ -41,17 +51,37 @@ async def add_item_to_collection(
             detail='You do not have permission to add items to this collection.',
         )
 
-    if not await session.get(Catalog, item.catalog_id):
+    query = (
+        select(Catalog)
+        .where(Catalog.id == item.catalog_id)
+        .options(
+            selectinload(Catalog.images),
+            selectinload(Catalog.workflow_history).options(
+                selectinload(CatalogWorkFlow.user).options(
+                    selectinload(User.system_identity).options(
+                        selectinload(SystemIdentity.legal_guardian)
+                    )
+                ),
+                selectinload(CatalogWorkFlow.transfer_requests),
+            ),
+            selectinload(Catalog.location)
+            .selectinload(Location.location_inventories)
+            .selectinload(LocationInventory.inventory),
+        )
+    )
+    db_catalog = await session.scalar(query)
+
+    if not db_catalog:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f'Catalog item with ID "{item.catalog_id}" not found.',
         )
 
-    query = select(CollectionItem).where(
+    query_existing = select(CollectionItem).where(
         CollectionItem.collection_id == collection_id,
         CollectionItem.catalog_id == item.catalog_id,
     )
-    if await session.scalar(query):
+    if await session.scalar(query_existing):
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
             detail='This item is already in the collection.',
@@ -66,6 +96,8 @@ async def add_item_to_collection(
     session.add(db_item)
     await session.commit()
     await session.refresh(db_item)
+
+    db_item.catalog = db_catalog
     return db_item
 
 
@@ -91,9 +123,27 @@ async def list_collection_items(
             detail='You do not have permission to view this collection.',
         )
 
-    query = select(CollectionItem).where(
-        CollectionItem.collection_id == collection_id
+    query = (
+        select(CollectionItem)
+        .where(CollectionItem.collection_id == collection_id)
+        .options(
+            selectinload(CollectionItem.catalog).options(
+                selectinload(Catalog.images),
+                selectinload(Catalog.workflow_history).options(
+                    selectinload(CatalogWorkFlow.user).options(
+                        selectinload(User.system_identity).options(
+                            selectinload(SystemIdentity.legal_guardian)
+                        )
+                    ),
+                    selectinload(CatalogWorkFlow.transfer_requests),
+                ),
+                selectinload(Catalog.location)
+                .selectinload(Location.location_inventories)
+                .selectinload(LocationInventory.inventory),
+            )
+        )
     )
+
     result = await session.execute(query)
     items = result.scalars().all()
 
