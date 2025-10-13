@@ -93,6 +93,18 @@ async def test_read_users_with_users(client, create_user):
 
 
 @pytest.mark.asyncio
+async def test_read_users_with_system_identity(
+    client, create_user, create_system_identity, create_legal_guardian
+):
+    user = await create_user()
+    legal_guardian = await create_legal_guardian(user_id=user.id)
+    await create_system_identity(user.id, legal_guardian.id)
+    user_schema = UserPublic.model_validate(user).model_dump(mode='json')
+    response = client.get('/users/')
+    assert response.json() == {'users': [user_schema]}
+
+
+@pytest.mark.asyncio
 async def test_update_user_with_wrong_user(client, create_user, create_token):
     user = await create_user()
     response = client.put(

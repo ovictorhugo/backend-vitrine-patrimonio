@@ -8,6 +8,7 @@ from jwt import DecodeError, ExpiredSignatureError, decode, encode
 from pwdlib import PasswordHash
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from vitrine.database import get_session
 from vitrine.models import User
@@ -46,7 +47,9 @@ async def get_current_user(
     except ExpiredSignatureError:
         raise credentials_exception
     user = await session.scalar(
-        select(User).where(User.email == subject_email)
+        select(User)
+        .options(selectinload(User.system_identity))
+        .where(User.email == subject_email)
     )
 
     if not user:

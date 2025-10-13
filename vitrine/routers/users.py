@@ -5,9 +5,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import User
+from vitrine.models import SystemIdentity, User
 from vitrine.schemas import (
     FilterPage,
     Message,
@@ -67,12 +68,16 @@ async def read_users(
 ):
     query = await session.scalars(
         select(User)
+        .options(
+            selectinload(User.system_identity).selectinload(
+                SystemIdentity.legal_guardian
+            )
+        )
         .where(User.deleted_at.is_(None))
         .offset(filter_users.offset)
         .limit(filter_users.limit)
     )
     users = query.all()
-
     return {'users': users}
 
 
