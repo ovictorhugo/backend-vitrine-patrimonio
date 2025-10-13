@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import SystemIdentity, User
+from vitrine.models import Role, RolePermission, SystemIdentity, User, UserRole
 from vitrine.schemas import (
     FilterPage,
     Message,
@@ -73,13 +73,18 @@ async def read_users(
         .options(
             selectinload(User.system_identity).selectinload(
                 SystemIdentity.legal_guardian
-            )
+            ),
+            selectinload(User.roles)
+            .selectinload(UserRole.role)
+            .selectinload(Role.permissions)
+            .selectinload(RolePermission.permission),
         )
         .where(User.deleted_at.is_(None))
         .offset(filter_users.offset)
         .limit(filter_users.limit)
     )
     users = query.all()
+    print(UserList.model_validate({'users': users}))
     return {'users': users}
 
 

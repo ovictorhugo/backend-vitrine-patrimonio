@@ -13,6 +13,7 @@ from vitrine.routers import (
     favorite,
     inventory,
     notifications,
+    rbac,
     users,
     users_visuals,
 )
@@ -53,6 +54,7 @@ app.add_middleware(
 app.include_router(users.router)
 app.include_router(users_visuals.router)
 app.include_router(auth.router)
+app.include_router(rbac.router)
 
 app.include_router(assets.router)
 app.include_router(catalog.router)

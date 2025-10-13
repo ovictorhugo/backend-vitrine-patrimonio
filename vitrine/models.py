@@ -116,6 +116,12 @@ class User:
         foreign_keys='[Notification.source_user_id]',
         lazy='selectin',
     )
+    roles: Mapped[list['UserRole']] = relationship(
+        back_populates='user',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -928,6 +934,134 @@ class Notification:
         init=False,
         back_populates='notifications_sent',
         foreign_keys=[source_user_id],
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class Permission:
+    __tablename__ = 'permissions'
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+    name: Mapped[str] = mapped_column(nullable=False, unique=True)
+    code: Mapped[str] = mapped_column(nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(nullable=True)
+
+    roles: Mapped[list['RolePermission']] = relationship(
+        back_populates='permission',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True, onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class Role:
+    __tablename__ = 'roles'
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+    name: Mapped[str] = mapped_column(nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(nullable=True)
+
+    permissions: Mapped[list['RolePermission']] = relationship(
+        back_populates='role',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
+
+    user_roles: Mapped[list['UserRole']] = relationship(
+        back_populates='role',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True, onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class UserRole:
+    __tablename__ = 'user_roles'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'role_id', name='uq_user_role'),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey('users.id'), nullable=False
+    )
+    role_id: Mapped[UUID] = mapped_column(
+        ForeignKey('roles.id'), nullable=False
+    )
+
+    user: Mapped['User'] = relationship(init=False, lazy='selectin')
+    role: Mapped['Role'] = relationship(
+        back_populates='user_roles', init=False, lazy='selectin'
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class RolePermission:
+    __tablename__ = 'role_permissions'
+    __table_args__ = (
+        UniqueConstraint(
+            'role_id', 'permission_id', name='uq_role_permission'
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+    role_id: Mapped[UUID] = mapped_column(
+        ForeignKey('roles.id'), nullable=False
+    )
+    permission_id: Mapped[UUID] = mapped_column(
+        ForeignKey('permissions.id'), nullable=False
+    )
+
+    role: Mapped['Role'] = relationship(
+        back_populates='permissions', init=False, lazy='selectin'
+    )
+    permission: Mapped['Permission'] = relationship(
+        back_populates='roles', init=False, lazy='selectin'
     )
 
     created_at: Mapped[datetime] = mapped_column(

@@ -67,6 +67,7 @@ class UserPublic(BaseModel):
     matricula: str | None = None
     verify: bool | None = None
     institution_id: UUID | None = None
+
     system_identity: Optional[SystemIdentityPublic]
 
     model_config = ConfigDict(from_attributes=True)
@@ -555,3 +556,36 @@ class FilterNotification(FilterPage):
         default=None,
         description='Filtrar por tipo de notificação (ex: NEW_TRANSFER_REQUEST).',
     )
+
+
+class PermissionSchema(BaseModel):
+    name: str
+    code: str
+    description: str | None = None
+
+
+class PermissionPublic(BaseModel):
+    id: UUID
+    name: str
+    code: str
+    description: str | None = None
+
+    model_config = {'from_attributes': True}
+
+
+class RoleSchema(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class RolePublic(BaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+    permissions: list[PermissionPublic] | None = None
+
+    model_config = {'from_attributes': True}
+
+
+class RoleList(BaseModel):
+    roles: list[RolePublic]
