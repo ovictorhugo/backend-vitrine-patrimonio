@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from vitrine.database import get_session
-from vitrine.models import User
+from vitrine.models import SystemIdentity, User, UserRole
 from vitrine.settings import Settings
 
 SECRET_KEY = Settings().SECRET_KEY
@@ -48,7 +48,14 @@ async def get_current_user(
         raise credentials_exception
     user = await session.scalar(
         select(User)
-        .options(selectinload(User.system_identity))
+        .options(
+            selectinload(User.system_identity).selectinload(
+                SystemIdentity.legal_guardian
+            ),
+            selectinload(User.user_role_associations).selectinload(
+                UserRole.role
+            ),
+        )
         .where(User.email == subject_email)
     )
 

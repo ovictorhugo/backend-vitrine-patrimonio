@@ -20,6 +20,7 @@ from vitrine.models import (
     Material,
     SystemIdentity,
     User,
+    UserRole,
     WorkFlowStatus,
     WorkflowTransfer,
     WorkflowTransferStatus,
@@ -97,7 +98,10 @@ async def create_catalog_entry(
                 selectinload(CatalogWorkFlow.user).options(
                     selectinload(User.system_identity).options(
                         selectinload(SystemIdentity.legal_guardian)
-                    )
+                    ),
+                    selectinload(User.user_role_associations).selectinload(
+                        UserRole.role
+                    ),
                 ),
                 selectinload(CatalogWorkFlow.transfer_requests),
             ),
@@ -174,7 +178,10 @@ async def read_catalog_entries(
             selectinload(CatalogWorkFlow.user).options(
                 selectinload(User.system_identity).options(
                     selectinload(SystemIdentity.legal_guardian)
-                )
+                ),
+                selectinload(User.user_role_associations).selectinload(
+                    UserRole.role
+                ),
             ),
             selectinload(CatalogWorkFlow.transfer_requests),
         ),

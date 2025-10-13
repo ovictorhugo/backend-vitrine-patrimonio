@@ -10,9 +10,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
 
 table_registry = registry()
@@ -74,6 +76,10 @@ class User:
 
     matricula: Mapped[str | None] = mapped_column(nullable=True, init=False)
 
+    roles: Mapped[list['Role']] = association_proxy(
+        'user_role_associations', 'role', init=false
+    )
+
     verify: Mapped[bool] = mapped_column(default=False)
     institution_id: Mapped[UUID] = mapped_column(
         default=UUID('27b3839b-d9b3-43c6-824a-aef738ace101'), init=False
@@ -116,12 +122,13 @@ class User:
         foreign_keys='[Notification.source_user_id]',
         lazy='selectin',
     )
-    roles: Mapped[list['UserRole']] = relationship(
+    user_role_associations: Mapped[list['UserRole']] = relationship(
         back_populates='user',
         init=False,
         cascade='all, delete-orphan',
         lazy='selectin',
     )
+
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -1025,7 +1032,9 @@ class UserRole:
         ForeignKey('roles.id'), nullable=False
     )
 
-    user: Mapped['User'] = relationship(init=False, lazy='selectin')
+    user: Mapped['User'] = relationship(
+        back_populates='user_role_associations', init=False, lazy='selectin'
+    )
     role: Mapped['Role'] = relationship(
         back_populates='user_roles', init=False, lazy='selectin'
     )

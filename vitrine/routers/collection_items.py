@@ -16,6 +16,7 @@ from vitrine.models import (
     LocationInventory,
     SystemIdentity,
     User,
+    UserRole,
 )
 from vitrine.schemas import (
     CollectionItemPublic,
@@ -63,7 +64,10 @@ async def add_item_to_collection(
                 selectinload(CatalogWorkFlow.user).options(
                     selectinload(User.system_identity).options(
                         selectinload(SystemIdentity.legal_guardian)
-                    )
+                    ),
+                    selectinload(User.user_role_associations).selectinload(
+                        UserRole.role
+                    ),
                 ),
                 selectinload(CatalogWorkFlow.transfer_requests),
             ),
@@ -138,7 +142,10 @@ async def list_collection_items(
                     selectinload(CatalogWorkFlow.user).options(
                         selectinload(User.system_identity).options(
                             selectinload(SystemIdentity.legal_guardian)
-                        )
+                        ),
+                        selectinload(User.user_role_associations).selectinload(
+                            UserRole.role
+                        ),
                     ),
                     selectinload(CatalogWorkFlow.transfer_requests),
                 ),

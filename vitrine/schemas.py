@@ -25,6 +25,39 @@ class Token(BaseModel):
     token_type: str
 
 
+class PermissionSchema(BaseModel):
+    name: str
+    code: str
+    description: str | None = None
+
+
+class PermissionPublic(BaseModel):
+    id: UUID
+    name: str
+    code: str
+    description: str | None = None
+
+    model_config = {'from_attributes': True}
+
+
+class RoleSchema(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class RolePublic(BaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+    permissions: list[PermissionPublic] | None = None
+
+    model_config = {'from_attributes': True}
+
+
+class RoleList(BaseModel):
+    roles: list[RolePublic]
+
+
 class UserSchema(BaseModel):
     username: str
     email: EmailStr
@@ -53,6 +86,15 @@ class SystemIdentityPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# Adicione este novo schema junto com os outros
+class RolePublicWithoutPermissions(BaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+
+    model_config = {'from_attributes': True}
+
+
 class UserPublic(BaseModel):
     id: UUID
     username: str
@@ -68,6 +110,7 @@ class UserPublic(BaseModel):
     verify: bool | None = None
     institution_id: UUID | None = None
 
+    roles: list[RolePublicWithoutPermissions]
     system_identity: Optional[SystemIdentityPublic]
 
     model_config = ConfigDict(from_attributes=True)
@@ -556,36 +599,3 @@ class FilterNotification(FilterPage):
         default=None,
         description='Filtrar por tipo de notificação (ex: NEW_TRANSFER_REQUEST).',
     )
-
-
-class PermissionSchema(BaseModel):
-    name: str
-    code: str
-    description: str | None = None
-
-
-class PermissionPublic(BaseModel):
-    id: UUID
-    name: str
-    code: str
-    description: str | None = None
-
-    model_config = {'from_attributes': True}
-
-
-class RoleSchema(BaseModel):
-    name: str
-    description: str | None = None
-
-
-class RolePublic(BaseModel):
-    id: UUID
-    name: str
-    description: str | None = None
-    permissions: list[PermissionPublic] | None = None
-
-    model_config = {'from_attributes': True}
-
-
-class RoleList(BaseModel):
-    roles: list[RolePublic]
