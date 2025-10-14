@@ -142,3 +142,56 @@ async def test_assign_duplicate_permission_to_role(client):
     )
     assert response.status_code == HTTPStatus.CONFLICT
     assert response.json() == {'detail': 'Permission already assigned to role'}
+
+
+@pytest.mark.asyncio
+async def test_delete_permission_success(client):
+    create_response = client.post(
+        '/roles/permissions',
+        json={
+            'name': 'Permissão a ser Deletada',
+            'code': 'permission_to_delete',
+            'description': 'Esta permissão será desativada',
+        },
+    )
+    assert create_response.status_code == HTTPStatus.CREATED
+    permission_id = create_response.json()['id']
+
+    delete_response = client.delete(f'/roles/permissions/{permission_id}')
+
+    assert delete_response.status_code == HTTPStatus.OK
+    assert delete_response.json() == {'message': 'Permission deactivated'}
+
+
+@pytest.mark.asyncio
+async def test_delete_permission_not_found(client):
+    fake_permission_id = uuid4()
+
+    delete_response = client.delete(f'/roles/permissions/{fake_permission_id}')
+
+    assert delete_response.status_code == HTTPStatus.NOT_FOUND
+    assert delete_response.json() == {'detail': 'Permission deactivated'}
+
+
+@pytest.mark.asyncio
+async def test_delete_permission_twice_idempotent(client):
+    create_response = client.post(
+        '/roles/permissions',
+        json={
+            'name': 'Permissão Deleção Dupla',
+            'code': 'permission_delete_twice',
+            'description': 'Testando idempotência',
+        },
+    )
+    assert create_response.status_code == HTTPStatus.CREATED
+    permission_id = create_response.json()['id']
+
+    delete_response_1 = client.delete(f'/roles/permissions/{permission_id}')
+
+    assert delete_response_1.status_code == HTTPStatus.OK
+    assert delete_response_1.json() == {'message': 'Permission deactivated'}
+
+    delete_response_2 = client.delete(f'/roles/permissions/{permission_id}')
+
+    assert delete_response_2.status_code == HTTPStatus.NOT_FOUND
+    assert delete_response_2.json() == {'detail': 'Permission deactivated'}

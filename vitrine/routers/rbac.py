@@ -1,3 +1,4 @@
+import datetime
 from http import HTTPStatus
 from typing import Annotated, List
 from uuid import UUID
@@ -54,6 +55,64 @@ async def read_roles(
     )
     roles = query.all()
     return RoleList(roles=roles)
+
+
+# --- ENDPOINTS DE PERMISSÕES MOVIDOS PARA CIMA ---
+# Rotas estáticas /permissions vêm antes de /{}
+
+
+@router.post(
+    '/permissions',
+    status_code=HTTPStatus.CREATED,
+    response_model=PermissionPublic,
+)
+async def create_permission(permission: PermissionSchema, session: Session):
+    existing = await session.scalar(
+        select(Permission).where(
+            (Permission.name == permission.name)
+            | (Permission.code == permission.code)
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail='Permission already exists'
+        )
+
+    db_permission = Permission(
+        name=permission.name,
+        code=permission.code,
+        description=permission.description,
+    )
+    session.add(db_permission)
+    await session.commit()
+    await session.refresh(db_permission)
+    return db_permission
+
+
+@router.get('/permissions', response_model=List[PermissionPublic])
+async def read_permissions(session: Session):
+    query = await session.scalars(
+        select(Permission).where(Permission.deleted_at.is_(None))
+    )
+    return query.all()
+
+
+@router.delete('/permissions/{permission_id}')
+async def delete_permission(permission_id: UUID, session: Session):
+    db_permission = await session.get(Permission, permission_id)
+
+    if (
+        not db_permission or db_permission.deleted_at
+    ):  # Verificando também se existe
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Permission deactivated',
+        )
+
+    db_permission.deleted_at = datetime.datetime.now()
+    await session.commit()
+
+    return {'message': 'Permission deactivated'}
 
 
 @router.post('/{role_id}/permissions', response_model=Message)
@@ -154,39 +213,3 @@ async def remove_role_from_user(
     await session.delete(assoc)
     await session.commit()
     return {'message': 'Role removed from user'}
-
-
-@router.post(
-    '/permissions',
-    status_code=HTTPStatus.CREATED,
-    response_model=PermissionPublic,
-)
-async def create_permission(permission: PermissionSchema, session: Session):
-    existing = await session.scalar(
-        select(Permission).where(
-            (Permission.name == permission.name)
-            | (Permission.code == permission.code)
-        )
-    )
-    if existing:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT, detail='Permission already exists'
-        )
-
-    db_permission = Permission(
-        name=permission.name,
-        code=permission.code,
-        description=permission.description,
-    )
-    session.add(db_permission)
-    await session.commit()
-    await session.refresh(db_permission)
-    return db_permission
-
-
-@router.get('/permissions', response_model=List[PermissionPublic])
-async def read_permissions(session: Session):
-    query = await session.scalars(
-        select(Permission).where(Permission.deleted_at.is_(None))
-    )
-    return query.all()
