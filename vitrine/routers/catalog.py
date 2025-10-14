@@ -20,6 +20,7 @@ from vitrine.models import (
     Location,
     LocationInventory,
     Material,
+    Role,
     Sector,
     SystemIdentity,
     User,
@@ -47,6 +48,8 @@ from vitrine.schemas import (
     RequestTransferSchema,
 )
 from vitrine.services import filter_service, mail_service
+
+COMISSION_SAMPLE_SIZE = 5
 
 router = APIRouter(
     prefix='/catalog', tags=['vitrine - patrimônios anunciados']
@@ -128,11 +131,34 @@ async def add_workflow_step(
     session: Session,
     current_user: CurrentUser,
 ):
+    if workflow_data.detail and 'reviewers' in workflow_data.detail:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail="The 'reviewers' field cannot be set manually.",
+        )
+
     db_catalog = await session.get(Catalog, catalog_id)
     if not db_catalog:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
         )
+
+    if workflow_data.workflow_status == 'REVIEW_REQUESTED_COMISSION':
+        stmt = (
+            select(User.id)
+            .where(User.roles.any(Role.name == 'Comissão de desfazimento'))
+            .order_by(func.random())
+            .limit(COMISSION_SAMPLE_SIZE)
+        )
+
+        result = await session.execute(stmt)
+        random_comission_user_ids = result.scalars().all()
+        if workflow_data.detail is None:
+            workflow_data.detail = {}
+
+        workflow_data.detail['reviewers'] = [
+            str(user_id) for user_id in random_comission_user_ids
+        ]
 
     new_workflow_entry = CatalogWorkFlow(
         catalog_id=catalog_id,
@@ -203,6 +229,21 @@ async def read_catalog_entries(
 
     if filters.location_id:
         query = query.where(Asset.location_id == filters.location_id)
+
+    if filters.reviewer_id:
+        latest_wf_time_subquery = (
+            select(func.max(CatalogWorkFlow.created_at))
+            .where(CatalogWorkFlow.catalog_id == Catalog.id)
+            .scalar_subquery()
+        )
+        reviewer_subquery = select(CatalogWorkFlow.id).where(
+            CatalogWorkFlow.catalog_id == Catalog.id,
+            CatalogWorkFlow.created_at == latest_wf_time_subquery,
+            CatalogWorkFlow.detail['reviewers'].has_key(
+                str(filters.reviewer_id)
+            ),
+        )
+        query = query.where(reviewer_subquery.exists())
 
     query = filter_service.apply_catalog_filters(query, filters)
 

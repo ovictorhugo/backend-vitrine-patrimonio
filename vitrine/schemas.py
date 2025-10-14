@@ -441,6 +441,7 @@ class CatalogList(BaseModel):
 class FilterCatalog(FilterAsset):
     q: str | None = Field(default=None)
     only_uncollected: Optional[bool] = False
+    reviewer_id: Optional[UUID] = None
 
     location_id: UUID | None = None
     unit_id: UUID | None = None
