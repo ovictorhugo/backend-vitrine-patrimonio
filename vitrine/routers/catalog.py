@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import func, select, update
+from sqlalchemy import String, cast, func, select, update
 from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Mail, Session
@@ -231,19 +231,32 @@ async def read_catalog_entries(
         query = query.where(Asset.location_id == filters.location_id)
 
     if filters.reviewer_id:
-        latest_wf_time_subquery = (
-            select(func.max(CatalogWorkFlow.created_at))
-            .where(CatalogWorkFlow.catalog_id == Catalog.id)
-            .scalar_subquery()
+        latest_workflow_subquery = (
+            select(
+                CatalogWorkFlow.catalog_id,
+                func.max(CatalogWorkFlow.created_at).label('max_created_at'),
+            )
+            .group_by(CatalogWorkFlow.catalog_id)
+            .subquery()
         )
-        reviewer_subquery = select(CatalogWorkFlow.id).where(
-            CatalogWorkFlow.catalog_id == Catalog.id,
-            CatalogWorkFlow.created_at == latest_wf_time_subquery,
-            CatalogWorkFlow.detail['reviewers'].has_key(
-                str(filters.reviewer_id)
+
+        query = query.join(
+            latest_workflow_subquery,
+            Catalog.id == latest_workflow_subquery.c.catalog_id,
+        ).join(
+            CatalogWorkFlow,
+            (Catalog.id == CatalogWorkFlow.catalog_id)
+            & (
+                CatalogWorkFlow.created_at
+                == latest_workflow_subquery.c.max_created_at
             ),
         )
-        query = query.where(reviewer_subquery.exists())
+
+        query = query.where(
+            cast(CatalogWorkFlow.detail, String).like(
+                f'%"{str(filters.reviewer_id)}"%'
+            )
+        )
 
     query = filter_service.apply_catalog_filters(query, filters)
 
