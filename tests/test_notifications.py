@@ -23,10 +23,62 @@ async def test_create_notification(client, create_user, create_token):
 
     assert response.status_code == HTTPStatus.CREATED
     data = response.json()
-    assert data['type'] == 'SYSTEM_ALERT'
-    assert data['detail']['info'] == 'Server maintenance scheduled.'
-    assert data['source_user']['id'] == str(source_user.id)
-    assert uuid.UUID(data['id'])
+    assert isinstance(data, list)
+    assert len(data) == 1
+    notification = data[0]
+    assert notification['type'] == 'SYSTEM_ALERT'
+    assert notification['detail']['info'] == 'Server maintenance scheduled.'
+    assert notification['source_user']['id'] == str(source_user.id)
+    assert uuid.UUID(notification['id'])
+
+
+@pytest.mark.asyncio
+async def test_create_notification_multiple_targets(
+    client, create_user, create_token
+):
+    source_user = await create_user(username='source', email='source@test.com')
+    target1 = await create_user(username='target1', email='t1@test.com')
+    target2 = await create_user(username='target2', email='t2@test.com')
+    token = create_token(source_user)
+
+    response = client.post(
+        '/notifications/',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'target_user_id': f'{target1.id};{target2.id}',
+            'type': 'MULTI_ALERT',
+            'detail': {'msg': 'Hello to multiple users!'},
+        },
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+
+
+@pytest.mark.asyncio
+async def test_create_notification_all_users(
+    client, create_user, create_token
+):
+    source = await create_user(username='source', email='source@test.com')
+    user1 = await create_user(username='user1', email='user1@test.com')
+    user2 = await create_user(username='user2', email='user2@test.com')
+    token = create_token(source)
+
+    response = client.post(
+        '/notifications/',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'target_user_id': '*',
+            'type': 'BROADCAST',
+            'detail': {'text': 'System-wide notice'},
+        },
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    data = response.json()
+    assert isinstance(data, list)
 
 
 @pytest.mark.asyncio
@@ -44,10 +96,10 @@ async def test_create_notification_target_not_found(
             'type': 'SYSTEM_ALERT',
         },
     )
-
+    print(response.json())
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json() == {
-        'detail': 'Target user not found or has been deactivated'
+        'detail': 'Target user(s) not found or deactivated'
     }
 
 

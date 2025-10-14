@@ -556,16 +556,9 @@ class FilterCollection(FilterCatalog):
 
 
 class NotificationCreateSchema(BaseModel):
-    target_user_id: UUID = Field(
-        ..., description='O ID do usuário que receberá a notificação.'
-    )
-    type: str = Field(
-        ...,
-        description='O tipo da notificação (ex: SYSTEM_ALERT, MAINTENANCE).',
-    )
-    detail: Optional[dict] = Field(
-        None, description='Metadados em JSON com detalhes da notificação.'
-    )
+    target_user_id: str
+    type: str
+    detail: Optional[dict] = {}
 
 
 class NotificationPublic(BaseModel):

@@ -52,6 +52,20 @@ async def create_collection(
     return db_collection
 
 
+@router.get('/', response_model=CollectionList)
+async def read_collections(
+    session: Session,
+    filters: Annotated[FilterCollection, Depends()],
+):
+    query = select(Collection).where(Collection.deleted_at.is_(None))
+    if filters.type:
+        query = query.where(Collection.type == filters.type)
+    query = query.offset(filters.offset).limit(filters.limit)
+    result = await session.scalars(query)
+    collections = result.all()
+    return {'collections': collections}
+
+
 @router.get('/my', response_model=CollectionList)
 async def read_my_collections(
     session: Session,
@@ -62,6 +76,8 @@ async def read_my_collections(
         Collection.deleted_at.is_(None),
         Collection.user_id == current_user.id,
     )
+    if filters.type:
+        query = query.where(Collection.type == filters.type)
     query = query.offset(filters.offset).limit(filters.limit)
     result = await session.scalars(query)
     collections = result.all()

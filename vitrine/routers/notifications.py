@@ -27,32 +27,55 @@ router = APIRouter(
 @router.post(
     '/',
     status_code=HTTPStatus.CREATED,
-    response_model=NotificationPublic,
+    response_model=list[NotificationPublic],
 )
 async def create_notification(
     notification_data: NotificationCreateSchema,
     session: Session,
     current_user: CurrentUser,
 ):
-    target_user = await session.get(User, notification_data.target_user_id)
-    if not target_user or target_user.deleted_at:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail='Target user not found or has been deactivated',
-        )
-
-    db_notification = Notification(
-        target_user_id=notification_data.target_user_id,
-        source_user_id=current_user.id,
-        type=notification_data.type,
-        detail=notification_data.detail,
+    target_ids = (
+        notification_data.target_user_id.split(';')
+        if notification_data.target_user_id != '*'
+        else '*'
     )
 
-    session.add(db_notification)
-    await session.commit()
-    await session.refresh(db_notification)
+    if target_ids == '*':
+        users = await session.scalars(
+            select(User).where(User.deleted_at.is_(None))
+        )
+        target_users = users.all()
+    else:
+        users = await session.scalars(
+            select(User).where(
+                User.id.in_(target_ids), User.deleted_at.is_(None)
+            )
+        )
+        target_users = users.all()
 
-    return db_notification
+    if not target_users:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Target user(s) not found or deactivated',
+        )
+
+    notifications = []
+    for user in target_users:
+        notification = Notification(
+            target_user_id=user.id,
+            source_user_id=current_user.id,
+            type=notification_data.type,
+            detail=notification_data.detail,
+        )
+        session.add(notification)
+        notifications.append(notification)
+
+    await session.commit()
+
+    for notification in notifications:
+        await session.refresh(notification)
+
+    return notifications
 
 
 @router.get('/', response_model=NotificationList)
