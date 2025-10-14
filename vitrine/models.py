@@ -10,7 +10,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     UniqueConstraint,
-    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR
@@ -77,7 +76,7 @@ class User:
     matricula: Mapped[str | None] = mapped_column(nullable=True, init=False)
 
     roles: Mapped[list['Role']] = association_proxy(
-        'user_role_associations', 'role', init=false
+        'user_role_associations', 'role', init=False
     )
 
     verify: Mapped[bool] = mapped_column(default=False)
@@ -962,11 +961,15 @@ class Permission:
     code: Mapped[str] = mapped_column(nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(nullable=True)
 
-    roles: Mapped[list['RolePermission']] = relationship(
+    role_permissions: Mapped[list['RolePermission']] = relationship(
         back_populates='permission',
         init=False,
         cascade='all, delete-orphan',
         lazy='selectin',
+    )
+
+    roles: Mapped[list['Role']] = association_proxy(
+        'role_permissions', 'role', init=False
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -990,11 +993,17 @@ class Role:
     name: Mapped[str] = mapped_column(nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(nullable=True)
 
-    permissions: Mapped[list['RolePermission']] = relationship(
+    role_permissions: Mapped[list['RolePermission']] = relationship(
         back_populates='role',
         init=False,
         cascade='all, delete-orphan',
         lazy='selectin',
+    )
+
+    permissions: Mapped[list['Permission']] = association_proxy(
+        'role_permissions',
+        'permission',
+        init=False,
     )
 
     user_roles: Mapped[list['UserRole']] = relationship(
@@ -1067,10 +1076,10 @@ class RolePermission:
     )
 
     role: Mapped['Role'] = relationship(
-        back_populates='permissions', init=False, lazy='selectin'
+        back_populates='role_permissions', init=False, lazy='selectin'
     )
     permission: Mapped['Permission'] = relationship(
-        back_populates='roles', init=False, lazy='selectin'
+        back_populates='role_permissions', init=False, lazy='selectin'
     )
 
     created_at: Mapped[datetime] = mapped_column(

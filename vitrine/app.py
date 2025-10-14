@@ -33,7 +33,6 @@ STORAGE_DIR = os.path.join(BASE_DIR, 'storage')
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
 UPLOADS_DIR = os.path.join(STORAGE_DIR, 'uploads')
-print(UPLOADS_DIR)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 TEMP_DIR = os.path.join(STORAGE_DIR, 'temp')

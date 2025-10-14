@@ -915,7 +915,192 @@ async def test_email_after_update_transfer_request_status_success(
 
     data = resp.json()
     assert data['total'] >= 1
-    message = data['messages'][0]
 
     msgs = data['messages']
     assert any(msg['To'][0]['Address'] == user.email for msg in msgs)
+
+
+@pytest.mark.asyncio
+async def test_list_catalog_by_location_id(
+    client, create_catalog_entry, create_asset, create_location
+):
+    # --- Setup ---
+    # Criar duas localizações distintas
+    loc1 = await create_location()
+    loc2 = await create_location()
+
+    # Criar assets em cada localização
+    asset1 = await create_asset(location_id=loc1.id)
+    asset2 = await create_asset(location_id=loc2.id)
+    asset3 = await create_asset(location_id=loc2.id)
+
+    # Criar entradas de catálogo para os assets
+    await create_catalog_entry(asset_id=asset1.id)
+    await create_catalog_entry(asset_id=asset2.id)
+    await create_catalog_entry(asset_id=asset3.id)
+
+    # --- Test ---
+    # 1. Filtrar pela localização 1 (deve retornar 1)
+    response_loc1 = client.get(f'/catalog?location_id={loc1.id}')
+    assert response_loc1.status_code == HTTPStatus.OK
+    assert len(response_loc1.json()['catalog_entries']) == 1
+    assert response_loc1.json()['catalog_entries'][0]['asset']['id'] == str(
+        asset1.id
+    )
+
+    # 2. Filtrar pela localização 2 (deve retornar 2)
+    response_loc2 = client.get(f'/catalog?location_id={loc2.id}')
+    assert response_loc2.status_code == HTTPStatus.OK
+    assert len(response_loc2.json()['catalog_entries']) == 2
+
+    # 3. Sem filtro (deve retornar 3)
+    response_all = client.get('/catalog')
+    assert response_all.status_code == HTTPStatus.OK
+    assert len(response_all.json()['catalog_entries']) == 3
+
+    # 4. Filtrar por um ID inexistente (deve retornar 0)
+    fake_id = uuid4()
+    response_fake = client.get(f'/catalog?location_id={fake_id}')
+    assert response_fake.status_code == HTTPStatus.OK
+    assert len(response_fake.json()['catalog_entries']) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_catalog_by_sector_id(
+    client,
+    create_catalog_entry,
+    create_asset,
+    create_location,
+    create_sector,  # Presume que esta fixture existe
+):
+    # --- Setup ---
+    # Criar dois setores distintos
+    sector1 = await create_sector()
+    sector2 = await create_sector()
+
+    # Criar localizações em cada setor
+    loc1 = await create_location(sector_id=sector1.id)
+    loc2 = await create_location(sector_id=sector2.id)
+
+    # Criar assets em cada localização
+    asset1 = await create_asset(location_id=loc1.id)
+    asset2 = await create_asset(location_id=loc2.id)
+
+    # Criar entradas de catálogo
+    await create_catalog_entry(asset_id=asset1.id)
+    await create_catalog_entry(asset_id=asset2.id)
+
+    # --- Test ---
+    # 1. Filtrar pelo setor 1 (deve retornar 1)
+    response_sec1 = client.get(f'/catalog?sector_id={sector1.id}')
+    assert response_sec1.status_code == HTTPStatus.OK
+    assert len(response_sec1.json()['catalog_entries']) == 1
+    assert response_sec1.json()['catalog_entries'][0]['asset']['id'] == str(
+        asset1.id
+    )
+
+    # 2. Filtrar pelo setor 2 (deve retornar 1)
+    response_sec2 = client.get(f'/catalog?sector_id={sector2.id}')
+    assert response_sec2.status_code == HTTPStatus.OK
+    assert len(response_sec2.json()['catalog_entries']) == 1
+    assert response_sec2.json()['catalog_entries'][0]['asset']['id'] == str(
+        asset2.id
+    )
+
+    # 3. Filtrar por um ID inexistente (deve retornar 0)
+    fake_id = uuid4()
+    response_fake = client.get(f'/catalog?sector_id={fake_id}')
+    assert response_fake.status_code == HTTPStatus.OK
+    assert len(response_fake.json()['catalog_entries']) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_catalog_by_agency_id(
+    client,
+    create_catalog_entry,
+    create_asset,
+    create_location,
+    create_sector,
+    create_agency,
+):
+    agency1 = await create_agency()
+    agency2 = await create_agency()
+
+    sector1 = await create_sector(agency_id=agency1.id)
+    sector2 = await create_sector(agency_id=agency2.id)
+
+    loc1 = await create_location(sector_id=sector1.id)
+    loc2 = await create_location(sector_id=sector2.id)
+
+    asset1 = await create_asset(location_id=loc1.id)
+    asset2 = await create_asset(location_id=loc2.id)
+
+    await create_catalog_entry(asset_id=asset1.id)
+    await create_catalog_entry(asset_id=asset2.id)
+
+    response_age1 = client.get(f'/catalog?agency_id={agency1.id}')
+    assert response_age1.status_code == HTTPStatus.OK
+    assert len(response_age1.json()['catalog_entries']) == 1
+    assert response_age1.json()['catalog_entries'][0]['asset']['id'] == str(
+        asset1.id
+    )
+
+    response_age2 = client.get(f'/catalog?agency_id={agency2.id}')
+    assert response_age2.status_code == HTTPStatus.OK
+    assert len(response_age2.json()['catalog_entries']) == 1
+    assert response_age2.json()['catalog_entries'][0]['asset']['id'] == str(
+        asset2.id
+    )
+
+    fake_id = uuid4()
+    response_fake = client.get(f'/catalog?agency_id={fake_id}')
+    assert response_fake.status_code == HTTPStatus.OK
+    assert len(response_fake.json()['catalog_entries']) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_catalog_by_unit_id(
+    client,
+    create_catalog_entry,
+    create_asset,
+    create_location,
+    create_sector,
+    create_agency,
+    create_unit,
+):
+    unit1 = await create_unit()
+    unit2 = await create_unit()
+
+    agency1 = await create_agency(unit_id=unit1.id)
+    agency2 = await create_agency(unit_id=unit2.id)
+
+    sector1 = await create_sector(agency_id=agency1.id)
+    sector2 = await create_sector(agency_id=agency2.id)
+
+    loc1 = await create_location(sector_id=sector1.id)
+    loc2 = await create_location(sector_id=sector2.id)
+
+    asset1 = await create_asset(location_id=loc1.id)
+    asset2 = await create_asset(location_id=loc2.id)
+
+    await create_catalog_entry(asset_id=asset1.id)
+    await create_catalog_entry(asset_id=asset2.id)
+
+    response_unit1 = client.get(f'/catalog?unit_id={unit1.id}')
+    assert response_unit1.status_code == HTTPStatus.OK
+    assert len(response_unit1.json()['catalog_entries']) == 1
+    assert response_unit1.json()['catalog_entries'][0]['asset']['id'] == str(
+        asset1.id
+    )
+
+    response_unit2 = client.get(f'/catalog?unit_id={unit2.id}')
+    assert response_unit2.status_code == HTTPStatus.OK
+    assert len(response_unit2.json()['catalog_entries']) == 1
+    assert response_unit2.json()['catalog_entries'][0]['asset']['id'] == str(
+        asset2.id
+    )
+
+    fake_id = uuid4()
+    response_fake = client.get(f'/catalog?unit_id={fake_id}')
+    assert response_fake.status_code == HTTPStatus.OK
+    assert len(response_fake.json()['catalog_entries']) == 0

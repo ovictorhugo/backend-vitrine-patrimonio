@@ -86,15 +86,6 @@ class SystemIdentityPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# Adicione este novo schema junto com os outros
-class RolePublicWithoutPermissions(BaseModel):
-    id: UUID
-    name: str
-    description: str | None = None
-
-    model_config = {'from_attributes': True}
-
-
 class UserPublic(BaseModel):
     id: UUID
     username: str
@@ -110,7 +101,7 @@ class UserPublic(BaseModel):
     verify: bool | None = None
     institution_id: UUID | None = None
 
-    roles: list[RolePublicWithoutPermissions]
+    roles: list[RolePublic]
     system_identity: Optional[SystemIdentityPublic]
 
     model_config = ConfigDict(from_attributes=True)
@@ -447,10 +438,17 @@ class CatalogList(BaseModel):
     catalog_entries: List[CatalogPublic]
 
 
-class FilterCatalog(FilterPage):
+class FilterCatalog(FilterAsset):
     q: str | None = Field(default=None)
+
+    location_id: UUID | None = None
+    unit_id: UUID | None = None
+    agency_id: UUID | None = None
+    sector_id: UUID | None = None
+
     material_id: UUID | None = None
     legal_guardian_id: UUID | None = None
+
     user_id: UUID | None = None
     workflow_status: Optional[str] = None
 
@@ -552,7 +550,7 @@ class CollectionList(BaseModel):
     collections: list[CollectionPublic]
 
 
-class FilterCollection(FilterAsset):
+class FilterCollection(FilterCatalog):
     q: str | None = Field(default=None)
     type: Optional[str] = Field(default=None)
 

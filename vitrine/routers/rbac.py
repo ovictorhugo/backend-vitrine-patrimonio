@@ -44,7 +44,7 @@ async def read_roles(
     query = await session.scalars(
         select(Role)
         .options(
-            selectinload(Role.permissions).selectinload(
+            selectinload(Role.role_permissions).selectinload(
                 RolePermission.permission
             )
         )
@@ -53,7 +53,7 @@ async def read_roles(
         .limit(filter_roles.limit)
     )
     roles = query.all()
-    return {'roles': roles}
+    return RoleList(roles=roles)
 
 
 @router.post('/{role_id}/permissions', response_model=Message)

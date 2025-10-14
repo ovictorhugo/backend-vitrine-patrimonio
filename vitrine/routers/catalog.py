@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Mail, Session
 from vitrine.models import (
+    Agency,
     Asset,
     Catalog,
     CatalogImage,
@@ -18,6 +19,7 @@ from vitrine.models import (
     Location,
     LocationInventory,
     Material,
+    Sector,
     SystemIdentity,
     User,
     UserRole,
@@ -153,7 +155,15 @@ async def read_catalog_entries(
 ):
     query = select(Catalog).where(Catalog.deleted_at.is_(None))
 
-    asset_join = filters.q or filters.material_id or filters.legal_guardian_id
+    asset_join = (
+        filters.q
+        or filters.material_id
+        or filters.legal_guardian_id
+        or filters.location_id
+        or filters.unit_id
+        or filters.agency_id
+        or filters.sector_id
+    )
     if asset_join:
         query = query.join(Catalog.asset)
 
@@ -169,6 +179,29 @@ async def read_catalog_entries(
         query = query.where(
             Asset.legal_guardian_id == filters.legal_guardian_id
         )
+
+    if filters.unit_id:
+        query = (
+            query.join(Asset.location)
+            .join(Location.sector)
+            .join(Sector.agency)
+            .where(Agency.unit_id == filters.unit_id)
+        )
+
+    if filters.agency_id:
+        query = (
+            query.join(Asset.location)
+            .join(Location.sector)
+            .where(Sector.agency_id == filters.agency_id)
+        )
+
+    if filters.sector_id:
+        query = query.join(Asset.location).where(
+            Location.sector_id == filters.sector_id
+        )
+
+    if filters.location_id:
+        query = query.where(Asset.location_id == filters.location_id)
 
     query = filter_service.apply_catalog_filters(query, filters)
 

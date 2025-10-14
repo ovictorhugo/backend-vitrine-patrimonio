@@ -83,14 +83,12 @@ async def read_users(
         .limit(filter_users.limit)
     )
     users = query.all()
-    print(UserList.model_validate({'users': users}))
     return {'users': users}
 
 
 @router.get('/my-self', include_in_schema=False)
 @router.get('/my', response_model=UserPublic)
 async def read_me(current_user: CurrentUser):
-    print(UserPublic.model_validate(current_user))
     return current_user
 
 
