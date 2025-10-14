@@ -15,6 +15,7 @@ from vitrine.models import (
     Catalog,
     CatalogImage,
     CatalogWorkFlow,
+    CollectionItem,
     LegalGuardian,
     Location,
     LocationInventory,
@@ -204,6 +205,11 @@ async def read_catalog_entries(
         query = query.where(Asset.location_id == filters.location_id)
 
     query = filter_service.apply_catalog_filters(query, filters)
+
+    if filters.only_uncollected:
+        query = query.outerjoin(
+            CollectionItem, CollectionItem.catalog_id == Catalog.id
+        ).where(CollectionItem.id.is_(None))
 
     query = query.options(
         selectinload(Catalog.images),
