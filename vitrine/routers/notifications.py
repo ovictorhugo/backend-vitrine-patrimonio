@@ -81,6 +81,34 @@ async def create_notification(
 @router.get('/', response_model=NotificationList)
 async def read_notifications(
     session: Session,
+    filters: Annotated[FilterNotification, Depends()],
+):
+    query = (
+        select(Notification)
+        .where(
+            Notification.deleted_at.is_(None),
+        )
+        .options(selectinload(Notification.source_user))
+        .offset(filters.offset)
+        .limit(filters.limit)
+        .order_by(Notification.created_at.desc())
+    )
+
+    if filters.read is True:
+        query = query.where(Notification.read_at.is_not(None))
+    elif filters.read is False:
+        query = query.where(Notification.read_at.is_(None))
+
+    if filters.type:
+        query = query.where(Notification.type == filters.type)
+
+    db_notifications = await session.scalars(query)
+    return {'notifications': db_notifications.all()}
+
+
+@router.get('/my', response_model=NotificationList)
+async def read_my_notifications(
+    session: Session,
     current_user: CurrentUser,
     filters: Annotated[FilterNotification, Depends()],
 ):

@@ -96,7 +96,6 @@ async def test_create_notification_target_not_found(
             'type': 'SYSTEM_ALERT',
         },
     )
-    print(response.json())
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json() == {
         'detail': 'Target user(s) not found or deactivated'

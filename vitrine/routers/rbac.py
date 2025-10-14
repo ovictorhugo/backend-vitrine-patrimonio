@@ -8,7 +8,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import Session
-from vitrine.models import Permission, Role, RolePermission, User, UserRole
+from vitrine.models import (
+    Permission,
+    Role,
+    RolePermission,
+    SystemIdentity,
+    User,
+    UserRole,
+)
 from vitrine.schemas import (
     FilterPage,
     Message,
@@ -17,6 +24,7 @@ from vitrine.schemas import (
     RoleList,
     RolePublic,
     RoleSchema,
+    UserList,
 )
 
 router = APIRouter(
@@ -113,6 +121,36 @@ async def delete_permission(permission_id: UUID, session: Session):
     await session.commit()
 
     return {'message': 'Permission deactivated'}
+
+
+@router.get('/{role_id}/users', response_model=UserList)
+async def get_users_from_roles(
+    role_id: UUID, filters: Annotated[FilterPage, Query()], session: Session
+):
+    query = (
+        select(User)
+        .join(UserRole, User.id == UserRole.user_id)
+        .where(
+            UserRole.role_id == role_id,
+            User.deleted_at.is_(None),
+            UserRole.deleted_at.is_(None),
+        )
+        .options(
+            selectinload(User.system_identity).selectinload(
+                SystemIdentity.legal_guardian
+            ),
+            selectinload(User.user_role_associations).selectinload(
+                UserRole.role
+            ),
+        )
+        .offset(filters.offset)
+        .limit(filters.limit)
+    )
+
+    result = await session.scalars(query)
+    users = result.all()
+
+    return {'users': users}
 
 
 @router.post('/{role_id}/permissions', response_model=Message)
