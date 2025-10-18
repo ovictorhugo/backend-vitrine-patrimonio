@@ -99,9 +99,15 @@ async def update_user(
     session: Session,
     current_user: CurrentUser,
 ):
+    db_user = await session.get(User, user_id)
+    if not db_user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='User not found'
+        )
+
     is_admin = any(role.name == 'Administrador' for role in current_user.roles)
 
-    if current_user.id != user_id and not is_admin:
+    if current_user.id != db_user.id and not is_admin:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail='Not enough permissions'
         )
@@ -109,7 +115,7 @@ async def update_user(
     update_data = user_update.model_dump(exclude_unset=True)
 
     if not update_data:
-        return current_user
+        return db_user
 
     if 'username' in update_data:
         query_username = select(User).where(
@@ -135,12 +141,13 @@ async def update_user(
             )
 
     for field, value in update_data.items():
-        setattr(current_user, field, value)
+        setattr(db_user, field, value)
 
+    session.add(db_user)
     await session.commit()
-    await session.refresh(current_user)
+    await session.refresh(db_user)
 
-    return current_user
+    return db_user
 
 
 @router.delete('/{user_id}', response_model=Message)
