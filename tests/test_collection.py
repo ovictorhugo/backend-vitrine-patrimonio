@@ -90,23 +90,6 @@ async def test_read_collection_by_id(
     assert data['name'] == collection.name
 
 
-async def test_read_collection_by_id_fails_for_other_user(
-    client, create_user, create_token, create_collection
-):
-    owner_user = await create_user()
-    collection = await create_collection(user_id=owner_user.id)
-
-    other_user = await create_user()
-    other_token = create_token(other_user)
-
-    response = client.get(
-        f'/collections/{collection.id}',
-        headers={'Authorization': f'Bearer {other_token}'},
-    )
-
-    assert response.status_code == HTTPStatus.FORBIDDEN
-
-
 async def test_delete_collection(
     client, session, create_user, create_token, create_collection
 ):

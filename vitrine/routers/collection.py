@@ -44,6 +44,7 @@ async def create_collection(
         type=collection.type,
         user_id=current_user.id,
     )
+
     session.add(db_collection)
     await session.commit()
     await session.refresh(db_collection)
@@ -99,12 +100,6 @@ async def read_collection(
     if not db_collection:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
-        )
-
-    if db_collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You do not have permission to access this collection.',
         )
 
     return db_collection

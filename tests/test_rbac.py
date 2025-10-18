@@ -195,3 +195,77 @@ async def test_delete_permission_twice_idempotent(client):
 
     assert delete_response_2.status_code == HTTPStatus.NOT_FOUND
     assert delete_response_2.json() == {'detail': 'Permission deactivated'}
+
+
+@pytest.mark.asyncio
+async def test_update_role_success(client):
+    create_response = client.post(
+        '/roles/',
+        json={'name': 'Nome Antigo', 'description': 'Descrição Antiga'},
+    )
+    assert create_response.status_code == HTTPStatus.CREATED
+    role_data = create_response.json()
+    role_id = role_data['id']
+
+    update_payload = {
+        'name': 'Nome Atualizado',
+        'description': 'Descrição Atualizada',
+    }
+
+    response = client.put(
+        f'/roles/{role_id}',
+        json=update_payload,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    updated_data = response.json()
+
+    assert updated_data['id'] == role_id
+    assert updated_data['name'] == 'Nome Atualizado'
+    assert updated_data['description'] == 'Descrição Atualizada'
+
+
+@pytest.mark.asyncio
+async def test_update_role_not_found(client):
+    fake_role_id = uuid4()
+    update_payload = {
+        'name': 'Nome Inexistente',
+        'description': 'Descrição Inexistente',
+    }
+
+    response = client.put(
+        f'/roles/{fake_role_id}',
+        json=update_payload,
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json() == {'detail': 'Role not found'}
+
+
+@pytest.mark.asyncio
+async def test_update_deleted_role_not_found(client):
+    create_response = client.post(
+        '/roles/',
+        json={'name': 'Role a ser deletado', 'description': '...'},
+    )
+    assert create_response.status_code == HTTPStatus.CREATED
+    role_id = create_response.json()['id']
+
+    delete_response = client.delete(f'/roles/{role_id}')
+
+    assert delete_response.status_code in {
+        HTTPStatus.OK,
+        HTTPStatus.NOT_FOUND,
+    }
+
+    update_payload = {
+        'name': 'Tentativa de Update',
+        'description': 'Não deve funcionar',
+    }
+    response = client.put(
+        f'/roles/{role_id}',
+        json=update_payload,
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json() == {'detail': 'Role not found'}

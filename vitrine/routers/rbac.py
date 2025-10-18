@@ -65,10 +65,6 @@ async def read_roles(
     return RoleList(roles=roles)
 
 
-# --- ENDPOINTS DE PERMISSÕES MOVIDOS PARA CIMA ---
-# Rotas estáticas /permissions vêm antes de /{}
-
-
 @router.post(
     '/permissions',
     status_code=HTTPStatus.CREATED,
@@ -105,13 +101,39 @@ async def read_permissions(session: Session):
     return query.all()
 
 
+@router.put('/{role_id}', response_model=RolePublic)
+async def update_role(session: Session, role_id: UUID, role: RoleSchema):
+    role_db = await session.get(Role, role_id)
+    if not role_db or role_db.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Role not found',
+        )
+    role_db.name = role.name
+    role_db.description = role.description
+    await session.commit()
+    await session.refresh(role_db)
+    return role_db
+
+
+@router.delete('/{role_id}', response_model=Message)
+async def delete_role(session: Session, role_id: UUID):
+    role_db = await session.get(Role, role_id)
+    if not role_db or role_db.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Role not found',
+        )
+    role_db.deleted_at = datetime.datetime.now()
+    await session.commit()
+    return {'message': 'Role deactivated'}
+
+
 @router.delete('/permissions/{permission_id}')
 async def delete_permission(permission_id: UUID, session: Session):
     db_permission = await session.get(Permission, permission_id)
 
-    if (
-        not db_permission or db_permission.deleted_at
-    ):  # Verificando também se existe
+    if not db_permission or db_permission.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail='Permission deactivated',
