@@ -196,19 +196,12 @@ async def update_collection_item(
 async def list_collection_items(
     collection_id: UUID,
     session: Session,
-    current_user: CurrentUser,
     filters: Annotated[FilterCatalog, Depends()],
 ):
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
-        )
-
-    if db_collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You do not have permission to view this collection.',
         )
 
     query = (
