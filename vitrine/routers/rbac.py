@@ -101,6 +101,17 @@ async def read_permissions(session: Session):
     return query.all()
 
 
+@router.get('/{role_id}/permissions', response_model=List[PermissionPublic])
+async def read_permissions_by_role(session: Session, role_id: UUID):
+    query = await session.scalars(
+        select(Permission).where(
+            Permission.deleted_at.is_(None),
+            Permission.roles.any(Role.id == role_id),
+        )
+    )
+    return query.all()
+
+
 @router.put('/{role_id}', response_model=RolePublic)
 async def update_role(session: Session, role_id: UUID, role: RoleSchema):
     role_db = await session.get(Role, role_id)

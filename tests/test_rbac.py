@@ -269,3 +269,98 @@ async def test_update_deleted_role_not_found(client):
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json() == {'detail': 'Role not found'}
+
+
+@pytest.mark.asyncio
+async def test_read_permissions_by_role_success(client):
+    role_response = client.post(
+        '/roles/', json={'name': 'Auditor', 'description': 'Audita o sistema'}
+    )
+    assert role_response.status_code == HTTPStatus.CREATED
+    role_id = role_response.json()['id']
+
+    perm1_response = client.post(
+        '/roles/permissions',
+        json={'name': 'Visualizar Logs', 'code': 'view_logs'},
+    )
+    perm2_response = client.post(
+        '/roles/permissions',
+        json={'name': 'Visualizar Relatórios', 'code': 'view_reports_audit'},
+    )
+    perm1_id = perm1_response.json()['id']
+    perm2_id = perm2_response.json()['id']
+
+    client.post(f'/roles/{role_id}/permissions?permission_id={perm1_id}')
+    client.post(f'/roles/{role_id}/permissions?permission_id={perm2_id}')
+
+    response = client.get(f'/roles/{role_id}/permissions')
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data) == 2
+
+    codes_in_response = {perm['code'] for perm in data}
+    assert 'view_logs' in codes_in_response
+    assert 'view_reports_audit' in codes_in_response
+
+
+@pytest.mark.asyncio
+async def test_read_permissions_by_role_empty(client):
+    role_response = client.post(
+        '/roles/', json={'name': 'Visitante', 'description': 'Sem permissões'}
+    )
+    assert role_response.status_code == HTTPStatus.CREATED
+    role_id = role_response.json()['id']
+
+    response = client.get(f'/roles/{role_id}/permissions')
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_read_permissions_for_nonexistent_role(client):
+    fake_role_id = uuid4()
+    response = client.get(f'/roles/{fake_role_id}/permissions')
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_read_permissions_by_role_skips_deleted_permissions(client):
+    role_response = client.post(
+        '/roles/', json={'name': 'Gerente', 'description': 'Gerencia'}
+    )
+    assert role_response.status_code == HTTPStatus.CREATED
+    role_id = role_response.json()['id']
+
+    perm_active_response = client.post(
+        '/roles/permissions',
+        json={'name': 'Permissão Ativa', 'code': 'perm_active'},
+    )
+    perm_deleted_response = client.post(
+        '/roles/permissions',
+        json={'name': 'Permissão Deletada', 'code': 'perm_deleted'},
+    )
+    perm_active_id = perm_active_response.json()['id']
+    perm_deleted_id = perm_deleted_response.json()['id']
+
+    client.post(f'/roles/{role_id}/permissions?permission_id={perm_active_id}')
+    client.post(
+        f'/roles/{role_id}/permissions?permission_id={perm_deleted_id}'
+    )
+
+    delete_resp = client.delete(f'/roles/permissions/{perm_deleted_id}')
+    assert (
+        delete_resp.status_code == HTTPStatus.OK
+    )  # Baseado no seu teste anterior
+
+    response = client.get(f'/roles/{role_id}/permissions')
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]['id'] == perm_active_id
+    assert data[0]['code'] == 'perm_active'
