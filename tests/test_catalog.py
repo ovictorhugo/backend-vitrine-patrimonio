@@ -6,7 +6,10 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from vitrine.models import WorkFlowStatus, WorkflowTransferStatus
+from vitrine.models import (
+    WorkFlowStatus,
+    WorkflowTransferStatus,
+)
 from vitrine.schemas import (
     AssetSituation,
     CatalogPublic,
@@ -1104,3 +1107,31 @@ async def test_list_catalog_by_unit_id(
     response_fake = client.get(f'/catalog?unit_id={fake_id}')
     assert response_fake.status_code == HTTPStatus.OK
     assert len(response_fake.json()['catalog_entries']) == 0
+
+
+@pytest.mark.asyncio
+async def test_filter_catalog_by_reviewer_id(
+    client, create_catalog_entry, create_token, create_user
+):
+    user1 = await create_user()
+    user2 = await create_user()
+    catalog1 = await create_catalog_entry()
+    await create_catalog_entry()
+
+    role = client.post(
+        '/roles/',
+        json={'name': 'Comissão de desfazimento'},
+    ).json()
+    client.post(f'/roles/{role["id"]}/users/{user1.id}')
+
+    workflow_payload = {
+        'workflow_status': 'REVIEW_REQUESTED_COMISSION',
+        'detail': {'reason': 'Awaiting approval from manager.'},
+    }
+    response = client.post(
+        f'/catalog/{catalog1.id}/workflow',
+        json=workflow_payload,
+        headers={'Authorization': f'Bearer {create_token(user2)}'},
+    )
+    response = client.get(f'/catalog/?reviewer_id={user1.id}')
+    assert len(response.json()) == 1

@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import String, cast, func, select, update
+from sqlalchemy import Text, cast, func, select, update
 from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Mail, Session
@@ -253,8 +253,8 @@ async def read_catalog_entries(
         )
 
         query = query.where(
-            cast(CatalogWorkFlow.detail, String).like(
-                f'%"{str(filters.reviewer_id)}"%'
+            cast(CatalogWorkFlow.detail['reviewers'], Text).like(
+                f'%{filters.reviewer_id}%'
             )
         )
 
