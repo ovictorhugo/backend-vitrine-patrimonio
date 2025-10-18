@@ -99,7 +99,9 @@ async def update_user(
     session: Session,
     current_user: CurrentUser,
 ):
-    if current_user.id != user_id:
+    is_admin = any(role.name == 'Administrador' for role in current_user.roles)
+
+    if current_user.id != user_id and not is_admin:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail='Not enough permissions'
         )
@@ -147,11 +149,29 @@ async def delete_user(
     session: Session,
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.id != user_id:
+    is_admin = any(role.name == 'Administrador' for role in current_user.roles)
+
+    if current_user.id != user_id and not is_admin:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail='Not enough permissions'
         )
 
-    current_user.deleted_at = datetime.now()
+    user_to_delete = await session.get(User, user_id)
+
+    if not user_to_delete:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='User not found'
+        )
+
+    if user_to_delete.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='User already deactivated',
+        )
+
+    user_to_delete.deleted_at = datetime.now()
+
+    session.add(user_to_delete)
     await session.commit()
+
     return {'message': 'User deactivated'}
