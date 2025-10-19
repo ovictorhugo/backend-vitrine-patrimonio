@@ -147,18 +147,45 @@ async def update_collection_item(
     existing_item_query = select(CollectionItem).where(
         CollectionItem.collection_id == collection_id,
         CollectionItem.id != item_id,
+        CollectionItem.catalog_id == db_item.catalog_id,
     )
     if await session.scalar(existing_item_query):
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
             detail='Another item with this catalog ID already exists in the collection.',
         )
+
     db_item.status = item_update.status
     db_item.comment = item_update.comment
+
     await session.commit()
     await session.refresh(db_item)
 
-    print(CollectionItemPublic.model_validate(db_item))
+    query = (
+        select(Catalog)
+        .options(
+            selectinload(Catalog.images),
+            selectinload(Catalog.workflow_history).options(
+                selectinload(CatalogWorkFlow.user).options(
+                    selectinload(User.system_identity).options(
+                        selectinload(SystemIdentity.legal_guardian)
+                    ),
+                    selectinload(User.user_role_associations).selectinload(
+                        UserRole.role
+                    ),
+                ),
+                selectinload(CatalogWorkFlow.transfer_requests),
+            ),
+            selectinload(Catalog.location)
+            .selectinload(Location.location_inventories)
+            .selectinload(LocationInventory.inventory),
+        )
+        .where(Catalog.id == db_item.catalog_id)
+    )
+    result = await session.execute(query)
+    db_catalog = result.scalar_one()
+    db_item.catalog = db_catalog
+
     return db_item
 
 

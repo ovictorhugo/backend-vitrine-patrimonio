@@ -11,6 +11,7 @@ from vitrine.models import (
     Asset,
     Catalog,
     CatalogWorkFlow,
+    Collection,
     CollectionItem,
     Location,
     Sector,
@@ -28,7 +29,7 @@ def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
             CollectionItem,
             and_(
                 CollectionItem.catalog_id == Catalog.id,
-                CollectionItem.deleted_at.is_(None),
+                CollectionItem.collection.has(Collection.deleted_at.is_(None)),
             ),
         ).where(CollectionItem.id.is_(None))
 
