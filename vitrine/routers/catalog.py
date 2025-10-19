@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import func, select, update
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -656,16 +656,23 @@ async def search_catalog_by_asset_identifier(session: Session, q: str = str()):
 
 
 @router.put(
-    '/workflow/{workflow_id}/reviewers',
+    '/{catalog_id}/reviewers',
     response_model=CatalogWorkFlowPublic,
 )
 async def update_workflow_reviewers(
-    workflow_id: UUID,
+    catalog_id: UUID,
     new_reviewers: list[UUID],
     session: Session,
     current_user: CurrentUser,
 ):
-    workflow = await session.get(CatalogWorkFlow, workflow_id)
+    result = await session.execute(
+        select(CatalogWorkFlow)
+        .where(CatalogWorkFlow.catalog_id == catalog_id)
+        .order_by(desc(CatalogWorkFlow.created_at))
+        .limit(1)
+    )
+    workflow = result.scalar_one_or_none()
+
     if not workflow:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Workflow not found'
