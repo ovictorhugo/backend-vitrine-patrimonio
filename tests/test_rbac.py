@@ -111,7 +111,9 @@ async def test_remove_role_from_user(client, create_user):
 
     response = client.delete(f'/roles/{role["id"]}/users/{user.id}')
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == {'message': 'Role removed from user'}
+    assert response.json() == {
+        'message': 'Role removed from user and reviewers reassigned if applicable'
+    }
 
 
 @pytest.mark.asyncio
