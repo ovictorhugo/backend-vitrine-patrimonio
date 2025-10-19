@@ -69,8 +69,8 @@ async def get_catalog_count_by_workflow_status(session: Session):
 async def get_catalog_count_by_collection_status(session: Session):
     query_true_false = select(
         case(
-            (CollectionItem.status == True, 'TRUE'),
-            (CollectionItem.status == False, 'FALSE'),
+            (CollectionItem.status.is_(True), literal_column("'TRUE'")),
+            (CollectionItem.status.is_(False), literal_column("'FALSE'")),
         ).label('status'),
         func.count(CollectionItem.id).label('count'),
     ).group_by(CollectionItem.status)
@@ -81,7 +81,7 @@ async def get_catalog_count_by_collection_status(session: Session):
             func.count(Catalog.id).label('count'),
         )
         .outerjoin(CollectionItem, Catalog.id == CollectionItem.catalog_id)
-        .where(CollectionItem.id == None)
+        .where(CollectionItem.id.is_(None))
     )
 
     final_query = union_all(query_true_false, query_not_in_collection)
