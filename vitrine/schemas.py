@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from pydantic import (
@@ -646,3 +646,30 @@ class FeedbackPublic(FeedbackBase):
 
 class FeedbackList(BaseModel):
     feedbacks: List[FeedbackPublic]
+
+
+class SystemSettingBase(BaseModel):
+    key: str
+    value: Any | None = None
+    description: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SystemSettingCreate(SystemSettingBase):
+    pass
+
+
+class SystemSettingUpdate(BaseModel):
+    value: Any | None = None
+    description: str | None = None
+
+
+class SystemSettingPublic(SystemSettingBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class SystemSettingList(BaseModel):
+    settings: list[SystemSettingPublic]

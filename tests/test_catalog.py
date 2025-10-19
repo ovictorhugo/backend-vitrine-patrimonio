@@ -1164,12 +1164,10 @@ async def test_update_workflow_reviewers(
         json=workflow_payload,
         headers={'Authorization': f'Bearer {create_token(user1)}'},
     )
-    workflow = response.json()
-    workflow_id = workflow['id']
 
     new_reviewers = [str(user2.id), str(user3.id)]
     response = client.put(
-        f'/catalog/workflow/{workflow_id}/reviewers',
+        f'/catalog/{catalog1.id}/reviewers',
         json=new_reviewers,
         headers={'Authorization': f'Bearer {create_token(user1)}'},
     )

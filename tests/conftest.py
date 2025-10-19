@@ -1,3 +1,4 @@
+import os
 import smtplib
 from contextlib import contextmanager
 from datetime import datetime
@@ -59,6 +60,7 @@ def client(session, mailpit):
         finally:
             smtp_connection.quit()
 
+    os.environ['ENVIRONMENT'] = 'PYTEST'
     with TestClient(app) as client:
         app.dependency_overrides[get_session] = get_session_override
         app.dependency_overrides[get_smtp] = get_smtp_override

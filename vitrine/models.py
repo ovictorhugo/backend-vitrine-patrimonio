@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import Enum as PythonEnum
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -1157,6 +1157,27 @@ class Feedback:
     )
     user: Mapped[Optional['User']] = relationship(init=False, lazy='selectin')
 
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True, onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class SystemSetting:
+    __tablename__ = 'system_settings'
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+    key: Mapped[str] = mapped_column(nullable=False, unique=True, index=True)
+    value: Mapped[Any] = mapped_column(JSON, nullable=True)
+    description: Mapped[str | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )

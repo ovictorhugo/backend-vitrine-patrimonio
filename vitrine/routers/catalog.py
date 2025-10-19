@@ -21,6 +21,7 @@ from vitrine.models import (
     Material,
     Role,
     SystemIdentity,
+    SystemSetting,
     User,
     UserRole,
     WorkFlowStatus,
@@ -48,10 +49,21 @@ from vitrine.schemas import (
 )
 from vitrine.services import filter_service, mail_service
 
-COMISSION_SAMPLE_SIZE = 5
+try:
+    _stmt = select(SystemSetting.value).where(
+        SystemSetting.key == 'COMISSION_SAMPLE_SIZE'
+    )
+    _sample_size = _stmt.session.scalar(_stmt)
+    COMISSION_SAMPLE_SIZE = (
+        int(_sample_size) if _sample_size is not None else 5
+    )
+except Exception:
+    COMISSION_SAMPLE_SIZE = 5
+
 _ASSET_FIELDS = set(FilterAsset.model_fields.keys())
 _NON_JOIN_FIELDS = {'limit', 'offset'}
 ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
+
 
 router = APIRouter(
     prefix='/catalog', tags=['vitrine - patrimônios anunciados']
@@ -146,11 +158,22 @@ async def add_workflow_step(
         )
 
     if workflow_data.workflow_status == 'REVIEW_REQUESTED_COMISSION':
+        try:
+            stmt = select(SystemSetting.value).where(
+                SystemSetting.key == 'COMISSION_SAMPLE_SIZE'
+            )
+            sample_size = await session.scalar(stmt)
+            comission_sample_size = (
+                int(sample_size) if sample_size is not None else 5
+            )
+        except Exception:
+            comission_sample_size = 5
+
         stmt = (
             select(User.id)
             .where(User.roles.any(Role.name == 'Comissão de desfazimento'))
             .order_by(func.random())
-            .limit(COMISSION_SAMPLE_SIZE)
+            .limit(comission_sample_size)
         )
 
         result = await session.execute(stmt)

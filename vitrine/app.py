@@ -1,9 +1,14 @@
 import os
+from contextlib import asynccontextmanager
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from vitrine.database import get_session
+from vitrine.events import check_and_update_stale_workflows
 from vitrine.routers import (
     assets,
     auth,
@@ -15,6 +20,7 @@ from vitrine.routers import (
     inventory,
     notifications,
     rbac,
+    system,
     users,
     users_visuals,
 )
@@ -39,7 +45,29 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 TEMP_DIR = os.path.join(STORAGE_DIR, 'temp')
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-app = FastAPI(root_path=Settings().ROOT_PATH, debug=True)
+
+scheduler = AsyncIOScheduler(timezone='America/Sao_Paulo')
+
+
+@scheduler.scheduled_job(CronTrigger(hour=0, minute=0, second=0))
+async def migration_to_alienation():
+    async for session in get_session():
+        count = await check_and_update_stale_workflows(session)
+        print(f'🔹 {count} workflows atualizados para ALIENACAO.')
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if os.environ.get('ENVIRONMENT') != 'PYTEST':
+        scheduler.start()
+        print('🔹 APScheduler iniciado')
+    yield
+    if os.environ.get('ENVIRONMENT') != 'PYTEST':
+        scheduler.shutdown(wait=False)
+        print('🔹 Encerrando APScheduler...')
+
+
+app = FastAPI(root_path=Settings().ROOT_PATH, debug=True, lifespan=lifespan)
 
 app.mount('/uploads', StaticFiles(directory=UPLOADS_DIR), name='uploads')
 
@@ -75,6 +103,7 @@ app.include_router(catalog_statistics.router)
 
 app.include_router(notifications.router)
 app.include_router(feedback.router)
+app.include_router(system.router)
 
 
 @app.get('/')
