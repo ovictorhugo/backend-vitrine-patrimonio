@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy import Text, cast, func, select
+from sqlalchemy import Text, and_, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
@@ -25,7 +25,11 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
     if filters.only_uncollected:
         query = query.outerjoin(
-            CollectionItem, CollectionItem.catalog_id == Catalog.id
+            CollectionItem,
+            and_(
+                CollectionItem.catalog_id == Catalog.id,
+                CollectionItem.deleted_at.is_(None),
+            ),
         ).where(CollectionItem.id.is_(None))
 
     needs_latest_workflow = filters.reviewer_id or filters.workflow_status
