@@ -278,12 +278,16 @@ async def update_catalog_entry(
         selectinload(Catalog.images),
         selectinload(Catalog.workflow_history).options(
             selectinload(CatalogWorkFlow.user),
-            selectinload(CatalogWorkFlow.transfer_requests),
+            selectinload(CatalogWorkFlow.transfer_requests).options(
+                selectinload(WorkflowTransfer.user),
+                selectinload(WorkflowTransfer.location),
+            ),
         ),
         selectinload(Catalog.location)
         .selectinload(Location.location_inventories)
         .selectinload(LocationInventory.inventory),
     ]
+
     db_catalog = await session.get(Catalog, catalog_id, options=options)
 
     if not db_catalog:
@@ -297,9 +301,16 @@ async def update_catalog_entry(
     db_catalog.description = catalog_data.description
 
     await session.commit()
-    await session.refresh(db_catalog)
 
-    return db_catalog
+    db_catalog_loaded = await session.get(Catalog, catalog_id, options=options)
+
+    if not db_catalog_loaded:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Catalog entry not found after update',
+        )
+
+    return db_catalog_loaded
 
 
 @router.post('/{catalog_id}/transfer', response_model=Message)
