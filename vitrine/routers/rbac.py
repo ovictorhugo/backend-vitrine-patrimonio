@@ -1,14 +1,17 @@
 import datetime
+from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated, List
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import Text, cast, func, select
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from vitrine.dependencies import Session
 from vitrine.models import (
+    CatalogWorkFlow,
     Permission,
     Role,
     RolePermission,
@@ -283,4 +286,58 @@ async def remove_role_from_user(
 
     await session.delete(assoc)
     await session.commit()
-    return {'message': 'Role removed from user'}
+
+    role = await session.get(Role, role_id)
+
+    if role and role.name == 'Comissão de desfazimento':
+        user_id_str = str(user_id)
+        stmt_find_workflows = select(CatalogWorkFlow).where(
+            CatalogWorkFlow.workflow_status == 'REVIEW_REQUESTED_COMISSION',
+            cast(CatalogWorkFlow.detail['reviewers'], Text).like(
+                f'%{user_id_str}%'
+            ),
+        )
+        result_workflows = await session.execute(stmt_find_workflows)
+        workflows_to_update = result_workflows.scalars().all()
+
+        for workflow in workflows_to_update:
+            current_reviewer_uuids = [
+                UUID(uid) for uid in workflow.detail['reviewers']
+            ]
+
+            stmt_find_replacement = (
+                select(User.id)
+                .where(
+                    User.roles.any(Role.name == 'Comissão de desfazimento'),
+                    User.id.notin_(current_reviewer_uuids),
+                    User.deleted_at.is_(None),
+                )
+                .order_by(func.random())
+                .limit(1)
+            )
+
+            result_replacement = await session.execute(stmt_find_replacement)
+            new_reviewer_id = result_replacement.scalar_one_or_none()
+
+            new_reviewers_list = [
+                uid
+                for uid in workflow.detail['reviewers']
+                if uid != user_id_str
+            ]
+
+            if new_reviewer_id:
+                new_reviewers_list.append(str(new_reviewer_id))
+            else:
+                print(
+                    f'WARNING: No replacement reviewer found for workflow {workflow.id}'
+                )
+
+            workflow.detail['reviewers'] = new_reviewers_list
+            flag_modified(workflow, 'detail')
+            session.add(workflow)
+
+        await session.commit()
+
+    return {
+        'message': 'Role removed from user and reviewers reassigned if applicable'
+    }

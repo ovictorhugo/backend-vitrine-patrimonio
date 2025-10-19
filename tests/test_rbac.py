@@ -364,3 +364,38 @@ async def test_read_permissions_by_role_skips_deleted_permissions(client):
     assert len(data) == 1
     assert data[0]['id'] == perm_active_id
     assert data[0]['code'] == 'perm_active'
+
+
+@pytest.mark.asyncio
+async def test_remove_comissao_role_reassigns_reviewers(
+    client, create_user, create_token, create_catalog_entry
+):
+    user1 = await create_user()
+    user2 = await create_user()
+    catalog = await create_catalog_entry()
+
+    role = client.post(
+        '/roles/',
+        json={'name': 'Comissão de desfazimento'},
+    ).json()
+    client.post(f'/roles/{role["id"]}/users/{user1.id}')
+    client.post(f'/roles/{role["id"]}/users/{user2.id}')
+
+    workflow_payload = {
+        'workflow_status': 'REVIEW_REQUESTED_COMISSION',
+        'detail': {'reviewers': [str(user1.id), str(user2.id)]},
+    }
+
+    client.post(
+        f'/catalog/{catalog.id}/workflow',
+        json=workflow_payload,
+        headers={'Authorization': f'Bearer {create_token(user2)}'},
+    )
+
+    response = client.delete(f'/roles/{role["id"]}/users/{user1.id}')
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert 'reassigned' in data['message']
+
+    response = client.get(f'/catalog/?reviewer_id={user1.id}')
+    assert len(response.json()['catalog_entries']) == 0
