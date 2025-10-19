@@ -553,25 +553,11 @@ class FilterCollection(FilterCatalog):
 
 
 class NotificationCreateSchema(BaseModel):
-    target_user_id: str
+    target_user_id: str = Field(
+        description="IDs de usuário separados por ';' ou '*' para todos."
+    )
     type: str
     detail: Optional[dict] = {}
-
-
-class NotificationPublic(BaseModel):
-    id: UUID
-    type: str
-    detail: Optional[dict] = None
-    read_at: Optional[datetime] = None
-    created_at: datetime
-
-    source_user: Optional[UserPublic] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class NotificationList(BaseModel):
-    notifications: List[NotificationPublic]
 
 
 class NotificationUpdateSchema(BaseModel):
@@ -587,3 +573,71 @@ class FilterNotification(FilterPage):
         default=None,
         description='Filtrar por tipo de notificação (ex: NEW_TRANSFER_REQUEST).',
     )
+
+
+class NotificationContentPublic(BaseModel):
+    id: UUID
+    type: str
+    detail: Optional[dict] = None
+    source_user: Optional[UserPublic] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationPublic(BaseModel):
+    id: UUID
+    read_at: Optional[datetime] = None
+    created_at: datetime
+    notification: NotificationContentPublic
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationList(BaseModel):
+    notifications: List[NotificationPublic]
+
+
+class UserNotificationRecipientPublic(BaseModel):
+    id: UUID
+    read_at: Optional[datetime]
+    target_user: Optional[UserPublic]
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationSentPublic(BaseModel):
+    id: UUID
+    type: str
+    detail: Optional[dict] = None
+    created_at: datetime
+    recipients: List[UserNotificationRecipientPublic] = []
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationSentList(BaseModel):
+    notifications: List[NotificationSentPublic]
+
+
+class FeedbackBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    email: EmailStr
+    rating: int = Field(..., ge=0, le=10)
+    description: Optional[str] = None
+
+
+class FeedbackCreate(FeedbackBase):
+    pass
+
+
+class FeedbackUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    email: Optional[EmailStr] = None
+    rating: Optional[int] = Field(None, ge=0, le=10)
+    description: Optional[str] = None
+
+
+class FeedbackPublic(FeedbackBase):
+    id: UUID
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FeedbackList(BaseModel):
+    feedbacks: List[FeedbackPublic]

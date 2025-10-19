@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     Computed,
     ForeignKey,
     Index,
@@ -107,11 +108,11 @@ class User:
         cascade='all, delete-orphan',
         lazy='selectin',
     )
-    notifications_received: Mapped[list['Notification']] = relationship(
+    notifications_received: Mapped[list['UserNotification']] = relationship(
         back_populates='target_user',
         init=False,
         cascade='all, delete-orphan',
-        foreign_keys='[Notification.target_user_id]',
+        foreign_keys='[UserNotification.target_user_id]',
         lazy='selectin',
     )
     notifications_sent: Mapped[list['Notification']] = relationship(
@@ -918,35 +919,79 @@ class Notification:
         init=False, primary_key=True, default=uuid.uuid4
     )
 
-    target_user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey('users.id'), nullable=False
-    )
+    # Quem criou/enviou a notificação (o "dono" do conteúdo)
     source_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey('users.id'), nullable=True
     )
 
+    # O conteúdo da notificação
     type: Mapped[str] = mapped_column(nullable=False, index=True)
-
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-
-    read_at: Mapped[datetime | None] = mapped_column(init=False, nullable=True)
-
-    target_user: Mapped['User'] = relationship(
-        init=False,
-        back_populates='notifications_received',
-        foreign_keys=[target_user_id],
-    )
-    source_user: Mapped[Optional['User']] = relationship(
-        init=False,
-        back_populates='notifications_sent',
-        foreign_keys=[source_user_id],
-    )
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
+    )
+
+    # Relacionamento com o usuário que criou
+    source_user: Mapped[Optional['User']] = relationship(
+        init=False,
+        back_populates='notifications_sent',
+        foreign_keys=[source_user_id],
+        lazy='selectin',
+    )
+
+    # Relacionamento com todos os destinatários (através da tabela de associação)
+    recipients: Mapped[list['UserNotification']] = relationship(
+        back_populates='notification',
+        init=False,
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
+
+
+@table_registry.mapped_as_dataclass
+class UserNotification:
+    __tablename__ = 'user_notifications'
+    __table_args__ = (
+        UniqueConstraint(
+            'notification_id', 'target_user_id', name='uq_user_notification'
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+
+    notification_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('notifications.id'), nullable=False, index=True
+    )
+
+    target_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('users.id'), nullable=False, index=True
+    )
+
+    read_at: Mapped[datetime | None] = mapped_column(init=False, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
+    )
+
+    notification: Mapped['Notification'] = relationship(
+        back_populates='recipients',
+        init=False,
+        lazy='selectin',
+    )
+
+    target_user: Mapped['User'] = relationship(
+        back_populates='notifications_received',
+        init=False,
+        lazy='selectin',
     )
 
 
@@ -1084,6 +1129,39 @@ class RolePermission:
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True
+    )
+
+
+@table_registry.mapped_as_dataclass
+class Feedback:
+    __tablename__ = 'feedbacks'
+    __table_args__ = (
+        CheckConstraint(
+            'rating >= 0 AND rating <= 10', name='chk_feedback_rating'
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+    name: Mapped[str]
+    email: Mapped[str]
+    rating: Mapped[int]
+    description: Mapped[str | None] = mapped_column(nullable=True)
+
+    user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey('users.id'), nullable=True, init=False
+    )
+    user: Mapped[Optional['User']] = relationship(init=False, lazy='selectin')
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        init=False, nullable=True, onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True

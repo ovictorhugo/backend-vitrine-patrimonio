@@ -11,6 +11,7 @@ from vitrine.routers import (
     collection,
     collection_items,
     favorite,
+    feedback,
     inventory,
     notifications,
     rbac,
@@ -73,6 +74,7 @@ app.include_router(collection_items.router)
 app.include_router(catalog_statistics.router)
 
 app.include_router(notifications.router)
+app.include_router(feedback.router)
 
 
 @app.get('/')

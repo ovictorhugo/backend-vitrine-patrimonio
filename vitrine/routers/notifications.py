@@ -8,26 +8,29 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import Notification, User
+from vitrine.models import Notification, User, UserNotification
 from vitrine.schemas import (
     FilterNotification,
+    FilterPage,
     Message,
     NotificationCreateSchema,
     NotificationList,
     NotificationPublic,
+    NotificationSentList,
+    NotificationSentPublic,
     NotificationUpdateSchema,
 )
 
 router = APIRouter(
     prefix='/notifications',
-    tags=['funcionalidades - notificações'],
+    tags=['utilidades - notificações'],
 )
 
 
 @router.post(
     '/',
     status_code=HTTPStatus.CREATED,
-    response_model=list[NotificationPublic],
+    response_model=NotificationSentPublic,
 )
 async def create_notification(
     notification_data: NotificationCreateSchema,
@@ -46,9 +49,16 @@ async def create_notification(
         )
         target_users = users.all()
     else:
+        try:
+            valid_target_ids = [UUID(uid) for uid in target_ids]
+        except ValueError:
+            raise HTTPException(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                detail='Invalid UUID format in target_user_id',
+            )
         users = await session.scalars(
             select(User).where(
-                User.id.in_(target_ids), User.deleted_at.is_(None)
+                User.id.in_(valid_target_ids), User.deleted_at.is_(None)
             )
         )
         target_users = users.all()
@@ -59,51 +69,35 @@ async def create_notification(
             detail='Target user(s) not found or deactivated',
         )
 
-    notifications = []
+    notification = Notification(
+        source_user_id=current_user.id,
+        type=notification_data.type,
+        detail=notification_data.detail,
+    )
+    session.add(notification)
+    await session.flush()
+
     for user in target_users:
-        notification = Notification(
+        user_notif = UserNotification(
+            notification_id=notification.id,
             target_user_id=user.id,
-            source_user_id=current_user.id,
-            type=notification_data.type,
-            detail=notification_data.detail,
         )
-        session.add(notification)
-        notifications.append(notification)
+        session.add(user_notif)
 
     await session.commit()
 
-    for notification in notifications:
-        await session.refresh(notification)
+    await session.refresh(notification)
 
-    return notifications
-
-
-@router.get('/', response_model=NotificationList)
-async def read_notifications(
-    session: Session,
-    filters: Annotated[FilterNotification, Depends()],
-):
-    query = (
+    result = await session.scalar(
         select(Notification)
-        .where(
-            Notification.deleted_at.is_(None),
+        .where(Notification.id == notification.id)
+        .options(
+            selectinload(Notification.recipients).selectinload(
+                UserNotification.target_user
+            )
         )
-        .options(selectinload(Notification.source_user))
-        .offset(filters.offset)
-        .limit(filters.limit)
-        .order_by(Notification.created_at.desc())
     )
-
-    if filters.read is True:
-        query = query.where(Notification.read_at.is_not(None))
-    elif filters.read is False:
-        query = query.where(Notification.read_at.is_(None))
-
-    if filters.type:
-        query = query.where(Notification.type == filters.type)
-
-    db_notifications = await session.scalars(query)
-    return {'notifications': db_notifications.all()}
+    return result
 
 
 @router.get('/my', response_model=NotificationList)
@@ -113,21 +107,83 @@ async def read_my_notifications(
     filters: Annotated[FilterNotification, Depends()],
 ):
     query = (
+        select(UserNotification)
+        .where(
+            UserNotification.target_user_id == current_user.id,
+            UserNotification.deleted_at.is_(None),
+        )
+        .join(UserNotification.notification)
+        .options(
+            selectinload(UserNotification.notification).selectinload(
+                Notification.source_user
+            )
+        )
+        .offset(filters.offset)
+        .limit(filters.limit)
+        .order_by(UserNotification.created_at.desc())
+    )
+
+    if filters.read is True:
+        query = query.where(UserNotification.read_at.is_not(None))
+    elif filters.read is False:
+        query = query.where(UserNotification.read_at.is_(None))
+
+    if filters.type:
+        query = query.where(Notification.type == filters.type)
+
+    db_notifications = await session.scalars(query)
+    return {'notifications': db_notifications.all()}
+
+
+@router.get('/sent', response_model=NotificationSentList)
+async def read_sent_notifications(
+    session: Session,
+    current_user: CurrentUser,
+    filters: Annotated[FilterPage, Depends()],
+):
+    query = (
         select(Notification)
         .where(
-            Notification.target_user_id == current_user.id,
+            Notification.source_user_id == current_user.id,
             Notification.deleted_at.is_(None),
         )
-        .options(selectinload(Notification.source_user))
+        .options(
+            selectinload(Notification.recipients).selectinload(
+                UserNotification.target_user
+            )
+        )
         .offset(filters.offset)
         .limit(filters.limit)
         .order_by(Notification.created_at.desc())
     )
 
+    db_notifications = await session.scalars(query)
+    return {'notifications': db_notifications.all()}
+
+
+@router.get('/', response_model=NotificationList)
+async def read_all_notifications(
+    session: Session,
+    filters: Annotated[FilterNotification, Depends()],
+):
+    query = (
+        select(UserNotification)
+        .where(UserNotification.deleted_at.is_(None))
+        .join(UserNotification.notification)
+        .options(
+            selectinload(UserNotification.notification).selectinload(
+                Notification.source_user
+            )
+        )
+        .offset(filters.offset)
+        .limit(filters.limit)
+        .order_by(UserNotification.created_at.desc())
+    )
+
     if filters.read is True:
-        query = query.where(Notification.read_at.is_not(None))
+        query = query.where(UserNotification.read_at.is_not(None))
     elif filters.read is False:
-        query = query.where(Notification.read_at.is_(None))
+        query = query.where(UserNotification.read_at.is_(None))
 
     if filters.type:
         query = query.where(Notification.type == filters.type)
@@ -143,9 +199,17 @@ async def update_notification_status(
     session: Session,
     current_user: CurrentUser,
 ):
-    query = select(Notification).where(
-        Notification.id == notification_id,
-        Notification.deleted_at.is_(None),
+    query = (
+        select(UserNotification)
+        .where(
+            UserNotification.id == notification_id,
+            UserNotification.deleted_at.is_(None),
+        )
+        .options(
+            selectinload(UserNotification.notification).selectinload(
+                Notification.source_user
+            )
+        )
     )
     notification = await session.scalar(query)
 
@@ -177,9 +241,9 @@ async def delete_notification(
     session: Session,
     current_user: CurrentUser,
 ):
-    query = select(Notification).where(
-        Notification.id == notification_id,
-        Notification.deleted_at.is_(None),
+    query = select(UserNotification).where(
+        UserNotification.id == notification_id,
+        UserNotification.deleted_at.is_(None),
     )
     notification = await session.scalar(query)
 

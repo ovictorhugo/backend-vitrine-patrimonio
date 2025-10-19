@@ -32,11 +32,13 @@ from vitrine.mail import get_smtp
 from vitrine.models import (
     CatalogWorkFlow,
     Collection,
+    Feedback,
     Location,
     LocationInventory,
     Notification,
     SystemIdentity,
     User,
+    UserNotification,
     WorkflowTransferStatus,
     table_registry,
 )
@@ -529,15 +531,43 @@ def create_notification(session):
     async def _create_notification(
         target_user: User, source_user: User | None = None, **kwargs
     ):
-        notification = Notification(
-            target_user_id=target_user.id,
+        notification_content = Notification(
             source_user_id=source_user.id if source_user else None,
             type=kwargs.get('type', 'TEST_NOTIFICATION'),
             detail=kwargs.get('detail', {'message': 'This is a test.'}),
         )
-        session.add(notification)
+        session.add(notification_content)
+        await session.flush()
+
+        user_notification = UserNotification(
+            notification_id=notification_content.id,
+            target_user_id=target_user.id,
+        )
+        session.add(user_notification)
         await session.commit()
-        await session.refresh(notification)
-        return notification
+
+        await session.refresh(user_notification)
+        return user_notification
 
     return _create_notification
+
+
+@pytest_asyncio.fixture
+def create_feedback(session):
+    """Fixture para criar um feedback no banco de dados."""
+
+    async def _create_feedback(**kwargs):
+        data = {
+            'name': 'Test User',
+            'email': 'test@example.com',
+            'rating': 5,
+            'description': 'A default test feedback.',
+            **kwargs,
+        }
+        feedback = Feedback(**data)
+        session.add(feedback)
+        await session.commit()
+        await session.refresh(feedback)
+        return feedback
+
+    return _create_feedback
