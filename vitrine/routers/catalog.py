@@ -5,23 +5,20 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import Text, cast, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from vitrine.dependencies import CurrentUser, Mail, Session
 from vitrine.models import (
-    Agency,
     Asset,
     Catalog,
     CatalogImage,
     CatalogWorkFlow,
-    CollectionItem,
     LegalGuardian,
     Location,
     LocationInventory,
     Material,
     Role,
-    Sector,
     SystemIdentity,
     User,
     UserRole,
@@ -37,6 +34,7 @@ from vitrine.schemas import (
     CatalogSchema,
     CatalogWorkFlowPublic,
     CatalogWorkFlowSchema,
+    FilterAsset,
     FilterCatalog,
     FilterSearchCatalog,
     FilterTransfer,
@@ -50,6 +48,9 @@ from vitrine.schemas import (
 from vitrine.services import filter_service, mail_service
 
 COMISSION_SAMPLE_SIZE = 5
+_ASSET_FIELDS = set(FilterAsset.model_fields.keys())
+_NON_JOIN_FIELDS = {'limit', 'offset'}
+ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
 
 router = APIRouter(
     prefix='/catalog', tags=['vitrine - patrimônios anunciados']
@@ -182,88 +183,16 @@ async def read_catalog_entries(
 ):
     query = select(Catalog).where(Catalog.deleted_at.is_(None))
 
-    asset_join = (
-        filters.q
-        or filters.material_id
-        or filters.legal_guardian_id
-        or filters.location_id
-        or filters.unit_id
-        or filters.agency_id
-        or filters.sector_id
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
     )
-    if asset_join:
-        query = query.join(Catalog.asset)
-
-    if filters.q:
-        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
-        ts_query = func.to_tsquery('portuguese', prefix_query)
-        query = query.where(Asset.tsv.op('@@')(ts_query))
-
-    if filters.material_id:
-        query = query.where(Asset.material_id == filters.material_id)
-
-    if filters.legal_guardian_id:
-        query = query.where(
-            Asset.legal_guardian_id == filters.legal_guardian_id
-        )
-
-    if filters.unit_id:
-        query = (
-            query.join(Asset.location)
-            .join(Location.sector)
-            .join(Sector.agency)
-            .where(Agency.unit_id == filters.unit_id)
-        )
-
-    if filters.agency_id:
-        query = (
-            query.join(Asset.location)
-            .join(Location.sector)
-            .where(Sector.agency_id == filters.agency_id)
-        )
-
-    if filters.sector_id:
-        query = query.join(Asset.location).where(
-            Location.sector_id == filters.sector_id
-        )
-
-    if filters.location_id:
-        query = query.where(Asset.location_id == filters.location_id)
-
-    if filters.reviewer_id:
-        latest_workflow_subquery = (
-            select(
-                CatalogWorkFlow.catalog_id,
-                func.max(CatalogWorkFlow.created_at).label('max_created_at'),
-            )
-            .group_by(CatalogWorkFlow.catalog_id)
-            .subquery()
-        )
-
-        query = query.join(
-            latest_workflow_subquery,
-            Catalog.id == latest_workflow_subquery.c.catalog_id,
-        ).join(
-            CatalogWorkFlow,
-            (Catalog.id == CatalogWorkFlow.catalog_id)
-            & (
-                CatalogWorkFlow.created_at
-                == latest_workflow_subquery.c.max_created_at
-            ),
-        )
-
-        query = query.where(
-            cast(CatalogWorkFlow.detail['reviewers'], Text).like(
-                f'%{filters.reviewer_id}%'
-            )
-        )
 
     query = filter_service.apply_catalog_filters(query, filters)
 
-    if filters.only_uncollected:
-        query = query.outerjoin(
-            CollectionItem, CollectionItem.catalog_id == Catalog.id
-        ).where(CollectionItem.id.is_(None))
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
 
     query = query.options(
         selectinload(Catalog.images),
@@ -284,7 +213,6 @@ async def read_catalog_entries(
     )
 
     query = query.offset(filters.offset).limit(filters.limit)
-
     result = await session.scalars(query)
     entries = result.unique().all()
 

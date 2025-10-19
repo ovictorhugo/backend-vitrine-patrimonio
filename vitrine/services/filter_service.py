@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy import func, select
+from sqlalchemy import Text, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
@@ -11,6 +11,7 @@ from vitrine.models import (
     Asset,
     Catalog,
     CatalogWorkFlow,
+    CollectionItem,
     Location,
     Sector,
 )
@@ -22,18 +23,46 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
-    if filters.user_id:
-        query = query.where(Catalog.user_id == filters.user_id)
+    if filters.only_uncollected:
+        query = query.outerjoin(
+            CollectionItem, CollectionItem.catalog_id == Catalog.id
+        ).where(CollectionItem.id.is_(None))
 
-    if filters.workflow_status:
-        latest_workflow_status = (
-            select(CatalogWorkFlow.workflow_status)
-            .where(CatalogWorkFlow.catalog_id == Catalog.id)
-            .order_by(CatalogWorkFlow.created_at.desc())
-            .limit(1)
-            .scalar_subquery()
+    needs_latest_workflow = filters.reviewer_id or filters.workflow_status
+
+    if needs_latest_workflow:
+        latest_workflow_subquery = (
+            select(
+                CatalogWorkFlow.catalog_id,
+                func.max(CatalogWorkFlow.created_at).label('max_created_at'),
+            )
+            .group_by(CatalogWorkFlow.catalog_id)
+            .subquery()
         )
-        query = query.where(latest_workflow_status == filters.workflow_status)
+
+        query = query.join(
+            latest_workflow_subquery,
+            Catalog.id == latest_workflow_subquery.c.catalog_id,
+        ).join(
+            CatalogWorkFlow,
+            (Catalog.id == CatalogWorkFlow.catalog_id)
+            & (
+                CatalogWorkFlow.created_at
+                == latest_workflow_subquery.c.max_created_at
+            ),
+        )
+
+        if filters.reviewer_id:
+            query = query.where(
+                cast(CatalogWorkFlow.detail['reviewers'], Text).like(
+                    f'%{filters.reviewer_id}%'
+                )
+            )
+
+        if filters.workflow_status:
+            query = query.where(
+                CatalogWorkFlow.workflow_status == filters.workflow_status
+            )
 
     return query
 
@@ -89,15 +118,10 @@ def apply_asset_filters(query, filters):
     if filters.is_official is not None:
         query = query.where(Asset.is_official == filters.is_official)
 
-    if filters.user_id:
-        query = query.where(Asset.user_id == filters.user_id)
-
     if filters.asset_status:
         query = query.where(Asset.asset_status == filters.asset_status)
 
     if filters.csv_code:
         query = query.where(Asset.csv_code == filters.csv_code)
-
-    query = query.offset(filters.offset).limit(filters.limit)
 
     return query

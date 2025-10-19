@@ -25,7 +25,7 @@ from vitrine.schemas import (
     FilterCatalog,
     Message,
 )
-from vitrine.services.filter_service import apply_catalog_filters
+from vitrine.services import filter_service
 
 router = APIRouter(
     prefix='/collections/{collection_id}/items',
@@ -228,7 +228,20 @@ async def list_collection_items(
             )
         )
     )
-    query = apply_catalog_filters(query, filters)
+    asset_join = (
+        filters.q
+        or filters.material_id
+        or filters.legal_guardian_id
+        or filters.location_id
+        or filters.unit_id
+        or filters.agency_id
+        or filters.sector_id
+    )
+    if asset_join:
+        query = query.join(Catalog.asset)
+
+    query = filter_service.apply_catalog_filters(query, filters)
+    query = filter_service.apply_asset_filters(query, filters)
 
     result = await session.execute(query)
     items = result.scalars().all()

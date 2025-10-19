@@ -77,8 +77,14 @@ async def read_assets(
         .joinedload(LocationInventory.inventory)
     )
 
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(Asset.tsv.op('@@')(ts_query))
+
     query = filter_service.apply_asset_filters(query, filters)
 
+    query = query.offset(filters.offset).limit(filters.limit)
     result = await session.scalars(query)
     assets = result.all()
     return {'assets': assets}

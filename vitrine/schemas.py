@@ -346,9 +346,7 @@ class LegalGuardianNameResponseList(BaseModel):
 class FilterAsset(BaseModel):
     limit: int = 100
     offset: int = 0
-    q: Optional[str] = Field(
-        default=None, description='Termo de busca (full-text search)'
-    )
+    q: Optional[str] = None
 
     asset_identifier: Optional[str] = Field(default=None)
     atm_number: Optional[str] = Field(default=None)
@@ -361,7 +359,6 @@ class FilterAsset(BaseModel):
     material_id: Optional[UUID] = Field(default=None)
     legal_guardian_id: Optional[UUID] = Field(default=None)
     is_official: Optional[bool] = Field(default=None)
-    user_id: Optional[UUID] = Field(default=None)
 
 
 class RequestTransferSchema(BaseModel):
@@ -439,7 +436,6 @@ class CatalogList(BaseModel):
 
 
 class FilterCatalog(FilterAsset):
-    q: str | None = Field(default=None)
     only_uncollected: Optional[bool] = False
     reviewer_id: Optional[UUID] = None
 
@@ -451,7 +447,6 @@ class FilterCatalog(FilterAsset):
     material_id: UUID | None = None
     legal_guardian_id: UUID | None = None
 
-    user_id: UUID | None = None
     workflow_status: Optional[str] = None
 
 
