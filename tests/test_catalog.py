@@ -1134,4 +1134,5 @@ async def test_filter_catalog_by_reviewer_id(
         headers={'Authorization': f'Bearer {create_token(user2)}'},
     )
     response = client.get(f'/catalog/?reviewer_id={user1.id}')
-    assert len(response.json()) == 1
+    data = response.json()
+    assert len(data['catalog_entries']) == 1

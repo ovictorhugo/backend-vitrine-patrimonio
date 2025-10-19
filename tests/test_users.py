@@ -158,29 +158,31 @@ async def test_read_users_multiple(client, create_user):
 async def test_remove_user_from_reviewers_after_deletion(
     client, create_catalog_entry, create_token, create_user
 ):
-    user_to_delete = await create_user()
-    replacement_user = await create_user()
-    requester_user = await create_user()
-    catalog_entry = await create_catalog_entry()
+    user1 = await create_user()
+    user2 = await create_user()
+    catalog1 = await create_catalog_entry()
+    await create_catalog_entry()
 
     role = client.post(
-        '/roles/', json={'name': 'Comissão de desfazimento'}
+        '/roles/',
+        json={'name': 'Comissão de desfazimento'},
     ).json()
-    client.post(f'/roles/{role["id"]}/users/{user_to_delete.id}')
-    client.post(f'/roles/{role["id"]}/users/{replacement_user.id}')
+    client.post(f'/roles/{role["id"]}/users/{user1.id}')
+    client.post(f'/roles/{role["id"]}/users/{user2.id}')
 
-    payload = {
+    workflow_payload = {
         'workflow_status': 'REVIEW_REQUESTED_COMISSION',
-        'detail': {'reason': 'Initial review pending.'},
+        'detail': {'reason': 'Awaiting approval from manager.'},
     }
     client.post(
-        f'/catalog/{catalog_entry.id}/workflow',
-        json=payload,
-        headers={'Authorization': f'Bearer {create_token(requester_user)}'},
+        f'/catalog/{catalog1.id}/workflow',
+        json=workflow_payload,
+        headers={'Authorization': f'Bearer {create_token(user2)}'},
     )
-    client.delete(
-        f'/users/{user_to_delete.id}',
-        headers={'Authorization': f'Bearer {create_token(requester_user)}'},
+    response = client.delete(
+        f'/users/{user1.id}',
+        headers={'Authorization': f'Bearer {create_token(user1)}'},
     )
-    response = client.get(f'/catalog/?reviewer_id={user_to_delete.id}')
-    print(response.json())
+    response = client.get(f'/catalog/?reviewer_id={user1.id}')
+    data = response.json()
+    assert len(data['catalog_entries']) == 0
