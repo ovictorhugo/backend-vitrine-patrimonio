@@ -81,7 +81,9 @@ async def test_delete_user(client, create_user, create_token):
         headers={'Authorization': f'Bearer {create_token(user)}'},
     )
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == {'message': 'User deactivated'}
+    assert response.json() == {
+        'message': 'User deactivated and reviewers reassigned'
+    }
 
 
 @pytest.mark.asyncio
@@ -150,3 +152,35 @@ async def test_read_users_multiple(client, create_user):
 
     for user_data in users_list:
         UserPublic.model_validate(user_data)
+
+
+@pytest.mark.asyncio
+async def test_remove_user_from_reviewers_after_deletion(
+    client, create_catalog_entry, create_token, create_user
+):
+    user_to_delete = await create_user()
+    replacement_user = await create_user()
+    requester_user = await create_user()
+    catalog_entry = await create_catalog_entry()
+
+    role = client.post(
+        '/roles/', json={'name': 'Comissão de desfazimento'}
+    ).json()
+    client.post(f'/roles/{role["id"]}/users/{user_to_delete.id}')
+    client.post(f'/roles/{role["id"]}/users/{replacement_user.id}')
+
+    payload = {
+        'workflow_status': 'REVIEW_REQUESTED_COMISSION',
+        'detail': {'reason': 'Initial review pending.'},
+    }
+    client.post(
+        f'/catalog/{catalog_entry.id}/workflow',
+        json=payload,
+        headers={'Authorization': f'Bearer {create_token(requester_user)}'},
+    )
+    client.delete(
+        f'/users/{user_to_delete.id}',
+        headers={'Authorization': f'Bearer {create_token(requester_user)}'},
+    )
+    response = client.get(f'/catalog/?reviewer_id={user_to_delete.id}')
+    print(response.json())
