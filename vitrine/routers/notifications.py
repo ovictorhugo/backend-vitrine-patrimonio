@@ -241,9 +241,9 @@ async def delete_notification(
     session: Session,
     current_user: CurrentUser,
 ):
-    query = select(UserNotification).where(
-        UserNotification.id == notification_id,
-        UserNotification.deleted_at.is_(None),
+    query = select(Notification).where(
+        Notification.id == notification_id,
+        Notification.deleted_at.is_(None),
     )
     notification = await session.scalar(query)
 
@@ -251,11 +251,6 @@ async def delete_notification(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail='Notification not found',
-        )
-
-    if notification.target_user_id != current_user.id:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN, detail='Not enough permissions'
         )
 
     notification.deleted_at = datetime.now()

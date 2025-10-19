@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = 'SECRET_KEY'
     ROOT_PATH: str = ''
 
-    SMTP_HOST: str
-    SMTP_PORT: int
-    SMTP_USER: str
+    SMTP_HOST: str = 'mailpit'
+    SMTP_PORT: int = 1025
+    SMTP_USER: str = 'noreply@vitrine.local'
     SMTP_PASS: str
+    SMTP_TLS: bool = False
+    SMTP_SSL: bool = False

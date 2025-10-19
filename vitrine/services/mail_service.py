@@ -10,7 +10,7 @@ async def send_email(mail: Mail, user: User, content: Any):
     msg = EmailMessage()
     msg['Subject'] = 'ASSUNTO'
     msg['From'] = Settings().SMTP_USER
-    msg['To'] = user.email
+    msg['To'] = 'geu_costa@outlook.com'  # user.email
     msg.set_content('CONTEUDO')
 
     try:

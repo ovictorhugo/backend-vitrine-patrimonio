@@ -547,6 +547,7 @@ class Catalog:
         init=False,
         lazy='selectin',
         cascade='all, delete-orphan',
+        order_by='CatalogWorkFlow.created_at.desc()',
     )
     favorited_by: Mapped[list['FavoriteCatalog']] = relationship(
         back_populates='catalog',
@@ -919,12 +920,10 @@ class Notification:
         init=False, primary_key=True, default=uuid.uuid4
     )
 
-    # Quem criou/enviou a notificação (o "dono" do conteúdo)
     source_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey('users.id'), nullable=True
     )
 
-    # O conteúdo da notificação
     type: Mapped[str] = mapped_column(nullable=False, index=True)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
@@ -935,7 +934,6 @@ class Notification:
         init=False, nullable=True
     )
 
-    # Relacionamento com o usuário que criou
     source_user: Mapped[Optional['User']] = relationship(
         init=False,
         back_populates='notifications_sent',
@@ -943,7 +941,6 @@ class Notification:
         lazy='selectin',
     )
 
-    # Relacionamento com todos os destinatários (através da tabela de associação)
     recipients: Mapped[list['UserNotification']] = relationship(
         back_populates='notification',
         init=False,

@@ -30,6 +30,7 @@ from vitrine.models import (
 )
 from vitrine.schemas import (
     CatalogAssetIdentifierList,
+    CatalogImageList,
     CatalogImagePublic,
     CatalogList,
     CatalogPublic,
@@ -38,6 +39,7 @@ from vitrine.schemas import (
     CatalogWorkFlowSchema,
     FilterAsset,
     FilterCatalog,
+    FilterCatalogImage,
     FilterSearchCatalog,
     FilterTransfer,
     LegalGuardianList,
@@ -729,3 +731,23 @@ async def update_workflow_reviewers(
     await session.refresh(workflow, attribute_names=['transfer_requests'])
 
     return workflow
+
+
+@router.get('/images', response_model=CatalogImageList)
+async def list_catalog_images(
+    session: Session,
+    filters: Annotated[FilterCatalogImage, Depends()],
+):
+    query = select(CatalogImage)
+
+    if filters.random:
+        query = query.order_by(func.random())
+    else:
+        query = query.order_by(CatalogImage.created_at.desc())
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    images = result.all()
+
+    return {'images': images}
