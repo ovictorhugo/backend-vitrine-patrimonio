@@ -103,6 +103,27 @@ async def test_create_notification_target_not_found(
 
 
 @pytest.mark.asyncio
+async def test_read_geral_notifications(
+    client, create_user, create_notification, create_token
+):
+    user1 = await create_user(username='user1', email='user1@test.com')
+    user2 = await create_user(username='user2', email='user2@test.com')
+    token_user1 = create_token(user1)
+
+    await create_notification(target_user=user1, source_user=user2, type='T1')
+    await create_notification(target_user=user1, source_user=user2, type='T2')
+    await create_notification(target_user=user2, source_user=user1, type='T3')
+
+    response = client.get(
+        '/notifications/', headers={'Authorization': f'Bearer {token_user1}'}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['notifications']) == 3
+
+
+@pytest.mark.asyncio
 async def test_read_notifications_for_user(
     client, create_user, create_notification, create_token
 ):
@@ -110,12 +131,12 @@ async def test_read_notifications_for_user(
     user2 = await create_user(username='user2', email='user2@test.com')
     token_user1 = create_token(user1)
 
-    await create_notification(target_user=user1, source_user=user2)
-    await create_notification(target_user=user1, source_user=user2)
-    await create_notification(target_user=user2, source_user=user1)
+    await create_notification(target_user=user1, source_user=user2, type='T1')
+    await create_notification(target_user=user1, source_user=user2, type='T2')
+    await create_notification(target_user=user2, source_user=user1, type='T3')
 
     response = client.get(
-        '/notifications/', headers={'Authorization': f'Bearer {token_user1}'}
+        '/notifications/my', headers={'Authorization': f'Bearer {token_user1}'}
     )
 
     assert response.status_code == HTTPStatus.OK

@@ -22,10 +22,15 @@ from vitrine.schemas import (
     CollectionItemPublic,
     CollectionItemSchema,
     CollectionItemsList,
+    FilterAsset,
     FilterCatalog,
     Message,
 )
 from vitrine.services import filter_service
+
+_ASSET_FIELDS = set(FilterAsset.model_fields.keys())
+_NON_JOIN_FIELDS = {'limit', 'offset'}
+ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
 
 router = APIRouter(
     prefix='/collections/{collection_id}/items',
@@ -228,24 +233,22 @@ async def list_collection_items(
             )
         )
     )
-    asset_join = (
-        filters.q
-        or filters.material_id
-        or filters.legal_guardian_id
-        or filters.location_id
-        or filters.unit_id
-        or filters.agency_id
-        or filters.sector_id
+
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
     )
-    if asset_join:
-        query = query.join(Catalog.asset)
 
     query = filter_service.apply_catalog_filters(query, filters)
-    query = filter_service.apply_asset_filters(query, filters)
+
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
+
+    query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.execute(query)
     items = result.scalars().all()
-
     return {'collection_items': items}
 
 

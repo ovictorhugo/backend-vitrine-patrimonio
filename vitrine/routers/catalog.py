@@ -456,15 +456,44 @@ async def list_catalog_materials(
         .where(Catalog.deleted_at.is_(None))
     )
 
-    query = filter_service.apply_catalog_filters(query, filters)
-
     if filters.q:
-        query = query.where(
-            Material.material_name.ilike(f'{filters.q}%')
-        ).distinct()
+        query = query.where(Material.material_name.ilike(f'{filters.q}%'))
 
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
+
+    if filters.workflow_status:
+        latest_workflow_subquery = (
+            select(
+                CatalogWorkFlow.catalog_id,
+                func.max(CatalogWorkFlow.created_at).label('max_created_at'),
+            )
+            .group_by(CatalogWorkFlow.catalog_id)
+            .subquery()
+        )
+
+        query = query.join(
+            latest_workflow_subquery,
+            Catalog.id == latest_workflow_subquery.c.catalog_id,
+        )
+        query = query.join(
+            CatalogWorkFlow,
+            (Catalog.id == CatalogWorkFlow.catalog_id)
+            & (
+                CatalogWorkFlow.created_at
+                == latest_workflow_subquery.c.max_created_at
+            ),
+        )
+
+        query = query.where(
+            CatalogWorkFlow.workflow_status == filters.workflow_status
+        )
+
+    query = query.distinct()
+
+    query = query.offset(filters.offset).limit(filters.limit)
     result = await session.scalars(query)
-    materials = result.all()
+    materials = result.unique().all()
 
     return {'materials': materials}
 
@@ -484,16 +513,46 @@ async def list_catalog_legal_guardians(
         .where(Catalog.deleted_at.is_(None))
     )
 
-    query = filter_service.apply_catalog_filters(query, filters)
-
     if filters.q:
         query = query.where(
             LegalGuardian.legal_guardians_name.ilike(f'{filters.q}%')
         )
 
-    result = await session.scalars(query)
-    legal_guardians = result.all()
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
 
+    if filters.workflow_status:
+        latest_workflow_subquery = (
+            select(
+                CatalogWorkFlow.catalog_id,
+                func.max(CatalogWorkFlow.created_at).label('max_created_at'),
+            )
+            .group_by(CatalogWorkFlow.catalog_id)
+            .subquery()
+        )
+
+        query = query.join(
+            latest_workflow_subquery,
+            Catalog.id == latest_workflow_subquery.c.catalog_id,
+        )
+        query = query.join(
+            CatalogWorkFlow,
+            (Catalog.id == CatalogWorkFlow.catalog_id)
+            & (
+                CatalogWorkFlow.created_at
+                == latest_workflow_subquery.c.max_created_at
+            ),
+        )
+
+        query = query.where(
+            CatalogWorkFlow.workflow_status == filters.workflow_status
+        )
+
+    query = query.distinct()
+
+    query = query.offset(filters.offset).limit(filters.limit)
+    result = await session.scalars(query)
+    legal_guardians = result.unique().all()
     return {'legal_guardians': legal_guardians}
 
 

@@ -116,8 +116,8 @@ async def test_update_user_with_wrong_user(client, create_user, create_token):
             'password': 'mynewpassword',
         },
     )
-    assert response.status_code == HTTPStatus.FORBIDDEN
-    assert response.json() == {'detail': 'Not enough permissions'}
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json() == {'detail': 'User not found'}
 
 
 @pytest.mark.asyncio
