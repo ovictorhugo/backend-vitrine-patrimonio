@@ -22,6 +22,7 @@ from vitrine.schemas import (
     CollectionItemPublic,
     CollectionItemSchema,
     CollectionItemsList,
+    CollectionItemUpdate,
     FilterAsset,
     FilterCatalog,
     Message,
@@ -121,7 +122,7 @@ async def add_item_to_collection(
 async def update_collection_item(
     collection_id: UUID,
     item_id: UUID,
-    item_update: CollectionItemSchema,
+    item_update: CollectionItemUpdate,
     session: Session,
     current_user: CurrentUser,
 ):
@@ -143,38 +144,8 @@ async def update_collection_item(
             detail='Item not found in this collection.',
         )
 
-    query_catalog = (
-        select(Catalog)
-        .where(Catalog.id == item_update.catalog_id)
-        .options(
-            selectinload(Catalog.images),
-            selectinload(Catalog.workflow_history).options(
-                selectinload(CatalogWorkFlow.user).options(
-                    selectinload(User.system_identity).options(
-                        selectinload(SystemIdentity.legal_guardian)
-                    ),
-                    selectinload(User.user_role_associations).selectinload(
-                        UserRole.role
-                    ),
-                ),
-                selectinload(CatalogWorkFlow.transfer_requests),
-            ),
-            selectinload(Catalog.location)
-            .selectinload(Location.location_inventories)
-            .selectinload(LocationInventory.inventory),
-        )
-    )
-    db_catalog = await session.scalar(query_catalog)
-
-    if not db_catalog:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f'Catalog item with ID "{item_update.catalog_id}" not found.',
-        )
-
     existing_item_query = select(CollectionItem).where(
         CollectionItem.collection_id == collection_id,
-        CollectionItem.catalog_id == item_update.catalog_id,
         CollectionItem.id != item_id,
     )
     if await session.scalar(existing_item_query):
@@ -182,14 +153,12 @@ async def update_collection_item(
             status_code=HTTPStatus.CONFLICT,
             detail='Another item with this catalog ID already exists in the collection.',
         )
-
-    db_item.catalog_id = item_update.catalog_id
     db_item.status = item_update.status
     db_item.comment = item_update.comment
     await session.commit()
     await session.refresh(db_item)
 
-    db_item.catalog = db_catalog
+    print(CollectionItemPublic.model_validate(db_item))
     return db_item
 
 

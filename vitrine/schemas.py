@@ -523,6 +523,11 @@ class CollectionItemSchema(BaseModel):
     comment: str | None = None
 
 
+class CollectionItemUpdate(BaseModel):
+    status: bool
+    comment: str | None = None
+
+
 class CollectionSchema(BaseModel):
     name: str
     description: str | None = None
@@ -607,7 +612,7 @@ class NotificationSentPublic(BaseModel):
     type: str
     detail: Optional[dict] = None
     created_at: datetime
-    recipients: List[UserNotificationRecipientPublic] = []
+    recipients: List[UserNotificationRecipientPublic]
     model_config = ConfigDict(from_attributes=True)
 
 

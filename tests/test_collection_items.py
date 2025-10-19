@@ -227,3 +227,143 @@ async def test_list_items_fails_if_collection_not_found(
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()['detail'] == 'Collection not found.'
+
+
+async def test_update_collection_item_success(
+    client, create_user, create_token, create_collection, create_catalog_entry
+):
+    user = await create_user()
+    token = create_token(user)
+    collection = await create_collection(user_id=user.id)
+    catalog_item = await create_catalog_entry(user_id=user.id)
+
+    add_payload = {'catalog_id': str(catalog_item.id), 'status': True}
+    add_response = client.post(
+        f'/collections/{collection.id}/items/',
+        json=add_payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    item_in_collection_id = add_response.json()['id']
+
+    update_payload = {
+        'status': False,
+        'comment': 'Novo comentário.',
+    }
+    update_response = client.put(
+        f'/collections/{collection.id}/items/{item_in_collection_id}',
+        json=update_payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert update_response.status_code == HTTPStatus.OK
+    data = update_response.json()
+    assert data['status'] is False
+    assert data['comment'] == 'Novo comentário.'
+    assert data['id'] == item_in_collection_id
+
+
+async def test_update_collection_item_fails_collection_not_found(
+    client, create_user, create_token
+):
+    user = await create_user()
+    token = create_token(user)
+    fake_collection_id = uuid4()
+    fake_item_id = uuid4()
+
+    update_payload = {'status': True, 'comment': 'Teste'}
+    response = client.put(
+        f'/collections/{fake_collection_id}/items/{fake_item_id}',
+        json=update_payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()['detail'] == 'Collection not found.'
+
+
+async def test_update_collection_item_fails_not_owner(
+    client, create_user, create_token, create_collection, create_catalog_entry
+):
+    owner_user = await create_user()
+    owner_token = create_token(owner_user)
+    collection = await create_collection(user_id=owner_user.id)
+    catalog_item = await create_catalog_entry(user_id=owner_user.id)
+
+    add_payload = {'catalog_id': str(catalog_item.id), 'status': True}
+    add_response = client.post(
+        f'/collections/{collection.id}/items/',
+        json=add_payload,
+        headers={'Authorization': f'Bearer {owner_token}'},
+    )
+    item_in_collection_id = add_response.json()['id']
+
+    other_user = await create_user()
+    other_token = create_token(other_user)
+
+    update_payload = {'status': False, 'comment': 'Tentativa de invasão.'}
+    response = client.put(
+        f'/collections/{collection.id}/items/{item_in_collection_id}',
+        json=update_payload,
+        headers={'Authorization': f'Bearer {other_token}'},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert (
+        response.json()['detail']
+        == 'You do not have permission to update items in this collection.'
+    )
+
+
+async def test_update_collection_item_fails_item_not_found(
+    client, create_user, create_token, create_collection
+):
+    user = await create_user()
+    token = create_token(user)
+    collection = await create_collection(user_id=user.id)
+    fake_item_id = uuid4()
+
+    update_payload = {'status': True, 'comment': 'Item fantasma.'}
+    response = client.put(
+        f'/collections/{collection.id}/items/{fake_item_id}',
+        json=update_payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()['detail'] == 'Item not found in this collection.'
+
+
+async def test_update_collection_item_fails_conflict_if_other_items_exist(
+    client, create_user, create_token, create_collection, create_catalog_entry
+):
+    user = await create_user()
+    token = create_token(user)
+    collection = await create_collection(user_id=user.id)
+    catalog_item1 = await create_catalog_entry(user_id=user.id)
+    catalog_item2 = await create_catalog_entry(user_id=user.id)
+
+    add_response1 = client.post(
+        f'/collections/{collection.id}/items/',
+        json={'catalog_id': str(catalog_item1.id), 'status': True},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    item1_id = add_response1.json()['id']
+
+    client.post(
+        f'/collections/{collection.id}/items/',
+        json={'catalog_id': str(catalog_item2.id), 'status': True},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    update_payload = {'status': False, 'comment': 'Update deve falhar'}
+    response = client.put(
+        f'/collections/{collection.id}/items/{item1_id}',
+        json=update_payload,
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert (
+        response.json()['detail']
+        == 'Another item with this catalog ID already exists in the collection.'
+    )
