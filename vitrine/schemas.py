@@ -673,3 +673,13 @@ class SystemSettingPublic(SystemSettingBase):
 
 class SystemSettingList(BaseModel):
     settings: list[SystemSettingPublic]
+
+
+class FilterCatalogImage(FilterPage):
+    random: Optional[bool] = Field(
+        False, description='Listar em ordem aleatória'
+    )
+
+
+class CatalogImageList(BaseModel):
+    images: list[CatalogImagePublic]

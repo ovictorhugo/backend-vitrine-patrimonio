@@ -147,3 +147,39 @@ async def delete_setting(
     await session.commit()
 
     return {'message': 'Configuração desativada com sucesso'}
+
+
+@router.get('/{identifier}', response_model=SystemSettingPublic)
+async def read_setting(
+    identifier: str,
+    session: Session,
+    current_user: CurrentUser,
+):
+    db_setting = None
+
+    try:
+        setting_id = int(identifier)
+        db_setting = await session.scalar(
+            select(SystemSetting).where(
+                SystemSetting.id == setting_id,
+                SystemSetting.deleted_at.is_(None),
+            )
+        )
+    except ValueError:
+        pass
+
+    if not db_setting:
+        db_setting = await session.scalar(
+            select(SystemSetting).where(
+                SystemSetting.key == identifier,
+                SystemSetting.deleted_at.is_(None),
+            )
+        )
+
+    if not db_setting:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Configuração não encontrada',
+        )
+
+    return db_setting

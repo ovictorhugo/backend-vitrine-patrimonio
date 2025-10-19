@@ -6,12 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 
 from vitrine.dependencies import CurrentUser, Session
-from vitrine.models import Collection
+from vitrine.models import CatalogImage, Collection
 from vitrine.schemas import (
+    CatalogImageList,
     CollectionList,
     CollectionPublic,
     CollectionSchema,
     CollectionUpdateSchema,
+    FilterCatalogImage,
     FilterCollection,
     Message,
 )
@@ -151,3 +153,23 @@ async def delete_collection(
     db_collection.deleted_at = func.now()
     await session.commit()
     return {'message': 'Collection deactivated successfully.'}
+
+
+@router.get('/images/', response_model=CatalogImageList)
+async def list_catalog_images(
+    session: Session,
+    filters: Annotated[FilterCatalogImage, Depends()],
+):
+    query = select(CatalogImage)
+
+    if filters.random:
+        query = query.order_by(func.random())
+    else:
+        query = query.order_by(CatalogImage.created_at.desc())
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    images = result.all()
+
+    return {'images': images}
