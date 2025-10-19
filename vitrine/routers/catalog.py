@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from vitrine.dependencies import CurrentUser, Mail, Session
 from vitrine.models import (
@@ -641,3 +642,49 @@ async def search_catalog_by_asset_identifier(session: Session, q: str = str()):
     )
     result = await session.execute(query)
     return {'catalogs': result.mappings().all()}
+
+
+@router.put(
+    '/workflow/{workflow_id}/reviewers',
+    response_model=CatalogWorkFlowPublic,
+)
+async def update_workflow_reviewers(
+    workflow_id: UUID,
+    new_reviewers: list[UUID],
+    session: Session,
+    current_user: CurrentUser,
+):
+    workflow = await session.get(CatalogWorkFlow, workflow_id)
+    if not workflow:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Workflow not found'
+        )
+
+    if workflow.workflow_status != 'REVIEW_REQUESTED_COMISSION':
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Can only update reviewers for workflows in REVIEW_REQUESTED_COMISSION status',
+        )
+
+    stmt = select(User.id).where(
+        User.id.in_(new_reviewers),
+        User.roles.any(Role.name == 'Comissão de desfazimento'),
+        User.deleted_at.is_(None),
+    )
+    result = await session.execute(stmt)
+    valid_reviewer_ids = set(result.scalars().all())
+
+    invalid_ids = set(new_reviewers) - valid_reviewer_ids
+    if invalid_ids:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f'Users {list(invalid_ids)} are not valid reviewers',
+        )
+
+    workflow.detail['reviewers'] = [str(uid) for uid in new_reviewers]
+    flag_modified(workflow, 'detail')
+    session.add(workflow)
+    await session.commit()
+    await session.refresh(workflow, attribute_names=['transfer_requests'])
+
+    return workflow

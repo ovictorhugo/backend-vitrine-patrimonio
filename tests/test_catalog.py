@@ -1136,3 +1136,51 @@ async def test_filter_catalog_by_reviewer_id(
     response = client.get(f'/catalog/?reviewer_id={user1.id}')
     data = response.json()
     assert len(data['catalog_entries']) == 1
+
+
+@pytest.mark.asyncio
+async def test_update_workflow_reviewers(
+    client, create_catalog_entry, create_token, create_user
+):
+    user1 = await create_user()
+    user2 = await create_user()
+    user3 = await create_user()
+    catalog1 = await create_catalog_entry()
+
+    role = client.post(
+        '/roles/',
+        json={'name': 'Comissão de desfazimento'},
+    ).json()
+    client.post(f'/roles/{role["id"]}/users/{user1.id}')
+    client.post(f'/roles/{role["id"]}/users/{user2.id}')
+    client.post(f'/roles/{role["id"]}/users/{user3.id}')
+
+    workflow_payload = {
+        'workflow_status': 'REVIEW_REQUESTED_COMISSION',
+        'detail': {'reason': 'Awaiting approval from manager.'},
+    }
+    response = client.post(
+        f'/catalog/{catalog1.id}/workflow',
+        json=workflow_payload,
+        headers={'Authorization': f'Bearer {create_token(user1)}'},
+    )
+    workflow = response.json()
+    workflow_id = workflow['id']
+
+    new_reviewers = [str(user2.id), str(user3.id)]
+    response = client.put(
+        f'/catalog/workflow/{workflow_id}/reviewers',
+        json=new_reviewers,
+        headers={'Authorization': f'Bearer {create_token(user1)}'},
+    )
+    assert response.status_code == 200
+    updated_workflow = response.json()
+    assert set(updated_workflow['detail']['reviewers']) == set(new_reviewers)
+
+    response = client.get(f'/catalog/?reviewer_id={user1.id}')
+    data = response.json()
+    assert len(data['catalog_entries']) == 0
+
+    response = client.get(f'/catalog/?reviewer_id={user3.id}')
+    data = response.json()
+    assert len(data['catalog_entries']) == 1
