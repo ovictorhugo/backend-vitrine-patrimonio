@@ -76,7 +76,8 @@ async def create_permission(permission: PermissionSchema, session: Session):
     existing = await session.scalar(
         select(Permission).where(
             (Permission.name == permission.name)
-            | (Permission.code == permission.code)
+            | (Permission.code == permission.code),
+            Permission.deleted_at.is_(None),
         )
     )
     if existing:
