@@ -1,4 +1,3 @@
-import datetime
 from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated, List
@@ -138,7 +137,7 @@ async def delete_role(session: Session, role_id: UUID):
             status_code=HTTPStatus.NOT_FOUND,
             detail='Role not found',
         )
-    role_db.deleted_at = datetime.datetime.now()
+    role_db.deleted_at = datetime.now()
     await session.commit()
     return {'message': 'Role deactivated'}
 
@@ -153,7 +152,7 @@ async def delete_permission(permission_id: UUID, session: Session):
             detail='Permission deactivated',
         )
 
-    db_permission.deleted_at = datetime.datetime.now()
+    db_permission.deleted_at = datetime.now()
     await session.commit()
 
     return {'message': 'Permission deactivated'}

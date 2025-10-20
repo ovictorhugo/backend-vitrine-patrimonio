@@ -271,6 +271,26 @@ async def list_transfer_requests(
     return {'transfer_requests': result.all()}
 
 
+@router.get('/images', response_model=CatalogImageList)
+async def list_catalog_images(
+    session: Session,
+    filters: Annotated[FilterCatalogImage, Depends()],
+):
+    query = select(CatalogImage)
+
+    if filters.random:
+        query = query.order_by(func.random())
+    else:
+        query = query.order_by(CatalogImage.created_at.desc())
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    images = result.all()
+
+    return {'images': images}
+
+
 @router.get('/{catalog_id}', response_model=CatalogPublic)
 async def read_catalog_entry(catalog_id: UUID, session: Session):
     options = [
@@ -731,23 +751,3 @@ async def update_workflow_reviewers(
     await session.refresh(workflow, attribute_names=['transfer_requests'])
 
     return workflow
-
-
-@router.get('/images', response_model=CatalogImageList)
-async def list_catalog_images(
-    session: Session,
-    filters: Annotated[FilterCatalogImage, Depends()],
-):
-    query = select(CatalogImage)
-
-    if filters.random:
-        query = query.order_by(func.random())
-    else:
-        query = query.order_by(CatalogImage.created_at.desc())
-
-    query = query.offset(filters.offset).limit(filters.limit)
-
-    result = await session.scalars(query)
-    images = result.all()
-
-    return {'images': images}
