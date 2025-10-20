@@ -64,9 +64,11 @@ class User:
         init=False, primary_key=True, default=uuid4
     )
 
-    username: Mapped[str] = mapped_column(unique=True)
+    # Removido unique=True para usar índice parcial
+    username: Mapped[str]
     password: Mapped[str]
-    email: Mapped[str] = mapped_column(unique=True)
+    # Removido unique=True para usar índice parcial
+    email: Mapped[str]
     provider: Mapped[str | None] = mapped_column(nullable=True)
 
     linkedin: Mapped[str | None] = mapped_column(nullable=True, init=False)
@@ -139,6 +141,22 @@ class User:
         init=False, nullable=True
     )
 
+    # Adicionado __table_args__ para índices parciais
+    __table_args__ = (
+        Index(
+            'ix_uq_users_username_active',
+            'username',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+        Index(
+            'ix_uq_users_email_active',
+            'email',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+    )
+
 
 @table_registry.mapped_as_dataclass
 class Unit:
@@ -178,7 +196,14 @@ class Unit:
     )
 
     __table_args__ = (
-        UniqueConstraint('unit_name', 'user_id', name='uq_unit_name_user_id'),
+        # Convertido UniqueConstraint para Index parcial
+        Index(
+            'ix_uq_units_unit_name_user_id_active',
+            'unit_name',
+            'user_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
         Index('ix_units_tsv', tsv, postgresql_using='gin'),
     )
 
@@ -226,8 +251,13 @@ class Agency:
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            'agency_name', 'unit_id', name='uq_agency_name_unit_id'
+        # Convertido UniqueConstraint para Index parcial
+        Index(
+            'ix_uq_agencys_agency_name_unit_id_active',
+            'agency_name',
+            'unit_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
         ),
         Index('ix_agencys_tsv', tsv, postgresql_using='gin'),
     )
@@ -274,8 +304,13 @@ class Sector:
         index=False,
     )
     __table_args__ = (
-        UniqueConstraint(
-            'sector_name', 'agency_id', name='uq_sector_name_agency_id'
+        # Convertido UniqueConstraint para Index parcial
+        Index(
+            'ix_uq_sectors_sector_name_agency_id_active',
+            'sector_name',
+            'agency_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
         ),
         Index('ix_sectors_tsv', tsv, postgresql_using='gin'),
     )
@@ -340,11 +375,14 @@ class Location:
         index=False,
     )
     __table_args__ = (
-        UniqueConstraint(
+        # Convertido UniqueConstraint para Index parcial
+        Index(
+            'ix_uq_locations_location_name_sector_lg_id_active',
             'location_name',
             'sector_id',
             'legal_guardian_id',
-            name='uq_location_name_sector_lg_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
         ),
         Index('ix_locations_tsv', tsv, postgresql_using='gin'),
     )
@@ -357,9 +395,8 @@ class LegalGuardian:
         init=False, primary_key=True, default=uuid4
     )
     legal_guardians_code: Mapped[str] = mapped_column(nullable=False)
-    legal_guardians_name: Mapped[str] = mapped_column(
-        nullable=False, unique=True
-    )
+    # Removido unique=True para usar índice parcial
+    legal_guardians_name: Mapped[str] = mapped_column(nullable=False)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped[User] = relationship(init=False, lazy='selectin')
@@ -397,6 +434,13 @@ class LegalGuardian:
 
     __table_args__ = (
         Index('ix_legal_guardians_tsv', tsv, postgresql_using='gin'),
+        # Adicionado Index parcial
+        Index(
+            'ix_uq_legal_guardians_name_active',
+            'legal_guardians_name',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )
 
 
@@ -407,7 +451,8 @@ class Material:
         init=False, primary_key=True, default=uuid4
     )
     material_code: Mapped[str] = mapped_column(nullable=False)
-    material_name: Mapped[str] = mapped_column(nullable=False, unique=True)
+    # Removido unique=True para usar índice parcial
+    material_name: Mapped[str] = mapped_column(nullable=False)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped[User] = relationship(init=False, lazy='selectin')
@@ -432,7 +477,16 @@ class Material:
         index=False,
     )
 
-    __table_args__ = (Index('ix_materials_tsv', tsv, postgresql_using='gin'),)
+    __table_args__ = (
+        Index('ix_materials_tsv', tsv, postgresql_using='gin'),
+        # Adicionado Index parcial
+        Index(
+            'ix_uq_materials_material_name_active',
+            'material_name',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+    )
 
 
 @table_registry.mapped_as_dataclass
@@ -509,7 +563,14 @@ class Asset:
 
     __table_args__ = (
         Index('ix_assets_tsv', tsv, postgresql_using='gin'),
-        UniqueConstraint('asset_code', 'asset_check_digit'),
+        # Convertido UniqueConstraint para Index parcial
+        Index(
+            'ix_uq_assets_asset_code_asset_check_digit_active',
+            'asset_code',
+            'asset_check_digit',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )
 
 
@@ -570,6 +631,7 @@ class Catalog:
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
     )
+    # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
 
 
 @table_registry.mapped_as_dataclass
@@ -667,12 +729,12 @@ class WorkflowTransfer:
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
     )
+    # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
 
 
 @table_registry.mapped_as_dataclass
 class Inventory:
     __tablename__ = 'inventory'
-    __table_args__ = (UniqueConstraint('key', name='uq_inventory_key'),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -697,6 +759,15 @@ class Inventory:
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            'ix_uq_inventory_key_active',
+            'key',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )
 
 
@@ -738,13 +809,8 @@ class LocationInventory:
 @table_registry.mapped_as_dataclass
 class InventoryAsset:
     __tablename__ = 'inventory_assets'
-    __table_args__ = (
-        UniqueConstraint(
-            'location_inventory_id',
-            'asset_id',
-            name='uq_location_inventory_asset',
-        ),
-    )
+    # Convertido UniqueConstraint para Index parcial
+
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
     )
@@ -772,6 +838,15 @@ class InventoryAsset:
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
+    )
+    __table_args__ = (
+        Index(
+            'ix_uq_inventory_assets_location_inventory_asset_active',
+            'location_inventory_id',
+            'asset_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )
 
 
@@ -809,12 +884,14 @@ class SystemIdentity:
         init=False, primary_key=True, default=uuid4
     )
 
+    # Removido unique=True para usar índice parcial
     user_id: Mapped[UUID] = mapped_column(
-        ForeignKey('users.id'), unique=True, nullable=False
+        ForeignKey('users.id'), nullable=False
     )
 
+    # Removido unique=True para usar índice parcial
     legal_guardian_id: Mapped[UUID] = mapped_column(
-        ForeignKey('legal_guardians.id'), unique=True, nullable=False
+        ForeignKey('legal_guardians.id'), nullable=False
     )
 
     user: Mapped['User'] = relationship(
@@ -834,13 +911,27 @@ class SystemIdentity:
         init=False, nullable=True
     )
 
+    # Adicionado __table_args__ para índices parciais
+    __table_args__ = (
+        Index(
+            'ix_uq_system_identities_user_id_active',
+            'user_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+        Index(
+            'ix_uq_system_identities_legal_guardian_id_active',
+            'legal_guardian_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+    )
+
 
 @table_registry.mapped_as_dataclass
 class Collection:
     __tablename__ = 'collections'
-    __table_args__ = (
-        UniqueConstraint('user_id', 'name', name='uq_collection_user_name'),
-    )
+    # Convertido UniqueConstraint para Index parcial
 
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -871,6 +962,15 @@ class Collection:
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
+    )
+    __table_args__ = (
+        Index(
+            'ix_uq_collections_user_id_name_active',
+            'user_id',
+            'name',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )
 
 
@@ -947,16 +1047,13 @@ class Notification:
         cascade='all, delete-orphan',
         lazy='selectin',
     )
+    # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
 
 
 @table_registry.mapped_as_dataclass
 class UserNotification:
     __tablename__ = 'user_notifications'
-    __table_args__ = (
-        UniqueConstraint(
-            'notification_id', 'target_user_id', name='uq_user_notification'
-        ),
-    )
+    # Convertido UniqueConstraint para Index parcial
 
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -990,6 +1087,15 @@ class UserNotification:
         init=False,
         lazy='selectin',
     )
+    __table_args__ = (
+        Index(
+            'ix_uq_user_notifications_notification_id_target_user_id_active',
+            'notification_id',
+            'target_user_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+    )
 
 
 @table_registry.mapped_as_dataclass
@@ -999,8 +1105,10 @@ class Permission:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-    name: Mapped[str] = mapped_column(nullable=False, unique=True)
-    code: Mapped[str] = mapped_column(nullable=False, unique=True)
+    # Removido unique=True para usar índice parcial
+    name: Mapped[str] = mapped_column(nullable=False)
+    # Removido unique=True para usar índice parcial
+    code: Mapped[str] = mapped_column(nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
 
     role_permissions: Mapped[list['RolePermission']] = relationship(
@@ -1024,6 +1132,22 @@ class Permission:
         init=False, nullable=True
     )
 
+    # Adicionado __table_args__ para índices parciais
+    __table_args__ = (
+        Index(
+            'ix_uq_permissions_name_active',
+            'name',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+        Index(
+            'ix_uq_permissions_code_active',
+            'code',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+    )
+
 
 @table_registry.mapped_as_dataclass
 class Role:
@@ -1032,7 +1156,8 @@ class Role:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-    name: Mapped[str] = mapped_column(nullable=False, unique=True)
+    # Removido unique=True para usar índice parcial
+    name: Mapped[str] = mapped_column(nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
 
     role_permissions: Mapped[list['RolePermission']] = relationship(
@@ -1065,13 +1190,21 @@ class Role:
         init=False, nullable=True
     )
 
+    # Adicionado __table_args__ para índice parcial
+    __table_args__ = (
+        Index(
+            'ix_uq_roles_name_active',
+            'name',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+    )
+
 
 @table_registry.mapped_as_dataclass
 class UserRole:
     __tablename__ = 'user_roles'
-    __table_args__ = (
-        UniqueConstraint('user_id', 'role_id', name='uq_user_role'),
-    )
+    # Convertido UniqueConstraint para Index parcial
 
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
@@ -1096,16 +1229,21 @@ class UserRole:
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
     )
+    __table_args__ = (
+        Index(
+            'ix_uq_user_roles_user_id_role_id_active',
+            'user_id',
+            'role_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
+    )
 
 
 @table_registry.mapped_as_dataclass
 class RolePermission:
     __tablename__ = 'role_permissions'
-    __table_args__ = (
-        UniqueConstraint(
-            'role_id', 'permission_id', name='uq_role_permission'
-        ),
-    )
+    # Convertido UniqueConstraint para Index parcial
 
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
@@ -1129,6 +1267,15 @@ class RolePermission:
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
+    )
+    __table_args__ = (
+        Index(
+            'ix_uq_role_permissions_role_id_permission_id_active',
+            'role_id',
+            'permission_id',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )
 
 
@@ -1163,6 +1310,7 @@ class Feedback:
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
     )
+    # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
 
 
 @table_registry.mapped_as_dataclass
@@ -1172,7 +1320,8 @@ class SystemSetting:
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-    key: Mapped[str] = mapped_column(nullable=False, unique=True, index=True)
+    # Removido unique=True para usar índice parcial
+    key: Mapped[str] = mapped_column(nullable=False, index=True)
     value: Mapped[Any] = mapped_column(JSON, nullable=True)
     description: Mapped[str | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -1183,4 +1332,14 @@ class SystemSetting:
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         init=False, nullable=True
+    )
+
+    # Adicionado __table_args__ para índice parcial
+    __table_args__ = (
+        Index(
+            'ix_uq_system_settings_key_active',
+            'key',
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )

@@ -296,7 +296,14 @@ async def read_catalog_entry(catalog_id: UUID, session: Session):
     options = [
         selectinload(Catalog.images),
         selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user),
+            selectinload(CatalogWorkFlow.user).options(
+                selectinload(User.system_identity).options(
+                    selectinload(SystemIdentity.legal_guardian)
+                ),
+                selectinload(User.user_role_associations).selectinload(
+                    UserRole.role
+                ),
+            ),
             selectinload(CatalogWorkFlow.transfer_requests),
         ),
         selectinload(Catalog.location)
@@ -309,6 +316,7 @@ async def read_catalog_entry(catalog_id: UUID, session: Session):
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
         )
+    print(CatalogPublic.model_validate(db_catalog))
     return db_catalog
 
 
