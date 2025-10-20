@@ -271,6 +271,35 @@ async def list_transfer_requests(
     return {'transfer_requests': result.all()}
 
 
+@router.get(
+    '/transfer/my',
+    response_model=RequestTransferList,
+    status_code=HTTPStatus.OK,
+)
+async def list_my_transfer_requests(
+    session: Session,
+    filters: Annotated[FilterTransfer, Depends()],
+    current_user: CurrentUser,
+):
+    query = select(WorkflowTransfer)
+
+    query = query.where(WorkflowTransfer.user_id == current_user.id)
+
+    if filters.status:
+        query = query.where(WorkflowTransfer.status == filters.status)
+
+    if filters.user_id:
+        query = query.where(WorkflowTransfer.user_id == filters.user_id)
+
+    if filters.workflow_id:
+        query = query.where(
+            WorkflowTransfer.workflow_id == filters.workflow_id
+        )
+
+    result = await session.scalars(query)
+    return {'transfer_requests': result.all()}
+
+
 @router.get('/images', response_model=CatalogImageList)
 async def list_catalog_images(
     session: Session,
