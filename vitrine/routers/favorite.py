@@ -1,7 +1,8 @@
 from http import HTTPStatus
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -15,7 +16,12 @@ from vitrine.models import (
     LocationInventory,
     WorkflowTransfer,
 )
-from vitrine.schemas import FavoriteList, Message
+from vitrine.schemas import FavoriteList, FilterAsset, FilterCatalog, Message
+from vitrine.services import filter_service
+
+_ASSET_FIELDS = set(FilterAsset.model_fields.keys())
+_NON_JOIN_FIELDS = {'limit', 'offset'}
+ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
 
 router = APIRouter(prefix='/favorites', tags=['vitrine - favoritos'])
 
@@ -60,6 +66,7 @@ async def create_favorite(
 async def read_user_favorites(
     session: Session,
     current_user: CurrentUser,
+    filters: Annotated[FilterCatalog, Depends()],
 ):
     query = (
         select(Catalog)
@@ -94,6 +101,19 @@ async def read_user_favorites(
             ),
         )
     )
+
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
+    )
+
+    query = filter_service.apply_catalog_filters(query, filters)
+
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
+
+    query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)
     entries = result.unique().all()
