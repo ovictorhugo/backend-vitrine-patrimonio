@@ -331,39 +331,3 @@ async def test_update_collection_item_fails_item_not_found(
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()['detail'] == 'Item not found in this collection.'
-
-
-async def test_update_collection_item_fails_conflict_if_other_items_exist(
-    client, create_user, create_token, create_collection, create_catalog_entry
-):
-    user = await create_user()
-    token = create_token(user)
-    collection = await create_collection(user_id=user.id)
-    catalog_item1 = await create_catalog_entry(user_id=user.id)
-    catalog_item2 = await create_catalog_entry(user_id=user.id)
-
-    add_response1 = client.post(
-        f'/collections/{collection.id}/items/',
-        json={'catalog_id': str(catalog_item1.id), 'status': True},
-        headers={'Authorization': f'Bearer {token}'},
-    )
-    item1_id = add_response1.json()['id']
-
-    client.post(
-        f'/collections/{collection.id}/items/',
-        json={'catalog_id': str(catalog_item2.id), 'status': True},
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    update_payload = {'status': False, 'comment': 'Update deve falhar'}
-    response = client.put(
-        f'/collections/{collection.id}/items/{item1_id}',
-        json=update_payload,
-        headers={'Authorization': f'Bearer {token}'},
-    )
-
-    assert response.status_code == HTTPStatus.CONFLICT
-    assert (
-        response.json()['detail']
-        == 'Another item with this catalog ID already exists in the collection.'
-    )

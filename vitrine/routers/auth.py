@@ -2,7 +2,7 @@ from http import HTTPStatus
 from secrets import token_hex
 
 from fastapi import APIRouter, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from starlette.responses import RedirectResponse
 
 from vitrine.dependencies import CurrentUser, OAuth2Form, Session
@@ -53,8 +53,6 @@ async def refresh_access_token(user: CurrentUser):
 async def shibboleth_login(request: Request, session: Session):
     shib_data = request.headers
 
-    print(shib_data)
-
     eppn = shib_data.get('eppn')
 
     if not eppn:
@@ -77,10 +75,23 @@ async def shibboleth_login(request: Request, session: Session):
             detail='Perfil cadastrado apenas como discente pelo Provedor de Identidade. Acesso negado.',
         )
 
+    shib_username = shib_data.get('shib-person-commonname')
+    shib_email = shib_data.get('shib-person-mail')
+
     db_user = await session.scalar(
         select(User).where(
-            (User.username == shib_data.get('shib-person-commonname'))
-            | (User.email == shib_data.get('shib-person-mail'))
+            or_(
+                (
+                    func.upper(User.username) == shib_username.upper()
+                    if shib_username
+                    else False
+                ),
+                (
+                    func.upper(User.email) == shib_email.upper()
+                    if shib_email
+                    else False
+                ),
+            )
         )
     )
 

@@ -345,7 +345,6 @@ async def read_catalog_entry(catalog_id: UUID, session: Session):
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
         )
-    print(CatalogPublic.model_validate(db_catalog))
     return db_catalog
 
 
