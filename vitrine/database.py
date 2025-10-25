@@ -1,10 +1,40 @@
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
+from vitrine.models import AuditMixin
 from vitrine.settings import Settings
 
-engine = create_async_engine(Settings().DATABASE_URL)
+settings = Settings()
+
+engine = create_async_engine(settings.DATABASE_URL, future=True)
+
+async_session = async_sessionmaker(
+    engine,
+    expire_on_commit=False,
+    class_=AsyncSession,
+)
 
 
-async def get_session():  # pragma: no cover
-    async with AsyncSession(engine, expire_on_commit=False) as session:
+@event.listens_for(Session, 'do_orm_execute')
+def _add_filtering_criteria(execute_state: ORMExecuteState):
+    skip_filter = execute_state.execution_options.get(
+        'skip_soft_delete_filter', False
+    )
+    if execute_state.is_select and not skip_filter:
+        execute_state.statement = execute_state.statement.options(
+            with_loader_criteria(
+                AuditMixin,
+                lambda cls: cls.deleted_at.is_(None),
+                include_aliases=True,
+            )
+        )
+
+
+async def get_session():
+    async with async_session() as session:
         yield session

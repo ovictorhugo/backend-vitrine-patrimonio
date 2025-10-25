@@ -12,11 +12,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     UniqueConstraint,
+    and_,
     column,  # Adicionado
     func,
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR
-from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import (
     Mapped,
     declared_attr,  # Adicionado
@@ -149,8 +149,20 @@ class User(AuditMixin):
 
     matricula: Mapped[str | None] = mapped_column(nullable=True, init=False)
 
-    roles: Mapped[list['Role']] = association_proxy(
-        'user_role_associations', 'role', init=False
+    roles: Mapped[list['Role']] = relationship(
+        'Role',
+        secondary='user_roles',  # Nome da tabela de associação
+        back_populates='users',
+        primaryjoin=lambda: and_(
+            User.id == UserRole.user_id,
+            UserRole.deleted_at.is_(None),  # Filtra a tabela de join
+        ),
+        secondaryjoin=lambda: and_(
+            Role.id == UserRole.role_id,
+            Role.deleted_at.is_(None),  # Filtra a tabela de destino
+        ),
+        init=False,
+        lazy='selectin',
     )
 
     verify: Mapped[bool] = mapped_column(default=False)
@@ -1137,8 +1149,20 @@ class Permission(AuditMixin):  # Herda de AuditMixin
         lazy='selectin',
     )
 
-    roles: Mapped[list['Role']] = association_proxy(
-        'role_permissions', 'role', init=False
+    roles: Mapped[list['Role']] = relationship(
+        'Role',
+        secondary='role_permissions',
+        back_populates='permissions',
+        primaryjoin=lambda: and_(
+            Permission.id == RolePermission.permission_id,
+            RolePermission.deleted_at.is_(None),
+        ),
+        secondaryjoin=lambda: and_(
+            Role.id == RolePermission.role_id,
+            Role.deleted_at.is_(None),
+        ),
+        init=False,
+        lazy='selectin',
     )
 
     # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
@@ -1180,10 +1204,20 @@ class Role(AuditMixin):  # Herda de AuditMixin
         lazy='selectin',
     )
 
-    permissions: Mapped[list['Permission']] = association_proxy(
-        'role_permissions',
-        'permission',
+    permissions: Mapped[list['Permission']] = relationship(
+        'Permission',
+        secondary='role_permissions',
+        back_populates='roles',
+        primaryjoin=lambda: and_(
+            Role.id == RolePermission.role_id,
+            RolePermission.deleted_at.is_(None),
+        ),
+        secondaryjoin=lambda: and_(
+            Permission.id == RolePermission.permission_id,
+            Permission.deleted_at.is_(None),
+        ),
         init=False,
+        lazy='selectin',
     )
 
     user_roles: Mapped[list['UserRole']] = relationship(
@@ -1192,7 +1226,21 @@ class Role(AuditMixin):  # Herda de AuditMixin
         cascade='all, delete-orphan',
         lazy='selectin',
     )
-
+    users: Mapped[list['User']] = relationship(
+        'User',
+        secondary='user_roles',
+        back_populates='roles',
+        primaryjoin=lambda: and_(
+            Role.id == UserRole.role_id,
+            UserRole.deleted_at.is_(None),
+        ),
+        secondaryjoin=lambda: and_(
+            User.id == UserRole.user_id,
+            User.deleted_at.is_(None),
+        ),
+        init=False,
+        lazy='selectin',
+    )
     # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     # Adicionado __table_args__ para índice parcial
