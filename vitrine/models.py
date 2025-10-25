@@ -1,7 +1,8 @@
 import uuid
+from dataclasses import dataclass  # Adicionado
 from datetime import datetime
 from enum import Enum as PythonEnum
-from typing import Any, Optional
+from typing import Any, Optional  # Adicionado List
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -11,13 +12,83 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     UniqueConstraint,
+    column,  # Adicionado
     func,
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
+from sqlalchemy.orm import (
+    Mapped,
+    declared_attr,  # Adicionado
+    mapped_column,
+    registry,
+    relationship,
+)
 
 table_registry = registry()
+
+
+@dataclass(init=False)
+class AuditMixin:
+    @declared_attr
+    def created_at(cls) -> Mapped[datetime]:
+        return mapped_column(init=False, server_default=func.now())
+
+    @declared_attr
+    def updated_at(cls) -> Mapped[Optional[datetime]]:
+        return mapped_column(init=False, nullable=True, onupdate=func.now())
+
+    @declared_attr
+    def deleted_at(cls) -> Mapped[Optional[datetime]]:
+        return mapped_column(init=False, nullable=True)
+
+    @declared_attr
+    def created_by(cls) -> Mapped[Optional[UUID]]:
+        return mapped_column(
+            ForeignKey(
+                'users.id',
+                name=f'fk_{cls.__tablename__}_created_by',
+                use_alter=True,
+            ),
+            nullable=True,
+            default=None,
+        )
+
+    @declared_attr
+    def updated_by(cls) -> Mapped[Optional[UUID]]:
+        return mapped_column(
+            ForeignKey(
+                'users.id',
+                name=f'fk_{cls.__tablename__}_updated_by',
+                use_alter=True,
+            ),
+            nullable=True,
+            default=None,
+        )
+
+    @declared_attr
+    def deleted_by(cls) -> Mapped[Optional[UUID]]:
+        return mapped_column(
+            ForeignKey(
+                'users.id',
+                name=f'fk_{cls.__tablename__}_deleted_by',
+                use_alter=True,
+            ),
+            nullable=True,
+            default=None,
+        )
+
+    def set_creation_audit(self, user_id: UUID):
+        self.created_at = func.now()
+        self.created_by = user_id
+
+    def set_update_audit(self, user_id: UUID):
+        self.updated_at = func.now()
+        self.updated_by = user_id
+
+    def set_deletion_audit(self, user_id: UUID):
+        self.deleted_at = func.now()
+        self.deleted_by = user_id
 
 
 class WorkflowTransferStatus(str, PythonEnum):
@@ -57,7 +128,7 @@ class InventoryStatus(str, PythonEnum):
 
 
 @table_registry.mapped_as_dataclass
-class User:
+class User(AuditMixin):
     __tablename__ = 'users'
 
     id: Mapped[UUID] = mapped_column(
@@ -97,18 +168,22 @@ class User:
         cascade='all, delete-orphan',
         lazy='selectin',
         uselist=False,
+        foreign_keys='[SystemIdentity.user_id]',
     )
     transfer_requests: Mapped[list['WorkflowTransfer']] = relationship(
         back_populates='user',
         init=False,
         lazy='selectin',
         cascade='all, delete-orphan',
+        # ADICIONE ISTO:
+        foreign_keys='[WorkflowTransfer.user_id]',
     )
     collections: Mapped[list['Collection']] = relationship(
         back_populates='user',
         init=False,
         cascade='all, delete-orphan',
         lazy='selectin',
+        foreign_keys='[Collection.user_id]',
     )
     notifications_received: Mapped[list['UserNotification']] = relationship(
         back_populates='target_user',
@@ -129,17 +204,10 @@ class User:
         init=False,
         cascade='all, delete-orphan',
         lazy='selectin',
+        foreign_keys='[UserRole.user_id]',
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     # Adicionado __table_args__ para índices parciais
     __table_args__ = (
@@ -147,19 +215,21 @@ class User:
             'ix_uq_users_username_active',
             'username',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index(
             'ix_uq_users_email_active',
             'email',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Unit:
+class Unit(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'units'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -173,16 +243,8 @@ class Unit:
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='selectin')
-
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
+    user: Mapped['User'] = relationship(
+        init=False, lazy='selectin', foreign_keys=[user_id]
     )
 
     tsv: Mapped[TSVECTOR] = mapped_column(
@@ -196,20 +258,19 @@ class Unit:
     )
 
     __table_args__ = (
-        # Convertido UniqueConstraint para Index parcial
         Index(
             'ix_uq_units_unit_name_user_id_active',
             'unit_name',
             'user_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index('ix_units_tsv', tsv, postgresql_using='gin'),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Agency:
+class Agency(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'agencys'
 
     id: Mapped[UUID] = mapped_column(
@@ -228,17 +289,11 @@ class Agency:
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='selectin')
+    user: Mapped['User'] = relationship(
+        init=False, lazy='selectin', foreign_keys=[user_id]
+    )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
@@ -257,14 +312,15 @@ class Agency:
             'agency_name',
             'unit_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index('ix_agencys_tsv', tsv, postgresql_using='gin'),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Sector:
+class Sector(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'sectors'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -278,21 +334,15 @@ class Sector:
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='selectin')
+    user: Mapped['User'] = relationship(
+        init=False, lazy='selectin', foreign_keys=[user_id]
+    )
 
     locations: Mapped[list['Location']] = relationship(
         init=False, back_populates='sector'
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
@@ -310,14 +360,15 @@ class Sector:
             'sector_name',
             'agency_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index('ix_sectors_tsv', tsv, postgresql_using='gin'),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Location:
+class Location(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'locations'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -338,21 +389,16 @@ class Location:
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped['User'] = relationship(init=False, lazy='selectin')
+    user: Mapped['User'] = relationship(
+        init=False, lazy='selectin', foreign_keys=[user_id]
+    )
 
     inventory_assets: Mapped[list['InventoryAsset']] = relationship(
         back_populates='location', init=False
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
+
     incoming_transfers: Mapped[list['WorkflowTransfer']] = relationship(
         back_populates='location',
         init=False,
@@ -382,14 +428,15 @@ class Location:
             'sector_id',
             'legal_guardian_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index('ix_locations_tsv', tsv, postgresql_using='gin'),
     )
 
 
 @table_registry.mapped_as_dataclass
-class LegalGuardian:
+class LegalGuardian(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'legal_guardians'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
@@ -399,17 +446,14 @@ class LegalGuardian:
     legal_guardians_name: Mapped[str] = mapped_column(nullable=False)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='selectin')
+    user: Mapped[User] = relationship(
+        init=False,
+        lazy='selectin',
+        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+    )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
+
     system_identity: Mapped[Optional['SystemIdentity']] = relationship(
         back_populates='legal_guardian',
         init=False,
@@ -439,13 +483,14 @@ class LegalGuardian:
             'ix_uq_legal_guardians_name_active',
             'legal_guardians_name',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Material:
+class Material(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'materials'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
@@ -455,17 +500,13 @@ class Material:
     material_name: Mapped[str] = mapped_column(nullable=False)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='selectin')
+    user: Mapped[User] = relationship(
+        init=False,
+        lazy='selectin',
+        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+    )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
@@ -484,13 +525,14 @@ class Material:
             'ix_uq_materials_material_name_active',
             'material_name',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Asset:
+class Asset(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'assets'
 
     id: Mapped[UUID] = mapped_column(
@@ -531,19 +573,15 @@ class Asset:
     subelement_code: Mapped[str | None] = mapped_column(nullable=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='selectin')
+    user: Mapped[User] = relationship(
+        init=False,
+        lazy='selectin',
+        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+    )
 
     is_official: Mapped[bool] = mapped_column(default=False)
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
@@ -569,13 +607,14 @@ class Asset:
             'asset_code',
             'asset_check_digit',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Catalog:
+class Catalog(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'catalog'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -590,7 +629,11 @@ class Catalog:
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
 
     asset: Mapped[Asset] = relationship(init=False, lazy='selectin')
-    user: Mapped[User] = relationship(init=False, lazy='selectin')
+    user: Mapped[User] = relationship(
+        init=False,
+        lazy='selectin',
+        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+    )
 
     location_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('locations.id'), nullable=True
@@ -622,20 +665,13 @@ class Catalog:
         cascade='all, delete-orphan',
         lazy='selectin',
     )
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
     # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
 
 
 @table_registry.mapped_as_dataclass
-class CatalogImage:
+class CatalogImage:  # Não modificado
     __tablename__ = 'catalog_images'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -654,7 +690,7 @@ class CatalogImage:
 
 
 @table_registry.mapped_as_dataclass
-class CatalogWorkFlow:
+class CatalogWorkFlow:  # Não modificado
     __tablename__ = 'catalog_workflow'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -663,7 +699,11 @@ class CatalogWorkFlow:
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    user: Mapped[User] = relationship(init=False, lazy='selectin')
+    user: Mapped[User] = relationship(
+        init=False,
+        lazy='selectin',
+        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+    )
     catalog: Mapped['Catalog'] = relationship(
         back_populates='workflow_history', init=False
     )
@@ -683,7 +723,7 @@ class CatalogWorkFlow:
 
 
 @table_registry.mapped_as_dataclass
-class WorkflowTransfer:
+class WorkflowTransfer(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'workflow_transfer'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -713,27 +753,22 @@ class WorkflowTransfer:
     )
 
     user: Mapped['User'] = relationship(
-        back_populates='transfer_requests', init=False, lazy='selectin'
+        back_populates='transfer_requests',
+        init=False,
+        lazy='selectin',
+        foreign_keys=[user_id],
     )
 
     location: Mapped['Location'] = relationship(
         back_populates='incoming_transfers', init=False, lazy='selectin'
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
     # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
 
 
 @table_registry.mapped_as_dataclass
-class Inventory:
+class Inventory(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'inventory'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -749,30 +784,28 @@ class Inventory:
     )
 
     created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-    created_by: Mapped[User] = relationship(init=False, lazy='selectin')
+    created_by: Mapped[User] = relationship(
+        init=False,
+        lazy='selectin',
+        foreign_keys=[created_by_id],  # <-- Especifique a coluna FK
+    )
     avaliable: Mapped[bool] = mapped_column(default=True, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     __table_args__ = (
         Index(
             'ix_uq_inventory_key_active',
             'key',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class LocationInventory:
+class LocationInventory:  # Não modificado
     __tablename__ = 'location_inventory'
     __table_args__ = (
         UniqueConstraint(
@@ -807,7 +840,7 @@ class LocationInventory:
 
 
 @table_registry.mapped_as_dataclass
-class InventoryAsset:
+class InventoryAsset(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'inventory_assets'
     # Convertido UniqueConstraint para Index parcial
 
@@ -833,25 +866,23 @@ class InventoryAsset:
         init=False, lazy='selectin', back_populates='inventory_assets'
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, deleted_at removidas (vêm do mixin)
+    # updated_at será adicionado pelo mixin
+
     __table_args__ = (
         Index(
             'ix_uq_inventory_assets_location_inventory_asset_active',
             'location_inventory_id',
             'asset_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class FavoriteCatalog:
+class FavoriteCatalog:  # Não modificado
     __tablename__ = 'favorite_catalogs'
     __table_args__ = (
         UniqueConstraint('user_id', 'catalog_id', name='uq_favorite_catalog'),
@@ -870,14 +901,16 @@ class FavoriteCatalog:
         init=False, server_default=func.now()
     )
 
-    user: Mapped['User'] = relationship(back_populates='favorites', init=False)
+    user: Mapped['User'] = relationship(
+        back_populates='favorites', init=False, foreign_keys=[user_id]
+    )
     catalog: Mapped['Catalog'] = relationship(
         back_populates='favorited_by', init=False, lazy='selectin'
     )
 
 
 @table_registry.mapped_as_dataclass
-class SystemIdentity:
+class SystemIdentity(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'system_identities'
 
     id: Mapped[UUID] = mapped_column(
@@ -895,21 +928,15 @@ class SystemIdentity:
     )
 
     user: Mapped['User'] = relationship(
-        back_populates='system_identity', init=False
+        back_populates='system_identity',
+        init=False,
+        foreign_keys=[user_id],
     )
     legal_guardian: Mapped['LegalGuardian'] = relationship(
         back_populates='system_identity', init=False
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     # Adicionado __table_args__ para índices parciais
     __table_args__ = (
@@ -917,19 +944,21 @@ class SystemIdentity:
             'ix_uq_system_identities_user_id_active',
             'user_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index(
             'ix_uq_system_identities_legal_guardian_id_active',
             'legal_guardian_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Collection:
+class Collection(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'collections'
     # Convertido UniqueConstraint para Index parcial
 
@@ -944,7 +973,9 @@ class Collection:
         ForeignKey('users.id'), nullable=False
     )
     user: Mapped['User'] = relationship(
-        back_populates='collections', init=False
+        back_populates='collections',
+        init=False,
+        foreign_keys=[user_id],
     )
 
     items: Mapped[list['CollectionItem']] = relationship(
@@ -954,28 +985,22 @@ class Collection:
         lazy='selectin',
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
+
     __table_args__ = (
         Index(
             'ix_uq_collections_user_id_name_active',
             'user_id',
             'name',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class CollectionItem:
+class CollectionItem:  # Não modificado
     __tablename__ = 'collection_items'
     __table_args__ = (
         UniqueConstraint(
@@ -1013,7 +1038,7 @@ class CollectionItem:
 
 
 @table_registry.mapped_as_dataclass
-class Notification:
+class Notification(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'notifications'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1027,12 +1052,8 @@ class Notification:
     type: Mapped[str] = mapped_column(nullable=False, index=True)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, deleted_at removidas (vêm do mixin)
+    # updated_at será adicionado pelo mixin
 
     source_user: Mapped[Optional['User']] = relationship(
         init=False,
@@ -1051,7 +1072,7 @@ class Notification:
 
 
 @table_registry.mapped_as_dataclass
-class UserNotification:
+class UserNotification(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'user_notifications'
     # Convertido UniqueConstraint para Index parcial
 
@@ -1069,12 +1090,8 @@ class UserNotification:
 
     read_at: Mapped[datetime | None] = mapped_column(init=False, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, deleted_at removidas (vêm do mixin)
+    # updated_at será adicionado pelo mixin
 
     notification: Mapped['Notification'] = relationship(
         back_populates='recipients',
@@ -1086,6 +1103,7 @@ class UserNotification:
         back_populates='notifications_received',
         init=False,
         lazy='selectin',
+        foreign_keys=[target_user_id],  # <-- Especifique a coluna FK
     )
     __table_args__ = (
         Index(
@@ -1093,13 +1111,14 @@ class UserNotification:
             'notification_id',
             'target_user_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Permission:
+class Permission(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'permissions'
 
     id: Mapped[UUID] = mapped_column(
@@ -1122,15 +1141,7 @@ class Permission:
         'role_permissions', 'role', init=False
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     # Adicionado __table_args__ para índices parciais
     __table_args__ = (
@@ -1138,19 +1149,21 @@ class Permission:
             'ix_uq_permissions_name_active',
             'name',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index(
             'ix_uq_permissions_code_active',
             'code',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Role:
+class Role(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'roles'
 
     id: Mapped[UUID] = mapped_column(
@@ -1180,15 +1193,7 @@ class Role:
         lazy='selectin',
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
+    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     # Adicionado __table_args__ para índice parcial
     __table_args__ = (
@@ -1196,13 +1201,14 @@ class Role:
             'ix_uq_roles_name_active',
             'name',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            # Corrigido para usar column()
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class UserRole:
+class UserRole(AuditMixin):  # Herda de AuditMixin
     __tablename__ = 'user_roles'
     # Convertido UniqueConstraint para Index parcial
 
@@ -1217,33 +1223,29 @@ class UserRole:
     )
 
     user: Mapped['User'] = relationship(
-        back_populates='user_role_associations', init=False, lazy='selectin'
+        back_populates='user_role_associations',
+        init=False,
+        lazy='selectin',
+        foreign_keys=[user_id],
     )
     role: Mapped['Role'] = relationship(
         back_populates='user_roles', init=False, lazy='selectin'
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
     __table_args__ = (
         Index(
             'ix_uq_user_roles_user_id_role_id_active',
             'user_id',
             'role_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class RolePermission:
+class RolePermission(AuditMixin):
     __tablename__ = 'role_permissions'
-    # Convertido UniqueConstraint para Index parcial
 
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
@@ -1262,25 +1264,19 @@ class RolePermission:
         back_populates='role_permissions', init=False, lazy='selectin'
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
     __table_args__ = (
         Index(
             'ix_uq_role_permissions_role_id_permission_id_active',
             'role_id',
             'permission_id',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Feedback:
+class Feedback(AuditMixin):
     __tablename__ = 'feedbacks'
     __table_args__ = (
         CheckConstraint(
@@ -1299,47 +1295,29 @@ class Feedback:
     user_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('users.id'), nullable=True, init=False
     )
-    user: Mapped[Optional['User']] = relationship(init=False, lazy='selectin')
-
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
+    user: Mapped[Optional['User']] = relationship(
+        init=False,
+        lazy='selectin',
+        foreign_keys=[user_id],
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
-    # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
 
 
 @table_registry.mapped_as_dataclass
-class SystemSetting:
+class SystemSetting(AuditMixin):
     __tablename__ = 'system_settings'
 
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-    # Removido unique=True para usar índice parcial
     key: Mapped[str] = mapped_column(nullable=False, index=True)
     value: Mapped[Any] = mapped_column(JSON, nullable=True)
     description: Mapped[str | None] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True, onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        init=False, nullable=True
-    )
 
-    # Adicionado __table_args__ para índice parcial
     __table_args__ = (
         Index(
             'ix_uq_system_settings_key_active',
             'key',
             unique=True,
-            postgresql_where=(deleted_at.is_(None)),
+            postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
