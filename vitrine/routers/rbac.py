@@ -4,7 +4,7 @@ from typing import Annotated, List
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import Text, cast, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -284,24 +284,19 @@ async def remove_role_from_user(
             detail='Role not assigned to user',
         )
 
-    # Remove a role primeiro
     await session.delete(assoc)
     await session.commit()
 
     role = await session.get(Role, role_id)
 
-    # --- LÓGICA DE SUBSTITUIÇÃO DO REVISOR ---
-    if role and role.name == 'Comissão de desfazimento':
+    if role and role.name == 'Comissão Permanente de Desfazimento':
         user_id_str = str(user_id)
-
-        # 1. Encontrar workflows onde o usuário é revisor.
-        #    Usamos o 'contains' do JSONB/JSON para verificar se a lista
-        #    'reviewers' contém um objeto que tenha {'id': user_id_str}.
+        search_string = f'%"id": "{user_id_str}"%'
         stmt_find_workflows = select(CatalogWorkFlow).where(
             CatalogWorkFlow.workflow_status == 'REVIEW_REQUESTED_COMISSION',
-            CatalogWorkFlow.detail['reviewers'].contains([
-                {'id': user_id_str}
-            ]),
+            cast(CatalogWorkFlow.detail['reviewers'], Text).like(
+                search_string
+            ),
         )
 
         result_workflows = await session.execute(stmt_find_workflows)
@@ -318,7 +313,9 @@ async def remove_role_from_user(
             stmt_find_replacement = (
                 select(User)  # Alterado de select(User.id) para select(User)
                 .where(
-                    User.roles.any(Role.name == 'Comissão de desfazimento'),
+                    User.roles.any(
+                        Role.name == 'Comissão Permanente de Desfazimento'
+                    ),
                     User.id.notin_(
                         current_reviewer_uuids
                     ),  # Não pode ser quem já está

@@ -173,7 +173,11 @@ async def add_workflow_step(
 
         stmt = (
             select(User)
-            .where(User.roles.any(Role.name == 'Comissão de desfazimento'))
+            .where(
+                User.roles.any(
+                    Role.name == 'Comissão Permanente de Desfazimento'
+                )
+            )
             .order_by(func.random())
             .limit(comission_sample_size)
         )
@@ -769,7 +773,7 @@ async def update_workflow_reviewers(
 
     stmt = select(User).where(
         User.id.in_(new_reviewers),
-        User.roles.any(Role.name == 'Comissão de desfazimento'),
+        User.roles.any(Role.name == 'Comissão Permanente de Desfazimento'),
         User.deleted_at.is_(None),
     )
     result = await session.execute(stmt)

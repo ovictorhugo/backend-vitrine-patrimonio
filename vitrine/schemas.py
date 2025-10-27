@@ -552,7 +552,7 @@ class CollectionList(BaseModel):
     collections: list[CollectionPublic]
 
 
-class FilterCollection(FilterCatalog):
+class FilterCollection(FilterPage):
     q: str | None = Field(default=None)
     type: Optional[str] = Field(default=None)
 

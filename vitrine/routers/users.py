@@ -245,7 +245,9 @@ async def delete_user(
         stmt_find_replacement = (
             select(User)
             .where(
-                User.roles.any(Role.name == 'Comissão de desfazimento'),
+                User.roles.any(
+                    Role.name == 'Comissão Permanente de Desfazimento'
+                ),
                 User.id.notin_(current_reviewer_uuids),
                 User.deleted_at.is_(None),
             )

@@ -1120,7 +1120,7 @@ async def test_filter_catalog_by_reviewer_id(
 
     role = client.post(
         '/roles/',
-        json={'name': 'Comissão de desfazimento'},
+        json={'name': 'Comissão Permanente de Desfazimento'},
     ).json()
     client.post(f'/roles/{role["id"]}/users/{user1.id}')
 
@@ -1149,7 +1149,7 @@ async def test_update_workflow_reviewers(
 
     role = client.post(
         '/roles/',
-        json={'name': 'Comissão de desfazimento'},
+        json={'name': 'Comissão Permanente de Desfazimento'},
     ).json()
     client.post(f'/roles/{role["id"]}/users/{user1.id}')
     client.post(f'/roles/{role["id"]}/users/{user2.id}')

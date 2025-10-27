@@ -378,7 +378,7 @@ async def test_remove_comissao_role_reassigns_reviewers(
 
     role = client.post(
         '/roles/',
-        json={'name': 'Comissão de desfazimento'},
+        json={'name': 'Comissão Permanente de Desfazimento'},
     ).json()
     client.post(f'/roles/{role["id"]}/users/{user1.id}')
     client.post(f'/roles/{role["id"]}/users/{user2.id}')
