@@ -99,6 +99,25 @@ async def read_me(current_user: CurrentUser):
     return current_user
 
 
+@router.get('/{user_id}', response_model=UserPublic)
+async def read_user(
+    session: Session,
+    user_id: UUID,
+):
+    options = [
+        selectinload(User.system_identity).selectinload(
+            SystemIdentity.legal_guardian
+        ),
+        selectinload(User.user_role_associations).selectinload(UserRole.role),
+    ]
+    user = await session.get(User, user_id, options=options)
+    if not user or user.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='User not found'
+        )
+    return user
+
+
 @router.put('/{user_id}', response_model=UserPublic)
 async def update_user(
     user_id: UUID,

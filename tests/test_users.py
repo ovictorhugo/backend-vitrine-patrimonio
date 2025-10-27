@@ -186,3 +186,56 @@ async def test_remove_user_from_reviewers_after_deletion(
     response = client.get(f'/catalog/?reviewer_id={user1.id}')
     data = response.json()
     assert len(data['catalog_entries']) == 0
+
+
+@pytest.mark.asyncio
+async def test_read_user_happy_path(client, create_user, create_token):
+    user = await create_user()
+    token = create_token(user)
+
+    response = client.get(
+        f'/users/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert data['id'] == str(user.id)
+    assert data['username'] == user.username
+
+
+@pytest.mark.asyncio
+async def test_read_user_non_existent(client, create_user, create_token):
+    user = await create_user()
+    token = create_token(user)
+    non_existent_uuid = uuid4()
+
+    response = client.get(
+        f'/users/{non_existent_uuid}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json() == {'detail': 'User not found'}
+
+
+@pytest.mark.asyncio
+async def test_read_user_after_delete_returns_not_found(
+    client, create_user, create_token
+):
+    user = await create_user()
+    token = create_token(user)
+
+    delete_response = client.delete(
+        f'/users/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert delete_response.status_code == HTTPStatus.OK
+
+    get_response = client.get(
+        f'/users/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert get_response.status_code == HTTPStatus.NOT_FOUND
+    assert get_response.json() == {'detail': 'User not found'}
