@@ -293,5 +293,5 @@ async def test_delete_setting_already_deleted(client, admin_token):
         f'/settings/{key}',
         headers={'Authorization': f'Bearer {admin_token}'},
     )
-    assert response2.status_code == HTTPStatus.BAD_REQUEST
-    assert response2.json() == {'detail': 'Configuração já está desativada'}
+    assert response2.status_code == HTTPStatus.NOT_FOUND
+    assert response2.json() == {'detail': 'Configuração não encontrada'}

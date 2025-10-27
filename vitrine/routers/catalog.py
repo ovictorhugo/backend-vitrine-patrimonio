@@ -172,19 +172,21 @@ async def add_workflow_step(
             comission_sample_size = 5
 
         stmt = (
-            select(User.id)
+            select(User)
             .where(User.roles.any(Role.name == 'Comissão de desfazimento'))
             .order_by(func.random())
             .limit(comission_sample_size)
         )
 
         result = await session.execute(stmt)
-        random_comission_user_ids = result.scalars().all()
+        random_comission_users = result.scalars().all()
+
         if workflow_data.detail is None:
             workflow_data.detail = {}
 
         workflow_data.detail['reviewers'] = [
-            str(user_id) for user_id in random_comission_user_ids
+            {'id': str(user.id), 'username': user.username}
+            for user in random_comission_users
         ]
 
     new_workflow_entry = CatalogWorkFlow(
@@ -765,22 +767,31 @@ async def update_workflow_reviewers(
             detail='Can only update reviewers for workflows in REVIEW_REQUESTED_COMISSION status',
         )
 
-    stmt = select(User.id).where(
+    stmt = select(User).where(
         User.id.in_(new_reviewers),
         User.roles.any(Role.name == 'Comissão de desfazimento'),
         User.deleted_at.is_(None),
     )
     result = await session.execute(stmt)
-    valid_reviewer_ids = set(result.scalars().all())
+    valid_reviewers = result.scalars().all()
 
+    valid_reviewer_ids = {user.id for user in valid_reviewers}
     invalid_ids = set(new_reviewers) - valid_reviewer_ids
+
     if invalid_ids:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=f'Users {list(invalid_ids)} are not valid reviewers',
+            detail=f'Users {list(invalid_ids)} are not valid reviewers or do not have permission',
         )
 
-    workflow.detail['reviewers'] = [str(uid) for uid in new_reviewers]
+    if workflow.detail is None:
+        workflow.detail = {}
+
+    workflow.detail['reviewers'] = [
+        {'id': str(user.id), 'username': user.username}
+        for user in valid_reviewers
+    ]
+
     flag_modified(workflow, 'detail')
     session.add(workflow)
     await session.commit()

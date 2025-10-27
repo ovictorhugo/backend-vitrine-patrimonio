@@ -1173,7 +1173,9 @@ async def test_update_workflow_reviewers(
     )
     assert response.status_code == 200
     updated_workflow = response.json()
-    assert set(updated_workflow['detail']['reviewers']) == set(new_reviewers)
+    assert set(
+        r['id'] for r in updated_workflow['detail']['reviewers']
+    ) == set(new_reviewers)
 
     response = client.get(f'/catalog/?reviewer_id={user1.id}')
     data = response.json()

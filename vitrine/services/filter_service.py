@@ -58,9 +58,10 @@ def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
         )
 
         if filters.reviewer_id:
+            search_string = f'%"id": "{str(filters.reviewer_id)}"%'
             query = query.where(
                 cast(CatalogWorkFlow.detail['reviewers'], Text).like(
-                    f'%{filters.reviewer_id}%'
+                    search_string
                 )
             )
 

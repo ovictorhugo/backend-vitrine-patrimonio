@@ -4,7 +4,7 @@ from typing import Annotated, List
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import Text, cast, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -284,32 +284,44 @@ async def remove_role_from_user(
             detail='Role not assigned to user',
         )
 
+    # Remove a role primeiro
     await session.delete(assoc)
     await session.commit()
 
     role = await session.get(Role, role_id)
 
+    # --- LÓGICA DE SUBSTITUIÇÃO DO REVISOR ---
     if role and role.name == 'Comissão de desfazimento':
         user_id_str = str(user_id)
+
+        # 1. Encontrar workflows onde o usuário é revisor.
+        #    Usamos o 'contains' do JSONB/JSON para verificar se a lista
+        #    'reviewers' contém um objeto que tenha {'id': user_id_str}.
         stmt_find_workflows = select(CatalogWorkFlow).where(
             CatalogWorkFlow.workflow_status == 'REVIEW_REQUESTED_COMISSION',
-            cast(CatalogWorkFlow.detail['reviewers'], Text).like(
-                f'%{user_id_str}%'
-            ),
+            CatalogWorkFlow.detail['reviewers'].contains([
+                {'id': user_id_str}
+            ]),
         )
+
         result_workflows = await session.execute(stmt_find_workflows)
         workflows_to_update = result_workflows.scalars().all()
 
         for workflow in workflows_to_update:
+            # 2. Obter os IDs (UUIDs) de todos os revisores atuais desse workflow
             current_reviewer_uuids = [
-                UUID(uid) for uid in workflow.detail['reviewers']
+                UUID(reviewer['id'])
+                for reviewer in workflow.detail['reviewers']
             ]
 
+            # 3. Encontrar um substituto (buscando o objeto User completo)
             stmt_find_replacement = (
-                select(User.id)
+                select(User)  # Alterado de select(User.id) para select(User)
                 .where(
                     User.roles.any(Role.name == 'Comissão de desfazimento'),
-                    User.id.notin_(current_reviewer_uuids),
+                    User.id.notin_(
+                        current_reviewer_uuids
+                    ),  # Não pode ser quem já está
                     User.deleted_at.is_(None),
                 )
                 .order_by(func.random())
@@ -317,26 +329,33 @@ async def remove_role_from_user(
             )
 
             result_replacement = await session.execute(stmt_find_replacement)
-            new_reviewer_id = result_replacement.scalar_one_or_none()
+            # 4. Agora temos o objeto User completo (ou None)
+            new_reviewer_user = result_replacement.scalar_one_or_none()
 
+            # 5. Filtrar o usuário removido da lista (comparando o 'id' no dict)
             new_reviewers_list = [
-                uid
-                for uid in workflow.detail['reviewers']
-                if uid != user_id_str
+                reviewer
+                for reviewer in workflow.detail['reviewers']
+                if reviewer['id'] != user_id_str
             ]
 
-            if new_reviewer_id:
-                new_reviewers_list.append(str(new_reviewer_id))
+            if new_reviewer_user:
+                new_reviewers_list.append({
+                    'id': str(new_reviewer_user.id),
+                    'username': new_reviewer_user.username,
+                })
             else:
                 print(
-                    f'WARNING: No replacement reviewer found for workflow {workflow.id}'
+                    f'WARNING: No replacement reviewer found for workflow {workflow.id} '
+                    f'after removing user {user_id_str}'
                 )
 
             workflow.detail['reviewers'] = new_reviewers_list
             flag_modified(workflow, 'detail')
             session.add(workflow)
 
-        await session.commit()
+        if workflows_to_update:
+            await session.commit()
 
     return {
         'message': 'Role removed from user and reviewers reassigned if applicable'
