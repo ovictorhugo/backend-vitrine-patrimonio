@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import Text, cast, desc, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -188,9 +188,31 @@ async def delete_user(
 
     user_id_str = str(user_id)
 
-    stmt_find_workflows = select(CatalogWorkFlow).where(
-        CatalogWorkFlow.workflow_status == 'REVIEW_REQUESTED_COMISSION',
-        CatalogWorkFlow.detail['reviewers'].contains([{'id': user_id_str}]),
+    workflow_rank_cte = select(
+        CatalogWorkFlow.id,
+        func.row_number()
+        .over(
+            partition_by=CatalogWorkFlow.catalog_id,
+            order_by=desc(CatalogWorkFlow.created_at),
+        )
+        .label('rn'),
+    ).cte('workflow_rank_cte')
+
+    search_string = f'%"id": "{user_id_str}"%'
+
+    stmt_find_workflows = (
+        select(CatalogWorkFlow)
+        .join(
+            workflow_rank_cte,
+            CatalogWorkFlow.id == workflow_rank_cte.c.id,
+        )
+        .where(
+            workflow_rank_cte.c.rn == 1,
+            CatalogWorkFlow.workflow_status == 'REVIEW_REQUESTED_COMISSION',
+            cast(CatalogWorkFlow.detail['reviewers'], Text).like(
+                search_string
+            ),
+        )
     )
 
     result_workflows = await session.execute(stmt_find_workflows)
