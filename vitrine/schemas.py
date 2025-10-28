@@ -448,6 +448,8 @@ class FilterCatalog(FilterAsset):
     legal_guardian_id: UUID | None = None
 
     workflow_status: Optional[str] = None
+    user_id: Optional[UUID] = None
+    role_id: Optional[UUID] = None
 
 
 class FilterSearchCatalog(FilterPage):

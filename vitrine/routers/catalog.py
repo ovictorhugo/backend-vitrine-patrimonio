@@ -244,6 +244,17 @@ async def read_catalog_entries(
         .selectinload(LocationInventory.inventory),
     )
 
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
+
+    if filters.role_id:
+        query = (
+            query.join(Catalog.workflow_history)
+            .join(CatalogWorkFlow.user)
+            .join(User.user_role_associations)
+            .join(UserRole.role)
+            .where(Role.id == filters.role_id)
+        )
     query = query.offset(filters.offset).limit(filters.limit)
     result = await session.scalars(query)
     entries = result.unique().all()
