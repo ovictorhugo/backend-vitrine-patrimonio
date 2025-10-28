@@ -95,15 +95,25 @@ async def shibboleth_login(request: Request, session: Session):
         session.add(db_user)
 
         query_lg = select(LegalGuardian).where(
-            func.upper(User.username) == shib_username.upper()
+            func.upper(LegalGuardian.legal_guardians_name)
+            == shib_username.upper()
         )
         found_legal_guardian = await session.scalar(query_lg)
 
         if found_legal_guardian:
-            new_identity = SystemIdentity(
-                user=db_user, legal_guardian=found_legal_guardian
+            existing_identity = await session.scalar(
+                select(SystemIdentity).where(
+                    SystemIdentity.legal_guardian_id
+                    == found_legal_guardian.id,
+                    SystemIdentity.deleted_at.is_(None),
+                )
             )
-            session.add(new_identity)
+            if not existing_identity:
+                new_identity = SystemIdentity(
+                    user_id=db_user.id,
+                    legal_guardian_id=found_legal_guardian.id,
+                )
+                session.add(new_identity)
 
         await session.commit()
         await session.refresh(db_user)

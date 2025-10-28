@@ -14,6 +14,6 @@ class Settings(BaseSettings):
     SMTP_HOST: str = 'mailpit'
     SMTP_PORT: int = 1025
     SMTP_USER: str = 'noreply@vitrine.local'
-    SMTP_PASS: str
+    SMTP_PASS: str = str()
     SMTP_TLS: bool = False
     SMTP_SSL: bool = False

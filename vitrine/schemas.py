@@ -121,9 +121,9 @@ class FilterPage(BaseModel):
 
 
 class UnitSchema(BaseModel):
-    unit_name: str = Field(..., validation_alias='uge_nom')
-    unit_code: str = Field(..., validation_alias='uge_cod')
-    unit_siaf: str = Field(..., validation_alias='uge_siaf')
+    unit_name: str = Field('NÃO ATRIBUIDO', validation_alias='uge_nom')
+    unit_code: str = Field('NÃO ATRIBUIDO', validation_alias='uge_cod')
+    unit_siaf: str = Field('NÃO ATRIBUIDO', validation_alias='uge_siaf')
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -144,8 +144,8 @@ class FilterUnit(FilterPage):
 
 
 class AgencySchema(BaseModel):
-    agency_name: str = Field(..., validation_alias='org_nom')
-    agency_code: str = Field(..., validation_alias='org_cod')
+    agency_name: str = Field('NÃO ATRIBUIDO', validation_alias='org_nom')
+    agency_code: str = Field('NÃO ATRIBUIDO', validation_alias='org_cod')
     unit_id: UUID
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -166,8 +166,8 @@ class FilterAgency(FilterPage):
 class SectorSchema(BaseModel):
     agency_id: UUID
 
-    sector_name: str = Field(..., validation_alias='set_nom')
-    sector_code: str = Field(..., validation_alias='set_cod')
+    sector_name: str = Field('NÃO ATRIBUIDO', validation_alias='set_nom')
+    sector_code: str = Field('NÃO ATRIBUIDO', validation_alias='set_cod')
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -192,15 +192,19 @@ class LocationSchema(BaseModel):
     legal_guardian_id: UUID
     sector_id: UUID
 
-    location_name: str = Field(..., validation_alias='loc_nom')
-    location_code: str = Field(..., validation_alias='loc_cod')
+    location_name: str = Field('NÃO ATRIBUIDO', validation_alias='loc_nom')
+    location_code: str = Field('NÃO ATRIBUIDO', validation_alias='loc_cod')
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class LegalGuardianSchema(BaseModel):
-    legal_guardians_code: str = Field(..., validation_alias='pes_cod')
-    legal_guardians_name: str = Field(..., validation_alias='pes_nome')
+    legal_guardians_code: str = Field(
+        'NÃO ATRIBUIDO', validation_alias='pes_cod'
+    )
+    legal_guardians_name: str = Field(
+        'NÃO ATRIBUIDO', validation_alias='pes_nome'
+    )
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -228,6 +232,13 @@ class LocationList(BaseModel):
     locations: List[LocationPublic]
 
 
+class MyLocationPublic(LocationPublic): ...
+
+
+class MyLocationList(BaseModel):
+    locations: List[MyLocationPublic]
+
+
 class FilterLocation(FilterPage):
     q: str | None = Field(default=None)
     sector_id: Optional[UUID] = Field(
@@ -243,8 +254,12 @@ class FilterLocationInventory(FilterLocation):
 
 
 class MaterialSchema(BaseModel):
-    material_code: str | None = Field(..., validation_alias='mat_cod')
-    material_name: str | None = Field(..., validation_alias='mat_nom')
+    material_code: str | None = Field(
+        'NÃO ATRIBUIDO', validation_alias='mat_cod'
+    )
+    material_name: str | None = Field(
+        'NÃO ATRIBUIDO', validation_alias='mat_nom'
+    )
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -263,33 +278,51 @@ class FilterMaterial(FilterPage):
 
 
 class AssetSchema(BaseModel):
-    asset_code: str = Field(..., validation_alias='bem_cod')
-    asset_check_digit: str = Field(..., validation_alias='bem_dgv')
-    atm_number: Optional[str] = Field(None, validation_alias='bem_num_atm')
-    serial_number: Optional[str] = Field(None, validation_alias='bem_serie')
-    asset_status: Optional[str] = Field(None, validation_alias='bem_sta')
-    asset_value: Optional[str] = Field(None, validation_alias='bem_val')
+    asset_code: str = Field('NÃO ATRIBUIDO', validation_alias='bem_cod')
+    asset_check_digit: str = Field('NÃO ATRIBUIDO', validation_alias='bem_dgv')
+    atm_number: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='bem_num_atm'
+    )
+    serial_number: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='bem_serie'
+    )
+    asset_status: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='bem_sta'
+    )
+    asset_value: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='bem_val'
+    )
     asset_description: Optional[str] = Field(
-        None, validation_alias='bem_dsc_com'
+        'NÃO ATRIBUIDO', validation_alias='bem_dsc_com'
     )
     csv_code: Optional[str] = Field(None, validation_alias='csv_cod')
     accounting_entry_code: Optional[str] = Field(
-        None, validation_alias='tre_cod'
+        'NÃO ATRIBUIDO', validation_alias='tre_cod'
     )
 
     location_id: UUID
     material_id: UUID
     legal_guardian_id: UUID
 
-    item_brand: Optional[str] = Field(None, validation_alias='ite_mar')
-    item_model: Optional[str] = Field(None, validation_alias='ite_mod')
-
-    group_type_code: Optional[str] = Field(None, validation_alias='tgr_cod')
-    group_code: Optional[str] = Field(None, validation_alias='grp_cod')
-    expense_element_code: Optional[str] = Field(
-        None, validation_alias='ele_cod'
+    item_brand: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='ite_mar'
     )
-    subelement_code: Optional[str] = Field(None, validation_alias='sbe_cod')
+    item_model: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='ite_mod'
+    )
+
+    group_type_code: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='tgr_cod'
+    )
+    group_code: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='grp_cod'
+    )
+    expense_element_code: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='ele_cod'
+    )
+    subelement_code: Optional[str] = Field(
+        'NÃO ATRIBUIDO', validation_alias='sbe_cod'
+    )
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 

@@ -12,8 +12,9 @@ async def send_email(mail: Mail, user: User, content: Any):
     msg['From'] = Settings().SMTP_USER
     msg['To'] = user.email
     msg.set_content('CONTEUDO')
-
     try:
+        print('DEBUG 1')
         mail.send_message(msg)
-    except Exception:
-        pass
+        print('DEBUG 2')
+    except Exception as e:
+        print(f'Erro ao enviar email: {e}')

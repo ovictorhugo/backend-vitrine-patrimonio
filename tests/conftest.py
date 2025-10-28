@@ -52,11 +52,9 @@ def client(session, mailpit):
         return session
 
     def get_smtp_override():
-        smtp_connection = smtplib.SMTP(mailpit['host'], mailpit['smtp_port'])
-        try:
-            yield smtp_connection
-        finally:
-            smtp_connection.quit()
+        smtp_connection = smtplib.SMTP()
+        smtp_connection.connect(mailpit['host'], mailpit['smtp_port'])
+        return smtp_connection
 
     os.environ['ENVIRONMENT'] = 'PYTEST'
     with TestClient(app) as client:

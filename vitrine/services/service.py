@@ -33,6 +33,16 @@ from vitrine.schemas import (
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
+def file_to_list_from_path(filepath: str):
+    ext = os.path.splitext(filepath)[-1].lower()
+    if ext == '.csv':
+        dataframe = pl.read_csv(filepath)
+    else:
+        dataframe = pl.read_excel(filepath)
+    dataframe = normalize_dataframe(dataframe)
+    return dataframe.to_dicts()
+
+
 def normalize_dataframe(dataframe: pl.DataFrame):
     dataframe = dataframe.with_columns([
         dataframe[col.name].cast(pl.Utf8).alias(col.name)
@@ -61,11 +71,32 @@ def file_to_list(file: UploadFile):
     return dataframe.to_dicts()
 
 
-def align_assets(assets: list[dict], user_id):
-    db_assets = list()
+async def align_assets(session: Session, assets: list[dict], user_id):
+    db_assets = []
     for dict_asset in assets:
-        assets_schema = AssetSchema(**dict_asset)
-        db_assets.append(Asset(**assets_schema.model_dump(), user_id=user_id))
+        asset_data = AssetSchema(**dict_asset).model_dump()
+        asset_code = asset_data['asset_code']
+        asset_check_digit = asset_data['asset_check_digit']
+
+        existing_asset = await session.scalar(
+            select(Asset).where(
+                (Asset.asset_code == asset_code),
+                (Asset.asset_check_digit == asset_check_digit),
+                (Asset.deleted_at.is_(None)),
+            )
+        )
+
+        if existing_asset:
+            for key, value in asset_data.items():
+                setattr(existing_asset, key, value)
+            existing_asset.user_id = user_id
+            db_assets.append(existing_asset)
+        else:
+            new_asset = Asset(**asset_data, user_id=user_id)
+            db_assets.append(new_asset)
+            session.add(new_asset)
+
+    await session.flush()
     return db_assets
 
 
@@ -238,7 +269,7 @@ async def get_or_create_legal_guardian(session: Session, data: dict, user_id):
 
 
 async def find_relationships(assets: list[dict], session: Session, user_id):
-    for asset in assets:
+    for _, asset in enumerate(assets):
         db_material = await get_or_create_material(session, asset, user_id)
         asset['material_id'] = db_material.id
 

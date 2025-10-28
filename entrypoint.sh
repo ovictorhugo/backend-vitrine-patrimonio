@@ -1,5 +1,5 @@
 #!/bin/sh
 
-poetry run alembic upgrade head
+alembic upgrade head
 
-poetry run uvicorn --host 0.0.0.0 --port 8000 vitrine.app:app
+uvicorn --host 0.0.0.0 --port 8000 vitrine.app:app

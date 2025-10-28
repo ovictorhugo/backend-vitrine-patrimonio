@@ -54,10 +54,7 @@ async def _delete_generic_file(entity_id: str, file_type: str):
         return False
 
     for file_path in existing_files:
-        try:
-            os.remove(file_path)
-        except OSError as e:
-            print(f'Error deleting old file {file_path}: {e}')
+        os.remove(file_path)
 
     return True
 

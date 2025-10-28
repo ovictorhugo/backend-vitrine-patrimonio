@@ -1,10 +1,18 @@
+import os
+import shutil
 from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import ValidationError
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    UploadFile,
+)
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -39,32 +47,36 @@ async def create_asset(
     return db_asset
 
 
+async def process_file(filepath: str, session: Session, user_id):
+    assets = service.file_to_list_from_path(filepath)
+    if not assets:
+        return
+    assets = await service.find_relationships(assets, session, user_id)
+    db_assets = await service.align_assets(session, assets, user_id)
+    session.add_all(db_assets)
+    await session.commit()
+    os.remove(filepath)
+
+
 @router.post('/upload', status_code=HTTPStatus.CREATED, response_model=Message)
 async def create_assets_from_file(
+    background_tasks: BackgroundTasks,
     session: Session,
     current_user: CurrentUser,
     file: UploadFile = File(...),
 ):
-    assets = service.file_to_list(file)
+    ext = os.path.splitext(file.filename)[-1].lower()
+    filename = f'{uuid4().hex}{ext}'
+    filepath = os.path.join('vitrine', 'storage', filename)
 
-    if not assets:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail='The file is empty or does not contain valid data.',
-        )
-    assets = await service.find_relationships(assets, session, current_user.id)
+    with open(filepath, 'wb') as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-    try:
-        db_assets = service.align_assets(assets, current_user.id)
-    except ValidationError as E:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail=f'Validation error in file data: {E.errors()}',
-        )
+    background_tasks.add_task(process_file, filepath, session, current_user.id)
 
-    session.add_all(db_assets)
-    await session.commit()
-    return {'message': f'{len(db_assets)} ativos criados com sucesso.'}
+    return {
+        'message': 'Arquivo enviado com sucesso. O processamento ocorrerá em segundo plano.'
+    }
 
 
 @router.get('/', response_model=AssetList)

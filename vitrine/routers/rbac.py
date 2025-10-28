@@ -336,11 +336,6 @@ async def remove_role_from_user(
                     'id': str(new_reviewer_user.id),
                     'username': new_reviewer_user.username,
                 })
-            else:
-                print(
-                    f'WARNING: No replacement reviewer found for workflow {workflow.id} '
-                    f'after removing user {user_id_str}'
-                )
 
             workflow.detail['reviewers'] = new_reviewers_list
             flag_modified(workflow, 'detail')
