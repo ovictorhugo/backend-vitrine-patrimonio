@@ -80,18 +80,7 @@ async def shibboleth_login(request: Request, session: Session):
 
     db_user = await session.scalar(
         select(User).where(
-            or_(
-                (
-                    func.upper(User.username) == shib_username.upper()
-                    if shib_username
-                    else False
-                ),
-                (
-                    func.upper(User.email) == shib_email.upper()
-                    if shib_email
-                    else False
-                ),
-            )
+            or_(User.username == shib_username, User.email == shib_email)
         )
     )
 
@@ -106,7 +95,7 @@ async def shibboleth_login(request: Request, session: Session):
         session.add(db_user)
 
         query_lg = select(LegalGuardian).where(
-            LegalGuardian.legal_guardians_code == eppn
+            func.upper(User.username) == shib_username.upper()
         )
         found_legal_guardian = await session.scalar(query_lg)
 
