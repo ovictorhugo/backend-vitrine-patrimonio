@@ -129,7 +129,7 @@ async def test_update_feedback_as_admin(
     data = response.json()
     assert data['rating'] == 10
     assert data['description'] == 'Atualizado'
-    assert data['name'] == 'Test User'  # Campo original mantido
+    assert data['name'] == 'Test User'
 
 
 @pytest.mark.asyncio
@@ -150,7 +150,6 @@ async def test_delete_feedback_as_admin(
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'message': 'Feedback deleted'}
 
-    # Verifica (soft delete) no banco
     db_feedback = await session.get(Feedback, feedback.id)
     assert db_feedback is not None
     assert db_feedback.deleted_at is not None

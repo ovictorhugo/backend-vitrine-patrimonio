@@ -69,7 +69,7 @@ async def create_setting(
 async def read_settings(
     session: Session,
     current_user: CurrentUser,
-    filter_page: Annotated[FilterPage, Depends()],  # Paginação
+    filter_page: Annotated[FilterPage, Depends()],
 ):
     query = (
         select(SystemSetting)

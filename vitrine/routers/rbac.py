@@ -303,22 +303,18 @@ async def remove_role_from_user(
         workflows_to_update = result_workflows.scalars().all()
 
         for workflow in workflows_to_update:
-            # 2. Obter os IDs (UUIDs) de todos os revisores atuais desse workflow
             current_reviewer_uuids = [
                 UUID(reviewer['id'])
                 for reviewer in workflow.detail['reviewers']
             ]
 
-            # 3. Encontrar um substituto (buscando o objeto User completo)
             stmt_find_replacement = (
-                select(User)  # Alterado de select(User.id) para select(User)
+                select(User)
                 .where(
                     User.roles.any(
                         Role.name == 'Comissão Permanente de Desfazimento'
                     ),
-                    User.id.notin_(
-                        current_reviewer_uuids
-                    ),  # Não pode ser quem já está
+                    User.id.notin_(current_reviewer_uuids),
                     User.deleted_at.is_(None),
                 )
                 .order_by(func.random())
@@ -326,10 +322,9 @@ async def remove_role_from_user(
             )
 
             result_replacement = await session.execute(stmt_find_replacement)
-            # 4. Agora temos o objeto User completo (ou None)
+
             new_reviewer_user = result_replacement.scalar_one_or_none()
 
-            # 5. Filtrar o usuário removido da lista (comparando o 'id' no dict)
             new_reviewers_list = [
                 reviewer
                 for reviewer in workflow.detail['reviewers']

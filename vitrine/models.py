@@ -1,8 +1,8 @@
 import uuid
-from dataclasses import dataclass  # Adicionado
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum as PythonEnum
-from typing import Any, Optional  # Adicionado List
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -13,13 +13,13 @@ from sqlalchemy import (
     Index,
     UniqueConstraint,
     and_,
-    column,  # Adicionado
+    column,
     func,
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import (
     Mapped,
-    declared_attr,  # Adicionado
+    declared_attr,
     mapped_column,
     registry,
     relationship,
@@ -135,10 +135,9 @@ class User(AuditMixin):
         init=False, primary_key=True, default=uuid4
     )
 
-    # Removido unique=True para usar índice parcial
     username: Mapped[str]
     password: Mapped[str]
-    # Removido unique=True para usar índice parcial
+
     email: Mapped[str]
     provider: Mapped[str | None] = mapped_column(nullable=True)
 
@@ -151,15 +150,15 @@ class User(AuditMixin):
 
     roles: Mapped[list['Role']] = relationship(
         'Role',
-        secondary='user_roles',  # Nome da tabela de associação
+        secondary='user_roles',
         back_populates='users',
         primaryjoin=lambda: and_(
             User.id == UserRole.user_id,
-            UserRole.deleted_at.is_(None),  # Filtra a tabela de join
+            UserRole.deleted_at.is_(None),
         ),
         secondaryjoin=lambda: and_(
             Role.id == UserRole.role_id,
-            Role.deleted_at.is_(None),  # Filtra a tabela de destino
+            Role.deleted_at.is_(None),
         ),
         init=False,
         lazy='selectin',
@@ -187,7 +186,6 @@ class User(AuditMixin):
         init=False,
         lazy='selectin',
         cascade='all, delete-orphan',
-        # ADICIONE ISTO:
         foreign_keys='[WorkflowTransfer.user_id]',
     )
     collections: Mapped[list['Collection']] = relationship(
@@ -219,29 +217,24 @@ class User(AuditMixin):
         foreign_keys='[UserRole.user_id]',
     )
 
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
-
-    # Adicionado __table_args__ para índices parciais
     __table_args__ = (
         Index(
             'ix_uq_users_username_active',
             'username',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index(
             'ix_uq_users_email_active',
             'email',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Unit(AuditMixin):  # Herda de AuditMixin
+class Unit(AuditMixin):
     __tablename__ = 'units'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -282,7 +275,7 @@ class Unit(AuditMixin):  # Herda de AuditMixin
 
 
 @table_registry.mapped_as_dataclass
-class Agency(AuditMixin):  # Herda de AuditMixin
+class Agency(AuditMixin):
     __tablename__ = 'agencys'
 
     id: Mapped[UUID] = mapped_column(
@@ -305,8 +298,6 @@ class Agency(AuditMixin):  # Herda de AuditMixin
         init=False, lazy='selectin', foreign_keys=[user_id]
     )
 
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
-
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
         Computed(
@@ -318,13 +309,11 @@ class Agency(AuditMixin):  # Herda de AuditMixin
     )
 
     __table_args__ = (
-        # Convertido UniqueConstraint para Index parcial
         Index(
             'ix_uq_agencys_agency_name_unit_id_active',
             'agency_name',
             'unit_id',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index('ix_agencys_tsv', tsv, postgresql_using='gin'),
@@ -332,7 +321,7 @@ class Agency(AuditMixin):  # Herda de AuditMixin
 
 
 @table_registry.mapped_as_dataclass
-class Sector(AuditMixin):  # Herda de AuditMixin
+class Sector(AuditMixin):
     __tablename__ = 'sectors'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -354,8 +343,6 @@ class Sector(AuditMixin):  # Herda de AuditMixin
         init=False, back_populates='sector'
     )
 
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
-
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
         Computed(
@@ -366,13 +353,11 @@ class Sector(AuditMixin):  # Herda de AuditMixin
         index=False,
     )
     __table_args__ = (
-        # Convertido UniqueConstraint para Index parcial
         Index(
             'ix_uq_sectors_sector_name_agency_id_active',
             'sector_name',
             'agency_id',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index('ix_sectors_tsv', tsv, postgresql_using='gin'),
@@ -380,7 +365,7 @@ class Sector(AuditMixin):  # Herda de AuditMixin
 
 
 @table_registry.mapped_as_dataclass
-class Location(AuditMixin):  # Herda de AuditMixin
+class Location(AuditMixin):
     __tablename__ = 'locations'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -409,8 +394,6 @@ class Location(AuditMixin):  # Herda de AuditMixin
         back_populates='location', init=False
     )
 
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
-
     incoming_transfers: Mapped[list['WorkflowTransfer']] = relationship(
         back_populates='location',
         init=False,
@@ -433,14 +416,12 @@ class Location(AuditMixin):  # Herda de AuditMixin
         index=False,
     )
     __table_args__ = (
-        # Convertido UniqueConstraint para Index parcial
         Index(
             'ix_uq_locations_location_name_sector_lg_id_active',
             'location_name',
             'sector_id',
             'legal_guardian_id',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index('ix_locations_tsv', tsv, postgresql_using='gin'),
@@ -448,23 +429,21 @@ class Location(AuditMixin):  # Herda de AuditMixin
 
 
 @table_registry.mapped_as_dataclass
-class LegalGuardian(AuditMixin):  # Herda de AuditMixin
+class LegalGuardian(AuditMixin):
     __tablename__ = 'legal_guardians'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
     legal_guardians_code: Mapped[str] = mapped_column(nullable=False)
-    # Removido unique=True para usar índice parcial
+
     legal_guardians_name: Mapped[str] = mapped_column(nullable=False)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
-        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+        foreign_keys=[user_id],
     )
-
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     system_identity: Mapped[Optional['SystemIdentity']] = relationship(
         back_populates='legal_guardian',
@@ -490,35 +469,31 @@ class LegalGuardian(AuditMixin):  # Herda de AuditMixin
 
     __table_args__ = (
         Index('ix_legal_guardians_tsv', tsv, postgresql_using='gin'),
-        # Adicionado Index parcial
         Index(
             'ix_uq_legal_guardians_name_active',
             'legal_guardians_name',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Material(AuditMixin):  # Herda de AuditMixin
+class Material(AuditMixin):
     __tablename__ = 'materials'
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
     material_code: Mapped[str] = mapped_column(nullable=False)
-    # Removido unique=True para usar índice parcial
+
     material_name: Mapped[str] = mapped_column(nullable=False)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
-        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+        foreign_keys=[user_id],
     )
-
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
@@ -532,19 +507,17 @@ class Material(AuditMixin):  # Herda de AuditMixin
 
     __table_args__ = (
         Index('ix_materials_tsv', tsv, postgresql_using='gin'),
-        # Adicionado Index parcial
         Index(
             'ix_uq_materials_material_name_active',
             'material_name',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Asset(AuditMixin):  # Herda de AuditMixin
+class Asset(AuditMixin):
     __tablename__ = 'assets'
 
     id: Mapped[UUID] = mapped_column(
@@ -588,12 +561,10 @@ class Asset(AuditMixin):  # Herda de AuditMixin
     user: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
-        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+        foreign_keys=[user_id],
     )
 
     is_official: Mapped[bool] = mapped_column(default=False)
-
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
@@ -613,20 +584,18 @@ class Asset(AuditMixin):  # Herda de AuditMixin
 
     __table_args__ = (
         Index('ix_assets_tsv', tsv, postgresql_using='gin'),
-        # Convertido UniqueConstraint para Index parcial
         Index(
             'ix_uq_assets_asset_code_asset_check_digit_active',
             'asset_code',
             'asset_check_digit',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Catalog(AuditMixin):  # Herda de AuditMixin
+class Catalog(AuditMixin):
     __tablename__ = 'catalog'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -644,7 +613,7 @@ class Catalog(AuditMixin):  # Herda de AuditMixin
     user: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
-        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+        foreign_keys=[user_id],
     )
 
     location_id: Mapped[UUID | None] = mapped_column(
@@ -678,12 +647,9 @@ class Catalog(AuditMixin):  # Herda de AuditMixin
         lazy='selectin',
     )
 
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
-    # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
-
 
 @table_registry.mapped_as_dataclass
-class CatalogImage:  # Não modificado
+class CatalogImage:
     __tablename__ = 'catalog_images'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -702,7 +668,7 @@ class CatalogImage:  # Não modificado
 
 
 @table_registry.mapped_as_dataclass
-class CatalogWorkFlow:  # Não modificado
+class CatalogWorkFlow:
     __tablename__ = 'catalog_workflow'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -714,7 +680,7 @@ class CatalogWorkFlow:  # Não modificado
     user: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
-        foreign_keys=[user_id],  # <--- ADICIONE ISTO
+        foreign_keys=[user_id],
     )
     catalog: Mapped['Catalog'] = relationship(
         back_populates='workflow_history', init=False
@@ -735,7 +701,7 @@ class CatalogWorkFlow:  # Não modificado
 
 
 @table_registry.mapped_as_dataclass
-class WorkflowTransfer(AuditMixin):  # Herda de AuditMixin
+class WorkflowTransfer(AuditMixin):
     __tablename__ = 'workflow_transfer'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -775,12 +741,9 @@ class WorkflowTransfer(AuditMixin):  # Herda de AuditMixin
         back_populates='incoming_transfers', init=False, lazy='selectin'
     )
 
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
-    # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
-
 
 @table_registry.mapped_as_dataclass
-class Inventory(AuditMixin):  # Herda de AuditMixin
+class Inventory(AuditMixin):
     __tablename__ = 'inventory'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -799,25 +762,22 @@ class Inventory(AuditMixin):  # Herda de AuditMixin
     created_by: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
-        foreign_keys=[created_by_id],  # <-- Especifique a coluna FK
+        foreign_keys=[created_by_id],
     )
     avaliable: Mapped[bool] = mapped_column(default=True, nullable=True)
-
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
     __table_args__ = (
         Index(
             'ix_uq_inventory_key_active',
             'key',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class LocationInventory:  # Não modificado
+class LocationInventory:
     __tablename__ = 'location_inventory'
     __table_args__ = (
         UniqueConstraint(
@@ -852,9 +812,8 @@ class LocationInventory:  # Não modificado
 
 
 @table_registry.mapped_as_dataclass
-class InventoryAsset(AuditMixin):  # Herda de AuditMixin
+class InventoryAsset(AuditMixin):
     __tablename__ = 'inventory_assets'
-    # Convertido UniqueConstraint para Index parcial
 
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -878,23 +837,19 @@ class InventoryAsset(AuditMixin):  # Herda de AuditMixin
         init=False, lazy='selectin', back_populates='inventory_assets'
     )
 
-    # Colunas created_at, deleted_at removidas (vêm do mixin)
-    # updated_at será adicionado pelo mixin
-
     __table_args__ = (
         Index(
             'ix_uq_inventory_assets_location_inventory_asset_active',
             'location_inventory_id',
             'asset_id',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class FavoriteCatalog:  # Não modificado
+class FavoriteCatalog:
     __tablename__ = 'favorite_catalogs'
     __table_args__ = (
         UniqueConstraint('user_id', 'catalog_id', name='uq_favorite_catalog'),
@@ -922,19 +877,17 @@ class FavoriteCatalog:  # Não modificado
 
 
 @table_registry.mapped_as_dataclass
-class SystemIdentity(AuditMixin):  # Herda de AuditMixin
+class SystemIdentity(AuditMixin):
     __tablename__ = 'system_identities'
 
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
 
-    # Removido unique=True para usar índice parcial
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey('users.id'), nullable=False
     )
 
-    # Removido unique=True para usar índice parcial
     legal_guardian_id: Mapped[UUID] = mapped_column(
         ForeignKey('legal_guardians.id'), nullable=False
     )
@@ -948,31 +901,25 @@ class SystemIdentity(AuditMixin):  # Herda de AuditMixin
         back_populates='system_identity', init=False
     )
 
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
-
-    # Adicionado __table_args__ para índices parciais
     __table_args__ = (
         Index(
             'ix_uq_system_identities_user_id_active',
             'user_id',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index(
             'ix_uq_system_identities_legal_guardian_id_active',
             'legal_guardian_id',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Collection(AuditMixin):  # Herda de AuditMixin
+class Collection(AuditMixin):
     __tablename__ = 'collections'
-    # Convertido UniqueConstraint para Index parcial
 
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -997,22 +944,19 @@ class Collection(AuditMixin):  # Herda de AuditMixin
         lazy='selectin',
     )
 
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
-
     __table_args__ = (
         Index(
             'ix_uq_collections_user_id_name_active',
             'user_id',
             'name',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class CollectionItem:  # Não modificado
+class CollectionItem:
     __tablename__ = 'collection_items'
     __table_args__ = (
         UniqueConstraint(
@@ -1050,7 +994,7 @@ class CollectionItem:  # Não modificado
 
 
 @table_registry.mapped_as_dataclass
-class Notification(AuditMixin):  # Herda de AuditMixin
+class Notification(AuditMixin):
     __tablename__ = 'notifications'
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1063,9 +1007,6 @@ class Notification(AuditMixin):  # Herda de AuditMixin
 
     type: Mapped[str] = mapped_column(nullable=False, index=True)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-
-    # Colunas created_at, deleted_at removidas (vêm do mixin)
-    # updated_at será adicionado pelo mixin
 
     source_user: Mapped[Optional['User']] = relationship(
         init=False,
@@ -1080,13 +1021,11 @@ class Notification(AuditMixin):  # Herda de AuditMixin
         cascade='all, delete-orphan',
         lazy='selectin',
     )
-    # Esta tabela tem deleted_at, mas não tinha constraints únicas. Nada a fazer.
 
 
 @table_registry.mapped_as_dataclass
-class UserNotification(AuditMixin):  # Herda de AuditMixin
+class UserNotification(AuditMixin):
     __tablename__ = 'user_notifications'
-    # Convertido UniqueConstraint para Index parcial
 
     id: Mapped[uuid.UUID] = mapped_column(
         init=False, primary_key=True, default=uuid.uuid4
@@ -1102,9 +1041,6 @@ class UserNotification(AuditMixin):  # Herda de AuditMixin
 
     read_at: Mapped[datetime | None] = mapped_column(init=False, nullable=True)
 
-    # Colunas created_at, deleted_at removidas (vêm do mixin)
-    # updated_at será adicionado pelo mixin
-
     notification: Mapped['Notification'] = relationship(
         back_populates='recipients',
         init=False,
@@ -1115,7 +1051,7 @@ class UserNotification(AuditMixin):  # Herda de AuditMixin
         back_populates='notifications_received',
         init=False,
         lazy='selectin',
-        foreign_keys=[target_user_id],  # <-- Especifique a coluna FK
+        foreign_keys=[target_user_id],
     )
     __table_args__ = (
         Index(
@@ -1123,22 +1059,21 @@ class UserNotification(AuditMixin):  # Herda de AuditMixin
             'notification_id',
             'target_user_id',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Permission(AuditMixin):  # Herda de AuditMixin
+class Permission(AuditMixin):
     __tablename__ = 'permissions'
 
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-    # Removido unique=True para usar índice parcial
+
     name: Mapped[str] = mapped_column(nullable=False)
-    # Removido unique=True para usar índice parcial
+
     code: Mapped[str] = mapped_column(nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
 
@@ -1165,35 +1100,30 @@ class Permission(AuditMixin):  # Herda de AuditMixin
         lazy='selectin',
     )
 
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
-
-    # Adicionado __table_args__ para índices parciais
     __table_args__ = (
         Index(
             'ix_uq_permissions_name_active',
             'name',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
         Index(
             'ix_uq_permissions_code_active',
             'code',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class Role(AuditMixin):  # Herda de AuditMixin
+class Role(AuditMixin):
     __tablename__ = 'roles'
 
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4
     )
-    # Removido unique=True para usar índice parcial
+
     name: Mapped[str] = mapped_column(nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
 
@@ -1241,24 +1171,20 @@ class Role(AuditMixin):  # Herda de AuditMixin
         init=False,
         lazy='selectin',
     )
-    # Colunas created_at, updated_at, deleted_at removidas (vêm do mixin)
 
-    # Adicionado __table_args__ para índice parcial
     __table_args__ = (
         Index(
             'ix_uq_roles_name_active',
             'name',
             unique=True,
-            # Corrigido para usar column()
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
 
 
 @table_registry.mapped_as_dataclass
-class UserRole(AuditMixin):  # Herda de AuditMixin
+class UserRole(AuditMixin):
     __tablename__ = 'user_roles'
-    # Convertido UniqueConstraint para Index parcial
 
     id: Mapped[UUID] = mapped_column(
         init=False, primary_key=True, default=uuid4

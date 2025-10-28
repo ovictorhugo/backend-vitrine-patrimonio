@@ -354,9 +354,7 @@ async def test_read_permissions_by_role_skips_deleted_permissions(client):
     )
 
     delete_resp = client.delete(f'/roles/permissions/{perm_deleted_id}')
-    assert (
-        delete_resp.status_code == HTTPStatus.OK
-    )  # Baseado no seu teste anterior
+    assert delete_resp.status_code == HTTPStatus.OK
 
     response = client.get(f'/roles/{role_id}/permissions')
 

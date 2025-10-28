@@ -37,13 +37,13 @@ from vitrine.settings import Settings
 
 BASE_DIR = os.path.dirname(__file__)
 STORAGE_DIR = os.path.join(BASE_DIR, 'storage')
-os.makedirs(STORAGE_DIR, exist_ok=True)
-
 UPLOADS_DIR = os.path.join(STORAGE_DIR, 'uploads')
-os.makedirs(UPLOADS_DIR, exist_ok=True)
-
 TEMP_DIR = os.path.join(STORAGE_DIR, 'temp')
-os.makedirs(TEMP_DIR, exist_ok=True)
+
+for path in [STORAGE_DIR, UPLOADS_DIR, TEMP_DIR]:
+    os.makedirs(path, exist_ok=True)
+
+print(f'🧭 Servindo uploads a partir de: {UPLOADS_DIR}')
 
 
 scheduler = AsyncIOScheduler(timezone='America/Sao_Paulo')
@@ -67,9 +67,11 @@ async def lifespan(app: FastAPI):
         print('🔹 Encerrando APScheduler...')
 
 
-app = FastAPI(root_path=Settings().ROOT_PATH, debug=True, lifespan=lifespan)
+app = FastAPI(root_path=Settings().ROOT_PATH, debug=False, lifespan=lifespan)
 
-app.mount('/uploads', StaticFiles(directory=UPLOADS_DIR), name='uploads')
+
+app.mount('/uploads', StaticFiles(directory=STORAGE_DIR), name='uploads')
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -79,28 +81,24 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+
 app.include_router(users.router)
 app.include_router(users_visuals.router)
 app.include_router(auth.router)
 app.include_router(rbac.router)
-
 app.include_router(assets.router)
 app.include_router(catalog.router)
 app.include_router(inventory.router)
 app.include_router(favorite.router)
-
 app.include_router(agencies.router)
 app.include_router(units.router)
 app.include_router(sectors.router)
 app.include_router(location.router)
 app.include_router(legal_guardians.router)
 app.include_router(materials.router)
-
 app.include_router(collection.router)
 app.include_router(collection_items.router)
-
 app.include_router(catalog_statistics.router)
-
 app.include_router(notifications.router)
 app.include_router(feedback.router)
 app.include_router(system.router)

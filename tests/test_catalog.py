@@ -927,23 +927,17 @@ async def test_email_after_update_transfer_request_status_success(
 async def test_list_catalog_by_location_id(
     client, create_catalog_entry, create_asset, create_location
 ):
-    # --- Setup ---
-    # Criar duas localizações distintas
     loc1 = await create_location()
     loc2 = await create_location()
 
-    # Criar assets em cada localização
     asset1 = await create_asset(location_id=loc1.id)
     asset2 = await create_asset(location_id=loc2.id)
     asset3 = await create_asset(location_id=loc2.id)
 
-    # Criar entradas de catálogo para os assets
     await create_catalog_entry(asset_id=asset1.id)
     await create_catalog_entry(asset_id=asset2.id)
     await create_catalog_entry(asset_id=asset3.id)
 
-    # --- Test ---
-    # 1. Filtrar pela localização 1 (deve retornar 1)
     response_loc1 = client.get(f'/catalog?location_id={loc1.id}')
     assert response_loc1.status_code == HTTPStatus.OK
     assert len(response_loc1.json()['catalog_entries']) == 1
@@ -951,17 +945,14 @@ async def test_list_catalog_by_location_id(
         asset1.id
     )
 
-    # 2. Filtrar pela localização 2 (deve retornar 2)
     response_loc2 = client.get(f'/catalog?location_id={loc2.id}')
     assert response_loc2.status_code == HTTPStatus.OK
     assert len(response_loc2.json()['catalog_entries']) == 2
 
-    # 3. Sem filtro (deve retornar 3)
     response_all = client.get('/catalog')
     assert response_all.status_code == HTTPStatus.OK
     assert len(response_all.json()['catalog_entries']) == 3
 
-    # 4. Filtrar por um ID inexistente (deve retornar 0)
     fake_id = uuid4()
     response_fake = client.get(f'/catalog?location_id={fake_id}')
     assert response_fake.status_code == HTTPStatus.OK
@@ -974,27 +965,20 @@ async def test_list_catalog_by_sector_id(
     create_catalog_entry,
     create_asset,
     create_location,
-    create_sector,  # Presume que esta fixture existe
+    create_sector,
 ):
-    # --- Setup ---
-    # Criar dois setores distintos
     sector1 = await create_sector()
     sector2 = await create_sector()
 
-    # Criar localizações em cada setor
     loc1 = await create_location(sector_id=sector1.id)
     loc2 = await create_location(sector_id=sector2.id)
 
-    # Criar assets em cada localização
     asset1 = await create_asset(location_id=loc1.id)
     asset2 = await create_asset(location_id=loc2.id)
 
-    # Criar entradas de catálogo
     await create_catalog_entry(asset_id=asset1.id)
     await create_catalog_entry(asset_id=asset2.id)
 
-    # --- Test ---
-    # 1. Filtrar pelo setor 1 (deve retornar 1)
     response_sec1 = client.get(f'/catalog?sector_id={sector1.id}')
     assert response_sec1.status_code == HTTPStatus.OK
     assert len(response_sec1.json()['catalog_entries']) == 1
@@ -1002,7 +986,6 @@ async def test_list_catalog_by_sector_id(
         asset1.id
     )
 
-    # 2. Filtrar pelo setor 2 (deve retornar 1)
     response_sec2 = client.get(f'/catalog?sector_id={sector2.id}')
     assert response_sec2.status_code == HTTPStatus.OK
     assert len(response_sec2.json()['catalog_entries']) == 1
@@ -1010,7 +993,6 @@ async def test_list_catalog_by_sector_id(
         asset2.id
     )
 
-    # 3. Filtrar por um ID inexistente (deve retornar 0)
     fake_id = uuid4()
     response_fake = client.get(f'/catalog?sector_id={fake_id}')
     assert response_fake.status_code == HTTPStatus.OK
