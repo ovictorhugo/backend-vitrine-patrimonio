@@ -52,7 +52,7 @@ async def test_create_asset(
 @pytest.mark.asyncio
 async def test_create_assets_from_file(client, create_user, create_token):
     user = await create_user()
-
+    FILE_LENGHT = 99
     with open('tests/storage/asset_mock.xlsx', 'rb') as file:
         content_type = """application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"""  # noqa: E501
         files = {'file': ('asset_mock.xlsx', file, content_type)}
@@ -62,6 +62,14 @@ async def test_create_assets_from_file(client, create_user, create_token):
             files=files,
         )
     assert response.status_code == HTTPStatus.CREATED
+    response = client.get(
+        '/assets/',
+        headers={'Authorization': f'Bearer {create_token(user)}'},
+    )
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['assets']) == FILE_LENGHT
+    assert data['assets'][0]['is_official']
 
 
 @pytest.mark.asyncio

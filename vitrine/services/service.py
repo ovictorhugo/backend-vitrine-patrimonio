@@ -92,7 +92,7 @@ async def align_assets(session: Session, assets: list[dict], user_id):
             existing_asset.user_id = user_id
             db_assets.append(existing_asset)
         else:
-            new_asset = Asset(**asset_data, user_id=user_id)
+            new_asset = Asset(**asset_data, user_id=user_id, is_official=True)
             db_assets.append(new_asset)
             session.add(new_asset)
 
