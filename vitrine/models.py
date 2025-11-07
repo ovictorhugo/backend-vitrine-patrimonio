@@ -1171,8 +1171,19 @@ class Role(AuditMixin):
         init=False,
         lazy='selectin',
     )
-
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('portuguese', "
+            "coalesce(name, '') || ' ' || "
+            "coalesce(description, '') || ' ' || ",
+            persisted=True,
+        ),
+        init=False,
+        index=False,
+    )
     __table_args__ = (
+        Index('ix_role_tsv', tsv, postgresql_using='gin'),
         Index(
             'ix_uq_roles_name_active',
             'name',
