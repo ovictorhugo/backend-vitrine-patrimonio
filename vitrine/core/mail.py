@@ -1,6 +1,6 @@
 import smtplib
 
-from vitrine.settings import Settings
+from vitrine.core.settings import Settings
 
 
 def get_smtp():

@@ -8,7 +8,7 @@ from sqlalchemy import Text, cast, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
-from vitrine.dependencies import Session
+from vitrine.core.dependencies import Session
 from vitrine.models import (
     CatalogWorkFlow,
     Permission,

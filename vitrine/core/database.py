@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
+from vitrine.core.settings import Settings
 from vitrine.models import AuditMixin
-from vitrine.settings import Settings
 
 settings = Settings()
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from vitrine.dependencies import CurrentUser, Session
+from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import Notification, User, UserNotification
 from vitrine.schemas import (
     FilterNotification,

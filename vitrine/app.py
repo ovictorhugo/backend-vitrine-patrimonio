@@ -7,7 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from vitrine.database import get_session
+from vitrine.core.database import get_session
+from vitrine.core.settings import Settings
 from vitrine.events import check_and_update_stale_workflows
 from vitrine.routers import (
     assets,
@@ -33,7 +34,6 @@ from vitrine.routers.organizational_structure import (
     units,
 )
 from vitrine.routers.statistics import catalog_statistics
-from vitrine.settings import Settings
 
 BASE_DIR = os.path.dirname(__file__)
 STORAGE_DIR = os.path.join(BASE_DIR, 'storage')

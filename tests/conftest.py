@@ -28,8 +28,9 @@ from tests.factories import (
     WorkflowTransferFactory,
 )
 from vitrine.app import app
-from vitrine.database import get_session
-from vitrine.mail import get_smtp
+from vitrine.core.database import get_session
+from vitrine.core.mail import get_smtp
+from vitrine.core.security import get_password_hash
 from vitrine.models import (
     CatalogWorkFlow,
     Collection,
@@ -41,7 +42,6 @@ from vitrine.models import (
     WorkflowTransferStatus,
     table_registry,
 )
-from vitrine.security import get_password_hash
 
 fake = Faker('pt_BR')
 

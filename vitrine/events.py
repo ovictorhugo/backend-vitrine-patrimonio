@@ -4,7 +4,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from sqlalchemy.exc import NoResultFound
 
-from vitrine.dependencies import Session
+from vitrine.core.dependencies import Session
 from vitrine.models import (
     Catalog,
     CatalogWorkFlow,

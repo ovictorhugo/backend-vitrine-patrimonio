@@ -5,15 +5,15 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func, or_, select
 from starlette.responses import RedirectResponse
 
-from vitrine.dependencies import CurrentUser, OAuth2Form, Session
-from vitrine.models import LegalGuardian, SystemIdentity, User
-from vitrine.schemas import Token
-from vitrine.security import (
+from vitrine.core.dependencies import CurrentUser, OAuth2Form, Session
+from vitrine.core.security import (
     create_access_token,
     get_password_hash,
     verify_password,
 )
-from vitrine.settings import Settings
+from vitrine.core.settings import Settings
+from vitrine.models import LegalGuardian, SystemIdentity, User
+from vitrine.schemas import Token
 
 router = APIRouter(
     prefix='/auth', tags=['autenticação e autorização - autenticação']

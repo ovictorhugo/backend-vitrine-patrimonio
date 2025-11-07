@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
-from vitrine.dependencies import CurrentUser, Session
+from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import (
     SystemSetting,
 )

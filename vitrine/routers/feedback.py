@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
-from vitrine.dependencies import CurrentUser, Session
+from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import Feedback
 from vitrine.schemas import (
     FeedbackCreate,

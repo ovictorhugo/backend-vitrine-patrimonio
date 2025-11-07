@@ -8,7 +8,7 @@ from fastapi import Depends, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from vitrine.database import get_session
+from vitrine.core.database import get_session
 from vitrine.models import (
     Agency,
     Asset,

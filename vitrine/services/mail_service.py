@@ -1,9 +1,9 @@
 from email.message import EmailMessage
 from typing import Any
 
-from vitrine.dependencies import Mail
+from vitrine.core.dependencies import Mail
+from vitrine.core.settings import Settings
 from vitrine.models import User
-from vitrine.settings import Settings
 
 
 async def send_email(mail: Mail, user: User, content: Any):

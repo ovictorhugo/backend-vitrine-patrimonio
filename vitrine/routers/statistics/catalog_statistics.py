@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, case, func, literal_column, select
 from sqlalchemy.sql import union_all
 
-from vitrine.dependencies import Session
+from vitrine.core.dependencies import Session
 from vitrine.models import (
     Catalog,
     CatalogWorkFlow,

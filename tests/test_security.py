@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from jwt import decode
 
-from vitrine.security import SECRET_KEY, create_access_token
+from vitrine.core.security import SECRET_KEY, create_access_token
 
 
 def test_jwt():

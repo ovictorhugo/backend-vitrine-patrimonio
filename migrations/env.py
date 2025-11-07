@@ -9,7 +9,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from vitrine.models import table_registry
-from vitrine.settings import Settings
+from vitrine.core.settings import Settings
 
 config = context.config
 config.set_main_option('sqlalchemy.url', Settings().DATABASE_URL)

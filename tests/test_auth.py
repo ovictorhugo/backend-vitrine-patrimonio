@@ -8,8 +8,8 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from vitrine.core.settings import Settings
 from vitrine.models import User
-from vitrine.settings import Settings
 
 MOCK_SHIB_HEADERS = {
     'eppn': 'testuser@example.com',

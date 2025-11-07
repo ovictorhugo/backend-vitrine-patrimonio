@@ -16,7 +16,7 @@ from fastapi import (
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from vitrine.dependencies import CurrentUser, Session
+from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import Asset, Location, LocationInventory
 from vitrine.schemas import (
     AssetCheckDigitList,

@@ -5,7 +5,7 @@ from sqlalchemy import Text, and_, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
-from vitrine.database import get_session
+from vitrine.core.database import get_session
 from vitrine.models import (
     Agency,
     Asset,

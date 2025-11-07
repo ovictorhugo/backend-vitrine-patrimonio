@@ -7,7 +7,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
-from vitrine.dependencies import CurrentUser, Session
+from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import User
 
 router = APIRouter(

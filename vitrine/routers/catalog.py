@@ -9,7 +9,7 @@ from sqlalchemy import desc, func, select, update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
-from vitrine.dependencies import CurrentUser, Mail, Session
+from vitrine.core.dependencies import CurrentUser, Mail, Session
 from vitrine.models import (
     Asset,
     Catalog,

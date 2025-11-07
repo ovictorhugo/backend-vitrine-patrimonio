@@ -10,9 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from vitrine.database import get_session
+from vitrine.core.database import get_session
+from vitrine.core.settings import Settings
 from vitrine.models import SystemIdentity, User, UserRole
-from vitrine.settings import Settings
 
 SECRET_KEY = Settings().SECRET_KEY
 ALGORITHM = 'HS256'

@@ -8,7 +8,11 @@ from sqlalchemy import Text, cast, desc, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
-from vitrine.dependencies import CurrentUser, Session
+from vitrine.core.dependencies import CurrentUser, Session
+from vitrine.core.security import (
+    get_current_user,
+    get_password_hash,
+)
 from vitrine.models import (
     CatalogWorkFlow,
     Role,
@@ -23,10 +27,6 @@ from vitrine.schemas import (
     UserPublic,
     UserSchema,
     UserUpdateSchema,
-)
-from vitrine.security import (
-    get_current_user,
-    get_password_hash,
 )
 
 router = APIRouter(
