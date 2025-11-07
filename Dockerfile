@@ -31,4 +31,4 @@ RUN chmod +x ./entrypoint.sh
 
 EXPOSE 8000
 
-CMD ["poetry", "run", "uvicorn", "--host", "0.0.0.0", "--port", "8000", "--reload", "vitrine.app:app"]
+CMD ["poetry", "run", "uvicorn", "--host", "0.0.0.0", "--port", "8000", "--reload", "--workers", "4", "vitrine.app:app"]

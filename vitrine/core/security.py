@@ -14,9 +14,8 @@ from vitrine.core.database import get_session
 from vitrine.core.settings import Settings
 from vitrine.models import SystemIdentity, User, UserRole
 
-SECRET_KEY = Settings().SECRET_KEY
-ALGORITHM = 'HS256'
-ACCESS_TOKEN_EXPIRE_MINUTES = 10080
+SETTINGS = Settings()
+
 pwd_context = PasswordHash.recommended()
 
 oauth2_scheme = OAuth2PasswordBearer(
@@ -35,7 +34,11 @@ async def get_current_user(
     )
 
     try:
-        payload = decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode(
+            token,
+            SETTINGS.SECRET_KEY,
+            algorithms=[SETTINGS.ALGORITHM],
+        )
         subject_email = payload.get('sub')
 
         if not subject_email:
@@ -68,10 +71,14 @@ async def get_current_user(
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(tz=ZoneInfo('UTC')) + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        minutes=SETTINGS.ACCESS_TOKEN_EXPIRE_MINUTES
     )
     to_encode.update({'exp': expire})
-    encoded_jwt = encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = encode(
+        to_encode,
+        SETTINGS.SECRET_KEY,
+        algorithm=SETTINGS.ALGORITHM,
+    )
     return encoded_jwt
 
 

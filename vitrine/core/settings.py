@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,7 +10,16 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str
     CLIENT: str = 'http://localhost:8080'
+
     SECRET_KEY: str = 'SECRET_KEY'
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ALGORITHM: str = 'HS256'
+
+    ALLOWED_ORIGINS: List[str] = [
+        'http://localhost:8000',
+        'http://localhost:8080',
+    ]
+
     ROOT_PATH: str = ''
 
     SMTP_HOST: str = 'mailpit'

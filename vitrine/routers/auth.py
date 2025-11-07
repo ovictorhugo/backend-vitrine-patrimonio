@@ -15,6 +15,8 @@ from vitrine.core.settings import Settings
 from vitrine.models import LegalGuardian, SystemIdentity, User
 from vitrine.schemas import Token
 
+SETTINGS = Settings()
+
 router = APIRouter(
     prefix='/auth', tags=['autenticação e autorização - autenticação']
 )
@@ -54,7 +56,6 @@ async def shibboleth_login(request: Request, session: Session):
     shib_data = request.headers
 
     eppn = shib_data.get('eppn')
-
     if not eppn:
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
@@ -78,6 +79,12 @@ async def shibboleth_login(request: Request, session: Session):
     shib_username = shib_data.get('shib-person-commonname')
     shib_email = shib_data.get('shib-person-mail')
 
+    if not shib_username or not shib_email:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Cabeçalhos obrigatórios (commonname ou mail) ausentes.',
+        )
+
     db_user = await session.scalar(
         select(User).where(
             or_(User.username == shib_username, User.email == shib_email)
@@ -85,14 +92,15 @@ async def shibboleth_login(request: Request, session: Session):
     )
 
     if not db_user:
-        hashed_password = get_password_hash(token_hex(256))
+        hashed_password = get_password_hash(token_hex(32))
         db_user = User(
-            username=shib_data.get('shib-person-commonname'),
+            username=shib_username,
             password=hashed_password,
-            email=shib_data.get('shib-person-mail'),
+            email=shib_email,
             provider='SHIB',
         )
         session.add(db_user)
+        await session.flush()
 
         query_lg = select(LegalGuardian).where(
             func.upper(LegalGuardian.legal_guardians_name)
@@ -103,9 +111,7 @@ async def shibboleth_login(request: Request, session: Session):
         if found_legal_guardian:
             existing_identity = await session.scalar(
                 select(SystemIdentity).where(
-                    SystemIdentity.legal_guardian_id
-                    == found_legal_guardian.id,
-                    SystemIdentity.deleted_at.is_(None),
+                    SystemIdentity.legal_guardian_id == found_legal_guardian.id
                 )
             )
             if not existing_identity:
@@ -119,5 +125,5 @@ async def shibboleth_login(request: Request, session: Session):
         await session.refresh(db_user)
 
     access_token = create_access_token(data={'sub': db_user.email})
-    url = f'{Settings().CLIENT}/authentication?token={access_token}'
+    url = f'{SETTINGS.CLIENT}/authentication?token={access_token}'
     return RedirectResponse(url, status_code=302)

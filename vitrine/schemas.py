@@ -737,3 +737,18 @@ class FilterCatalogImage(FilterPage):
 
 class CatalogImageList(BaseModel):
     images: list[CatalogImagePublic]
+
+
+class CatalogStatisticsFilters(BaseModel):
+    q: str | None = None
+    asset_identifier: UUID | None = None
+    atm_number: UUID | None = None
+    material_id: UUID | None = None
+    unit_id: UUID | None = None
+    agency_id: UUID | None = None
+    sector_id: UUID | None = None
+    location_id: UUID | None = None
+    legal_guardian_id: UUID | None = None
+    is_official: bool | None = None
+    asset_status: UUID | None = None
+    csv_code: str | None = None

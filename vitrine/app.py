@@ -35,6 +35,8 @@ from vitrine.routers.organizational_structure import (
 )
 from vitrine.routers.statistics import catalog_statistics
 
+SETTINGS = Settings()
+
 BASE_DIR = os.path.dirname(__file__)
 STORAGE_DIR = os.path.join(BASE_DIR, 'storage')
 UPLOADS_DIR = os.path.join(STORAGE_DIR, 'uploads')
@@ -67,7 +69,11 @@ async def lifespan(app: FastAPI):
         print('🔹 Encerrando APScheduler...')
 
 
-app = FastAPI(root_path=Settings().ROOT_PATH, debug=False, lifespan=lifespan)
+app = FastAPI(
+    root_path=SETTINGS.ROOT_PATH,
+    debug=False,
+    lifespan=lifespan,
+)
 
 
 app.mount('/uploads', StaticFiles(directory=STORAGE_DIR), name='uploads')
@@ -75,7 +81,7 @@ app.mount('/uploads', StaticFiles(directory=STORAGE_DIR), name='uploads')
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
+    allow_origins=[SETTINGS.ALLOWED_ORIGINS],
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],
