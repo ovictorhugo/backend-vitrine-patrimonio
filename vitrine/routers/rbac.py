@@ -3,7 +3,7 @@ from http import HTTPStatus
 from typing import Annotated, List
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import Text, cast, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
@@ -23,6 +23,7 @@ from vitrine.schemas import (
     Message,
     PermissionPublic,
     PermissionSchema,
+    RoleFilter,
     RoleList,
     RolePublic,
     RoleSchema,
@@ -50,9 +51,10 @@ async def create_role(role: RoleSchema, session: Session):
 
 @router.get('/', response_model=RoleList)
 async def read_roles(
-    session: Session, filter_roles: Annotated[FilterPage, Query()]
+    session: Session,
+    filters: RoleFilter = Depends(),
 ):
-    query = await session.scalars(
+    query = (
         select(Role)
         .options(
             selectinload(Role.role_permissions).selectinload(
@@ -60,11 +62,20 @@ async def read_roles(
             )
         )
         .where(Role.deleted_at.is_(None))
-        .offset(filter_roles.offset)
-        .limit(filter_roles.limit)
     )
-    roles = query.all()
-    return RoleList(roles=roles)
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+
+        query = query.where(Role.tsv.op('@@')(ts_query))
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    roles = result.all()
+    return {'roles': roles}
 
 
 @router.post(

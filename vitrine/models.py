@@ -1176,7 +1176,7 @@ class Role(AuditMixin):
         Computed(
             "to_tsvector('portuguese', "
             "coalesce(name, '') || ' ' || "
-            "coalesce(description, '') || ' ' || ",
+            "coalesce(description, ''))",
             persisted=True,
         ),
         init=False,

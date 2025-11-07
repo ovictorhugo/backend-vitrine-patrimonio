@@ -399,3 +399,66 @@ async def test_remove_comissao_role_reassigns_reviewers(
 
     response = client.get(f'/catalog/?reviewer_id={user1.id}')
     assert len(response.json()['catalog_entries']) == 0
+
+
+@pytest.mark.asyncio
+async def test_read_roles_with_search_filter(client):
+    role_admin = client.post(
+        '/roles/',
+        json={
+            'name': 'Administrador do Sistema',
+            'description': 'Acesso total e irrestrito',
+        },
+    ).json()
+
+    role_gerente = client.post(
+        '/roles/',
+        json={
+            'name': 'Gerente de Projetos',
+            'description': 'Coordena a equipe de desenvolvimento',
+        },
+    ).json()
+
+    role_suporte = client.post(
+        '/roles/',
+        json={
+            'name': 'Analista de Suporte Nível 2',
+            'description': 'Resolve problemas técnicos complexos',
+        },
+    ).json()
+
+    response = client.get('/roles/?q=Admin')
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['roles']) == 1
+    assert data['roles'][0]['id'] == role_admin['id']
+    assert data['roles'][0]['name'] == 'Administrador do Sistema'
+
+    response = client.get('/roles/?q=equipe')
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['roles']) == 1
+    assert data['roles'][0]['id'] == role_gerente['id']
+
+    response = client.get('/roles/?q=Analista complexos')
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['roles']) == 1
+    assert data['roles'][0]['id'] == role_suporte['id']
+
+    response = client.get('/roles/?q=Zebra')
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['roles']) == 0
+    assert data == {'roles': []}
+
+    response = client.get('/roles/?q=')
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['roles']) == 3
+
+    response = client.get('/roles/?q=irrestri')
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['roles']) == 1
+    assert data['roles'][0]['id'] == role_admin['id']

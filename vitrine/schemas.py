@@ -120,6 +120,10 @@ class FilterPage(BaseModel):
     limit: int = Field(100, ge=1)
 
 
+class RoleFilter(FilterPage):
+    q: str | None = Field(default=None)
+
+
 class UnitSchema(BaseModel):
     unit_name: str = Field('NÃO ATRIBUIDO', validation_alias='uge_nom')
     unit_code: str = Field('NÃO ATRIBUIDO', validation_alias='uge_cod')
