@@ -260,7 +260,7 @@ async def remove_item_from_collection(
     current_user: CurrentUser,
 ):
     db_collection = await session.get(Collection, collection_id)
-    if not db_collection or db_collection.user_id != current_user.id:
+    if not db_collection:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail='Action not allowed.'
         )

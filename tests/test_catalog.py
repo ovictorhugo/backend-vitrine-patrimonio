@@ -1166,3 +1166,46 @@ async def test_update_workflow_reviewers(
     response = client.get(f'/catalog/?reviewer_id={user3.id}')
     data = response.json()
     assert len(data['catalog_entries']) == 1
+
+
+@pytest.mark.asyncio
+async def test_catalog_get_returns_uploaded_file(
+    client, create_user, create_catalog_entry, create_token
+):
+    user = await create_user()
+    catalog_entry = await create_catalog_entry(user_id=user.id)
+    token = create_token(user)
+
+    file_name = 'manual_de_uso.pdf'
+    file_content = b'%PDF-1.4 fake pdf content'
+    content_type = 'application/pdf'
+
+    upload_response = client.post(
+        f'/catalog/{catalog_entry.id}/images',
+        files={'file': (file_name, io.BytesIO(file_content), content_type)},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert upload_response.status_code == HTTPStatus.CREATED
+    uploaded_file = upload_response.json()
+    assert uploaded_file['catalog_id'] == str(catalog_entry.id)
+    assert uploaded_file['file_path'].startswith('/uploads/')
+    assert uploaded_file['file_path'].endswith('.pdf')
+
+    get_response = client.get(
+        f'/catalog/{catalog_entry.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert get_response.status_code == HTTPStatus.OK
+    catalog_data = get_response.json()
+
+    assert 'images' in catalog_data
+    assert len(catalog_data['images']) == 1
+
+    returned_file = catalog_data['images'][0]
+    assert returned_file['id'] == uploaded_file['id']
+    assert returned_file['file_path'] == uploaded_file['file_path']
+    assert returned_file['file_path'].startswith('/uploads/')
+    assert returned_file['file_path'].endswith('.pdf')
+    assert returned_file['catalog_id'] == str(catalog_entry.id)

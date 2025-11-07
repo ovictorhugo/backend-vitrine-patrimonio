@@ -626,7 +626,12 @@ class Catalog(AuditMixin):
         lazy='selectin',
         cascade='all, delete-orphan',
     )
-
+    files: Mapped[list['CatalogFile']] = relationship(
+        back_populates='catalog',
+        init=False,
+        lazy='selectin',
+        cascade='all, delete-orphan',
+    )
     workflow_history: Mapped[list['CatalogWorkFlow']] = relationship(
         back_populates='catalog',
         init=False,
@@ -660,6 +665,28 @@ class CatalogImage:
     file_path: Mapped[str] = mapped_column(nullable=False)
     catalog: Mapped['Catalog'] = relationship(
         back_populates='images', init=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+
+
+@table_registry.mapped_as_dataclass
+class CatalogFile:
+    __tablename__ = 'catalog_files'
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+
+    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
+    file_path: Mapped[str] = mapped_column(nullable=False)
+    file_name: Mapped[str] = mapped_column(nullable=False)
+    content_type: Mapped[str | None] = mapped_column(nullable=True)
+
+    catalog: Mapped['Catalog'] = relationship(
+        back_populates='files', init=False
     )
 
     created_at: Mapped[datetime] = mapped_column(

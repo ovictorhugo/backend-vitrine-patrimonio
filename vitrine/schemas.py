@@ -452,6 +452,20 @@ class CatalogImagePublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CatalogFilePublic(BaseModel):
+    id: UUID
+    catalog_id: UUID
+    file_path: str
+    file_name: str
+    content_type: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CatalogFileList(BaseModel):
+    files: list[CatalogFilePublic]
+
+
 class CatalogPublic(CatalogSchema):
     id: UUID
     asset_id: UUID = Field(exclude=True)
@@ -462,6 +476,7 @@ class CatalogPublic(CatalogSchema):
     user: UserPublic
     location: LocationPublic
     images: List[CatalogImagePublic]
+    files: List[CatalogFilePublic]
     workflow_history: List[CatalogWorkFlowPublic]
 
     created_at: datetime
