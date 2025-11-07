@@ -1,5 +1,5 @@
 from typing import Sequence, Union
-from alembic import op
+from alembic import op, context
 import sqlalchemy as sa
 
 revision: str = '3f797a9ce940'
@@ -11,18 +11,20 @@ def upgrade() -> None:
     op.add_column('assets', sa.Column('user_id', sa.Uuid(), nullable=True))
     op.create_foreign_key(None, 'assets', 'users', ['user_id'], ['id'])
 
-    conn = op.get_bind()
-
-    assets_count = conn.execute(sa.text("SELECT COUNT(*) FROM assets")).scalar()
-    if assets_count > 0:
-        default_user_id = conn.execute(sa.text("SELECT id FROM users LIMIT 1")).scalar()
-        if default_user_id:
-            conn.execute(sa.text("UPDATE assets SET user_id = :uid WHERE user_id IS NULL"), {"uid": default_user_id})
-        else:
-            raise Exception("Nenhum usuário encontrado para preencher user_id em assets")
+    if not context.is_offline_mode():
+        conn = op.get_bind()
+        assets_count = conn.execute(sa.text("SELECT COUNT(*) FROM assets")).scalar()
+        if assets_count > 0:
+            default_user_id = conn.execute(sa.text("SELECT id FROM users LIMIT 1")).scalar()
+            if default_user_id:
+                conn.execute(
+                    sa.text("UPDATE assets SET user_id = :uid WHERE user_id IS NULL"),
+                    {"uid": default_user_id},
+                )
+            else:
+                raise Exception("Nenhum usuário encontrado para preencher user_id em assets")
 
     op.alter_column('assets', 'user_id', nullable=False)
-
     op.add_column('inventory', sa.Column('avaliable', sa.Boolean(), nullable=True))
     op.drop_column('inventory', 'available')
     op.drop_column('users', 'photo_url')
