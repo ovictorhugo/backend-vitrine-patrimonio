@@ -217,6 +217,16 @@ class User(AuditMixin):
         foreign_keys='[UserRole.user_id]',
     )
 
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('portuguese', coalesce(username, '') || ' ' || coalesce(email, ''))",
+            persisted=True,
+        ),
+        init=False,
+        index=False,
+    )
+
     __table_args__ = (
         Index(
             'ix_uq_users_username_active',
@@ -230,6 +240,7 @@ class User(AuditMixin):
             unique=True,
             postgresql_where=(column('deleted_at').is_(None)),
         ),
+        Index('ix_user_tsv', tsv, postgresql_using='gin'),
     )
 
 
