@@ -28,28 +28,28 @@ class Token(BaseModel):
 class PermissionSchema(BaseModel):
     name: str
     code: str
-    description: str | None = None
+    description: Optional[str] = Field(default=None)
 
 
 class PermissionPublic(BaseModel):
     id: UUID
     name: str
     code: str
-    description: str | None = None
+    description: Optional[str] = Field(default=None)
 
     model_config = {'from_attributes': True}
 
 
 class RoleSchema(BaseModel):
     name: str
-    description: str | None = None
+    description: Optional[str] = Field(default=None)
 
 
 class RolePublic(BaseModel):
     id: UUID
     name: str
-    description: str | None = None
-    permissions: list[PermissionPublic] | None = None
+    description: Optional[str] = Field(default=None)
+    permissions: list[PermissionPublic] | None = Field(default=None)
 
     model_config = {'from_attributes': True}
 
@@ -67,16 +67,16 @@ class UserSchema(BaseModel):
 class UserUpdateSchema(BaseModel):
     username: str
     email: EmailStr
-    provider: str | None = None
-    linkedin: str | None = None
-    lattes_id: str | None = None
-    orcid: str | None = None
-    ramal: str | None = None
-    photo_url: str | None = None
-    background_url: str | None = None
-    matricula: str | None = None
-    verify: bool | None = None
-    institution_id: UUID | None = None
+    provider: Optional[str] = Field(default=None)
+    linkedin: Optional[str] = Field(default=None)
+    lattes_id: Optional[str] = Field(default=None)
+    orcid: Optional[str] = Field(default=None)
+    ramal: Optional[str] = Field(default=None)
+    photo_url: Optional[str] = Field(default=None)
+    background_url: Optional[str] = Field(default=None)
+    matricula: Optional[str] = Field(default=None)
+    verify: bool | None = Field(default=None)
+    institution_id: Optional[UUID] = Field(default=None)
 
 
 class SystemIdentityPublic(BaseModel):
@@ -90,16 +90,16 @@ class UserPublic(BaseModel):
     id: UUID
     username: str
     email: EmailStr
-    provider: str | None = None
-    linkedin: str | None = None
-    lattes_id: str | None = None
-    orcid: str | None = None
-    ramal: str | None = None
-    photo_url: str | None = None
-    background_url: str | None = None
-    matricula: str | None = None
-    verify: bool | None = None
-    institution_id: UUID | None = None
+    provider: Optional[str] = Field(default=None)
+    linkedin: Optional[str] = Field(default=None)
+    lattes_id: Optional[str] = Field(default=None)
+    orcid: Optional[str] = Field(default=None)
+    ramal: Optional[str] = Field(default=None)
+    photo_url: Optional[str] = Field(default=None)
+    background_url: Optional[str] = Field(default=None)
+    matricula: Optional[str] = Field(default=None)
+    verify: bool | None = Field(default=None)
+    institution_id: Optional[UUID] = Field(default=None)
 
     roles: list[RolePublic]
     system_identity: Optional[SystemIdentityPublic]
@@ -121,7 +121,7 @@ class FilterPage(BaseModel):
 
 
 class RoleFilter(FilterPage):
-    q: str | None = Field(default=None)
+    q: Optional[str] = Field(default=None)
 
 
 class UnitSchema(BaseModel):
@@ -141,10 +141,14 @@ class UnitList(BaseModel):
 
 
 class FilterUnit(FilterPage):
-    q: str | None = Field(default=None)
+    q: Optional[str] = Field(default=None)
     agency_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID da Agência'
     )
+
+
+class FilterUser(FilterPage):
+    q: Optional[str] = Field(default=None)
 
 
 class AgencySchema(BaseModel):
@@ -164,7 +168,7 @@ class AgencyList(BaseModel):
 
 
 class FilterAgency(FilterPage):
-    q: str | None = Field(default=None)
+    q: Optional[str] = Field(default=None)
 
 
 class SectorSchema(BaseModel):
@@ -186,7 +190,7 @@ class SectorList(BaseModel):
 
 
 class FilterSector(FilterPage):
-    q: str | None = Field(default=None)
+    q: Optional[str] = Field(default=None)
     agency_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID da Organização'
     )
@@ -223,7 +227,7 @@ class LegalGuardianList(BaseModel):
 
 
 class FilterLegalGuardian(FilterPage):
-    q: str | None = Field(default=None)
+    q: Optional[str] = Field(default=None)
 
 
 class LocationPublic(LocationSchema):
@@ -244,7 +248,7 @@ class MyLocationList(BaseModel):
 
 
 class FilterLocation(FilterPage):
-    q: str | None = Field(default=None)
+    q: Optional[str] = Field(default=None)
     sector_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID do setor'
     )
@@ -254,14 +258,14 @@ class FilterLocation(FilterPage):
 
 
 class FilterLocationInventory(FilterLocation):
-    filled: Optional[bool] = None
+    filled: Optional[bool] = Field(default=None)
 
 
 class MaterialSchema(BaseModel):
-    material_code: str | None = Field(
+    material_code: Optional[str] = Field(
         'NÃO ATRIBUIDO', validation_alias='mat_cod'
     )
-    material_name: str | None = Field(
+    material_name: Optional[str] = Field(
         'NÃO ATRIBUIDO', validation_alias='mat_nom'
     )
 
@@ -278,7 +282,7 @@ class MaterialList(BaseModel):
 
 
 class FilterMaterial(FilterPage):
-    q: str | None = Field(default=None)
+    q: Optional[str] = Field(default=None)
 
 
 class AssetSchema(BaseModel):
@@ -364,7 +368,7 @@ class AssetIdentifierList(BaseModel):
 
 
 class MaterialNameResponseList(BaseModel):
-    material_name: List[str] = None
+    material_name: List[str] = Field(default=None)
 
 
 class CatalogAssetIdentifier(BaseModel):
@@ -377,13 +381,13 @@ class CatalogAssetIdentifierList(BaseModel):
 
 
 class LegalGuardianNameResponseList(BaseModel):
-    legal_guardians_name: List[str] = None
+    legal_guardians_name: List[str] = Field(default=None)
 
 
 class FilterAsset(BaseModel):
     limit: int = 100
     offset: int = 0
-    q: Optional[str] = None
+    q: Optional[str] = Field(default=None)
 
     asset_identifier: Optional[str] = Field(default=None)
     atm_number: Optional[str] = Field(default=None)
@@ -416,9 +420,9 @@ class RequestTransferList(BaseModel):
 
 
 class FilterTransfer(FilterPage):
-    user_id: UUID | None = None
-    workflow_id: UUID | None = None
-    status: Optional[WorkflowTransferStatus] = None
+    user_id: Optional[UUID] = Field(default=None)
+    workflow_id: Optional[UUID] = Field(default=None)
+    status: Optional[WorkflowTransferStatus] = Field(default=None)
 
 
 class CatalogSchema(BaseModel):
@@ -426,12 +430,12 @@ class CatalogSchema(BaseModel):
     location_id: UUID
     situation: AssetSituation
     conservation_status: str
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None)
 
 
 class CatalogWorkFlowSchema(BaseModel):
     workflow_status: str
-    detail: Optional[dict] = None
+    detail: Optional[dict] = Field(default=None)
 
 
 class CatalogWorkFlowPublic(CatalogWorkFlowSchema):
@@ -457,7 +461,7 @@ class CatalogFilePublic(BaseModel):
     catalog_id: UUID
     file_path: str
     file_name: str
-    content_type: str | None = None
+    content_type: Optional[str] = Field(default=None)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -489,25 +493,25 @@ class CatalogList(BaseModel):
 
 class FilterCatalog(FilterAsset):
     only_uncollected: Optional[bool] = False
-    reviewer_id: Optional[UUID] = None
+    reviewer_id: Optional[UUID] = Field(default=None)
 
-    location_id: UUID | None = None
-    unit_id: UUID | None = None
-    agency_id: UUID | None = None
-    sector_id: UUID | None = None
+    location_id: Optional[UUID] = Field(default=None)
+    unit_id: Optional[UUID] = Field(default=None)
+    agency_id: Optional[UUID] = Field(default=None)
+    sector_id: Optional[UUID] = Field(default=None)
 
-    material_id: UUID | None = None
-    legal_guardian_id: UUID | None = None
+    material_id: Optional[UUID] = Field(default=None)
+    legal_guardian_id: Optional[UUID] = Field(default=None)
 
-    workflow_status: Optional[str] = None
-    user_id: Optional[UUID] = None
-    role_id: Optional[UUID] = None
+    workflow_status: Optional[str] = Field(default=None)
+    user_id: Optional[UUID] = Field(default=None)
+    role_id: Optional[UUID] = Field(default=None)
 
 
 class FilterSearchCatalog(FilterPage):
-    q: str | None = Field(default=None)
-    user_id: UUID | None = None
-    workflow_status: Optional[str] = None
+    q: Optional[str] = Field(default=None)
+    user_id: Optional[UUID] = Field(default=None)
+    workflow_status: Optional[str] = Field(default=None)
 
 
 class InventorySchema(BaseModel):
@@ -528,20 +532,20 @@ class InventoryList(BaseModel):
 
 
 class FilterInventory(FilterPage):
-    q: str | None = Field(default=None)
+    q: Optional[str] = Field(default=None)
 
 
 class InventoryAssetSchema(BaseModel):
     asset_id: UUID
     status: InventoryAssetStatus | None = InventoryAssetStatus.OC.value
     location_id: UUID
-    comment: str | None = None
+    comment: Optional[str] = Field(default=None)
 
 
 class InventoryAssetPublic(BaseModel):
     id: UUID
     status: InventoryAssetStatus | None
-    comment: str | None
+    comment: Optional[str]
     asset: AssetPublic
 
     model_config = ConfigDict(from_attributes=True)
@@ -562,7 +566,7 @@ class FavoriteList(BaseModel):
 class CollectionItemPublic(BaseModel):
     id: UUID
     status: bool
-    comment: str | None
+    comment: Optional[str]
     catalog: CatalogPublic
     model_config = ConfigDict(from_attributes=True)
 
@@ -574,29 +578,29 @@ class CollectionItemsList(BaseModel):
 class CollectionItemSchema(BaseModel):
     catalog_id: UUID
     status: bool
-    comment: str | None = None
+    comment: Optional[str] = Field(default=None)
 
 
 class CollectionItemUpdate(BaseModel):
     status: bool
-    comment: str | None = None
+    comment: Optional[str] = Field(default=None)
 
 
 class CollectionSchema(BaseModel):
     name: str
-    description: str | None = None
-    type: str | None = None
+    description: Optional[str] = Field(default=None)
+    type: Optional[str] = Field(default=None)
 
 
 class CollectionUpdateSchema(BaseModel):
-    name: str | None = None
-    description: str | None = None
+    name: Optional[str] = Field(default=None)
+    description: Optional[str] = Field(default=None)
 
 
 class CollectionPublic(BaseModel):
     id: UUID
     name: str
-    description: str | None
+    description: Optional[str]
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -607,7 +611,7 @@ class CollectionList(BaseModel):
 
 
 class FilterCollection(FilterPage):
-    q: str | None = Field(default=None)
+    q: Optional[str] = Field(default=None)
     type: Optional[str] = Field(default=None)
 
 
@@ -637,14 +641,14 @@ class FilterNotification(FilterPage):
 class NotificationContentPublic(BaseModel):
     id: UUID
     type: str
-    detail: Optional[dict] = None
-    source_user: Optional[UserPublic] = None
+    detail: Optional[dict] = Field(default=None)
+    source_user: Optional[UserPublic] = Field(default=None)
     model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationPublic(BaseModel):
     id: UUID
-    read_at: Optional[datetime] = None
+    read_at: Optional[datetime] = Field(default=None)
     created_at: datetime
     notification: NotificationContentPublic
     model_config = ConfigDict(from_attributes=True)
@@ -664,7 +668,7 @@ class UserNotificationRecipientPublic(BaseModel):
 class NotificationSentPublic(BaseModel):
     id: UUID
     type: str
-    detail: Optional[dict] = None
+    detail: Optional[dict] = Field(default=None)
     created_at: datetime
     recipients: List[UserNotificationRecipientPublic]
     model_config = ConfigDict(from_attributes=True)
@@ -678,7 +682,7 @@ class FeedbackBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
     rating: int = Field(..., ge=0, le=10)
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None)
 
 
 class FeedbackCreate(FeedbackBase):
@@ -687,9 +691,9 @@ class FeedbackCreate(FeedbackBase):
 
 class FeedbackUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
-    email: Optional[EmailStr] = None
+    email: Optional[EmailStr] = Field(default=None)
     rating: Optional[int] = Field(None, ge=0, le=10)
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None)
 
 
 class FeedbackPublic(FeedbackBase):
@@ -704,8 +708,8 @@ class FeedbackList(BaseModel):
 
 class SystemSettingBase(BaseModel):
     key: str
-    value: Any | None = None
-    description: str | None = None
+    value: Any | None = Field(default=None)
+    description: Optional[str] = Field(default=None)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -715,8 +719,8 @@ class SystemSettingCreate(SystemSettingBase):
 
 
 class SystemSettingUpdate(BaseModel):
-    value: Any | None = None
-    description: str | None = None
+    value: Any | None = Field(default=None)
+    description: Optional[str] = Field(default=None)
 
 
 class SystemSettingPublic(SystemSettingBase):
@@ -740,15 +744,15 @@ class CatalogImageList(BaseModel):
 
 
 class CatalogStatisticsFilters(BaseModel):
-    q: str | None = None
-    asset_identifier: UUID | None = None
-    atm_number: UUID | None = None
-    material_id: UUID | None = None
-    unit_id: UUID | None = None
-    agency_id: UUID | None = None
-    sector_id: UUID | None = None
-    location_id: UUID | None = None
-    legal_guardian_id: UUID | None = None
-    is_official: bool | None = None
-    asset_status: UUID | None = None
-    csv_code: str | None = None
+    q: Optional[str] = Field(default=None)
+    asset_identifier: Optional[UUID] = Field(default=None)
+    atm_number: Optional[UUID] = Field(default=None)
+    material_id: Optional[UUID] = Field(default=None)
+    unit_id: Optional[UUID] = Field(default=None)
+    agency_id: Optional[UUID] = Field(default=None)
+    sector_id: Optional[UUID] = Field(default=None)
+    location_id: Optional[UUID] = Field(default=None)
+    legal_guardian_id: Optional[UUID] = Field(default=None)
+    is_official: bool | None = Field(default=None)
+    asset_status: Optional[UUID] = Field(default=None)
+    csv_code: Optional[str] = Field(default=None)

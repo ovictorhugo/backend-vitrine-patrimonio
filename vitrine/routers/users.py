@@ -1,9 +1,8 @@
 from datetime import datetime
 from http import HTTPStatus
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import Text, cast, desc, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
@@ -21,7 +20,7 @@ from vitrine.models import (
     UserRole,
 )
 from vitrine.schemas import (
-    FilterPage,
+    FilterUser,
     Message,
     UserList,
     UserPublic,
@@ -73,9 +72,10 @@ async def create_user(
 
 @router.get('/', response_model=UserList)
 async def read_users(
-    session: Session, filter_users: Annotated[FilterPage, Query()]
+    session: Session,
+    filters: FilterUser = Depends(),
 ):
-    query = await session.scalars(
+    query = (
         select(User)
         .options(
             selectinload(User.system_identity).selectinload(
@@ -86,10 +86,18 @@ async def read_users(
             ),
         )
         .where(User.deleted_at.is_(None))
-        .offset(filter_users.offset)
-        .limit(filter_users.limit)
     )
-    users = query.all()
+
+    if filters.q:
+        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
+        ts_query = func.to_tsquery('portuguese', prefix_query)
+        query = query.where(User.tsv.op('@@')(ts_query))
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    users = result.all()
+
     return {'users': users}
 
 
