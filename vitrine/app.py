@@ -81,12 +81,11 @@ app.mount('/uploads', StaticFiles(directory=STORAGE_DIR), name='uploads')
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[SETTINGS.ALLOWED_ORIGINS],
+    allow_origins=SETTINGS.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],
 )
-
 
 app.include_router(users.router)
 app.include_router(users_visuals.router)
