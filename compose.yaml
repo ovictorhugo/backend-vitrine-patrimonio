@@ -19,10 +19,10 @@ services:
       - vitrine_db
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@vitrine_db:5432/vitrine
+    env_file:
+      - ./.env
     volumes:
       - storage:/app/vitrine/storage
-    env_file:
-      - .env
 
   vitrine_mailpit:
     image: axllent/mailpit:v1.21
