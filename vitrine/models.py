@@ -220,7 +220,10 @@ class User(AuditMixin):
     tsv: Mapped[TSVECTOR] = mapped_column(
         TSVECTOR,
         Computed(
-            "to_tsvector('portuguese', coalesce(username, '') || ' ' || coalesce(email, ''))",
+            "to_tsvector('portuguese', "
+            "coalesce(username, '') || ' ' || "
+            "regexp_replace(coalesce(split_part(email, '@', 1), ''), '[@._-]', ' ', 'g')"
+            ')',
             persisted=True,
         ),
         init=False,
