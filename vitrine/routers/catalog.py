@@ -251,13 +251,21 @@ async def read_catalog_entries(
         query = query.where(Catalog.user_id == filters.user_id)
 
     if filters.role_id:
-        query = (
-            query.join(Catalog.workflow_history)
-            .join(CatalogWorkFlow.user)
-            .join(User.user_role_associations)
-            .join(UserRole.role)
-            .where(Role.id == filters.role_id)
+        users_with_role = (
+            select(UserRole.user_id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                Role.id == filters.role_id,
+                UserRole.deleted_at.is_(None),
+                Role.deleted_at.is_(None),
+            )
+            .distinct()
+            .cte('users_with_role')
         )
+        query = query.join(
+            users_with_role, Catalog.user_id == users_with_role.c.user_id
+        )
+
     query = query.offset(filters.offset).limit(filters.limit)
     result = await session.scalars(query)
     entries = result.unique().all()
