@@ -1,37 +1,37 @@
 services:
-    vitrine_db:
-        image: pgvector/pgvector:pg17
-        volumes:
-            - vitrine_db:/var/lib/postgresql/data
-        environment:
-            POSTGRES_USER: postgres
-            POSTGRES_DB: vitrine
-            POSTGRES_PASSWORD: postgres
-        ports:
-            - "5432:5432"
+  vitrine_db:
+    image: pgvector/pgvector:pg17
+    volumes:
+      - vitrine_db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: vitrine
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
 
-    vitrine_api:
-        image: gleidsoncosta/vitrine-api:latest
-        entrypoint: ./entrypoint.sh
-        ports:
-            - "5055:8000"
-        depends_on:
-            - vitrine_db
-        environment:
-            DATABASE_URL: postgresql+psycopg://postgres:postgres@vitrine_db:5432/vitrine
-        env_file:
-            - ./.env
-        volumes:
-            - storage:/app/vitrine/storage
+  vitrine_api:
+    image: gleidsoncosta/vitrine-api:latest
+    entrypoint: ./entrypoint.sh
+    ports:
+      - "5055:8000"
+    depends_on:
+      - vitrine_db
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@vitrine_db:5432/vitrine
+    env_file:
+      - ./.env
+    volumes:
+      - storage:/app/vitrine/storage
 
-    vitrine_mailpit:
-        image: axllent/mailpit:v1.21
-        ports:
-            - "1025:1025"
-            - "8025:8025"
-        profiles:
-            - optional
+  vitrine_mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    profiles:
+      - optional
 
 volumes:
-    vitrine_db:
-    storage:
+  vitrine_db:
+  storage:

@@ -745,8 +745,6 @@ class CatalogImageList(BaseModel):
 
 class CatalogStatisticsFilters(BaseModel):
     q: Optional[str] = Field(default=None)
-    asset_identifier: Optional[UUID] = Field(default=None)
-    atm_number: Optional[UUID] = Field(default=None)
     material_id: Optional[UUID] = Field(default=None)
     unit_id: Optional[UUID] = Field(default=None)
     agency_id: Optional[UUID] = Field(default=None)
@@ -756,3 +754,5 @@ class CatalogStatisticsFilters(BaseModel):
     is_official: bool | None = Field(default=None)
     asset_status: Optional[UUID] = Field(default=None)
     csv_code: Optional[str] = Field(default=None)
+    role_id: Optional[str] = Field(default=None)
+    user_id: Optional[str] = Field(default=None)
