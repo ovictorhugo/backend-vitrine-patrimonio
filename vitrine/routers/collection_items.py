@@ -55,11 +55,6 @@ async def add_item_to_collection(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
-    if db_collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You do not have permission to add items to this collection.',
-        )
 
     query = (
         select(Catalog)
@@ -130,11 +125,6 @@ async def update_collection_item(
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
-        )
-    if db_collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You do not have permission to update items in this collection.',
         )
 
     db_item = await session.get(CollectionItem, item_id)

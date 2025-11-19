@@ -118,11 +118,6 @@ async def update_collection(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
-    if db_collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You do not have permission to edit this collection.',
-        )
 
     update_data = collection_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
