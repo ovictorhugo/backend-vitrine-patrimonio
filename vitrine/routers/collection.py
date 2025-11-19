@@ -142,11 +142,6 @@ async def delete_collection(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
-    if db_collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You do not have permission to delete this collection.',
-        )
 
     db_collection.deleted_at = func.now()
     await session.commit()
