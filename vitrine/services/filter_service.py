@@ -139,25 +139,21 @@ def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
     needs_latest_workflow = filters.reviewer_id or filters.workflow_status
 
     if needs_latest_workflow:
-        latest_workflow_subquery = (
-            select(
-                CatalogWorkFlow.catalog_id,
-                func.max(CatalogWorkFlow.created_at).label('max_created_at'),
+        latest = select(
+            CatalogWorkFlow.id,
+            CatalogWorkFlow.catalog_id,
+            CatalogWorkFlow.workflow_status,
+            CatalogWorkFlow.detail,
+            func.row_number()
+            .over(
+                partition_by=CatalogWorkFlow.catalog_id,
+                order_by=CatalogWorkFlow.created_at.desc(),
             )
-            .group_by(CatalogWorkFlow.catalog_id)
-            .subquery()
-        )
+            .label('rn'),
+        ).subquery()
 
-        query = query.join(
-            latest_workflow_subquery,
-            Catalog.id == latest_workflow_subquery.c.catalog_id,
-        ).join(
-            CatalogWorkFlow,
-            (Catalog.id == CatalogWorkFlow.catalog_id)
-            & (
-                CatalogWorkFlow.created_at
-                == latest_workflow_subquery.c.max_created_at
-            ),
+        query = query.join(latest, Catalog.id == latest.c.catalog_id).where(
+            latest.c.rn == 1
         )
 
     if filters.reviewer_id:
