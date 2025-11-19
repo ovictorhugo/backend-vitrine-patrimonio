@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy import Text, and_, cast, func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
@@ -160,18 +160,17 @@ def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
             ),
         )
 
-        if filters.reviewer_id:
-            search_string = f'%"id": "{str(filters.reviewer_id)}"%'
-            query = query.where(
-                cast(CatalogWorkFlow.detail['reviewers'], Text).like(
-                    search_string
-                )
-            )
+    if filters.reviewer_id:
+        query = query.where(
+            CatalogWorkFlow.detail['reviewers'].contains([
+                {'id': str(filters.reviewer_id)}
+            ])
+        )
 
-        if filters.workflow_status:
-            query = query.where(
-                CatalogWorkFlow.workflow_status == filters.workflow_status
-            )
+    if filters.workflow_status:
+        query = query.where(
+            CatalogWorkFlow.workflow_status == filters.workflow_status
+        )
 
     return query
 

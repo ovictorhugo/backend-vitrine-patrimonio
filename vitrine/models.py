@@ -6,7 +6,6 @@ from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    JSON,
     CheckConstraint,
     Computed,
     ForeignKey,
@@ -16,7 +15,7 @@ from sqlalchemy import (
     column,
     func,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import (
     Mapped,
     declared_attr,
@@ -729,8 +728,7 @@ class CatalogWorkFlow:
     workflow_status: Mapped[str | None] = mapped_column(
         nullable=False, index=True
     )
-
-    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    detail: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     transfer_requests: Mapped[list['WorkflowTransfer']] = relationship(
         back_populates='workflow',
         init=False,
@@ -1047,7 +1045,7 @@ class Notification(AuditMixin):
     )
 
     type: Mapped[str] = mapped_column(nullable=False, index=True)
-    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    detail: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     source_user: Mapped[Optional['User']] = relationship(
         init=False,
@@ -1336,7 +1334,7 @@ class SystemSetting(AuditMixin):
         init=False, primary_key=True, default=uuid4
     )
     key: Mapped[str] = mapped_column(nullable=False, index=True)
-    value: Mapped[Any] = mapped_column(JSON, nullable=True)
+    value: Mapped[Any] = mapped_column(JSONB, nullable=True)
     description: Mapped[str | None] = mapped_column(nullable=True)
 
     __table_args__ = (
