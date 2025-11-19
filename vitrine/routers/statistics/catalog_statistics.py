@@ -25,6 +25,13 @@ class CollectionStatusCount(BaseModel):
     count: int
 
 
+class WorkflowStatusGrouped(BaseModel):
+    id: UUID | None
+    name: str | None
+    status: str
+    count: int
+
+
 @router.get(
     '/catalog/count-by-workflow-status',
     response_model=list[CollectionStatusCount],
@@ -114,28 +121,31 @@ async def get_catalog_review_commission_stats(
 
     SQL = f"""
         SELECT
-            rid AS reviewer_id, reviewer,
+            rid AS reviewer_id,
+            reviewer,
             COUNT(*) AS total,
             COUNT(*) FILTER (WHERE DATE(cw.created_at) = CURRENT_DATE) AS d0,
             COUNT(*) FILTER (WHERE cw.created_at >= CURRENT_DATE - INTERVAL '3 days') AS d3,
             COUNT(*) FILTER (WHERE cw.created_at < CURRENT_DATE - INTERVAL '7 days') AS w1
         FROM (
-            SELECT DISTINCT ON (catalog_workflow.catalog_id)
-                catalog_workflow.detail -> 'reviewers' -> 0 ->> 'id' AS rid,
-                catalog_workflow.detail -> 'reviewers' -> 0 ->> 'username' AS reviewer,
+            SELECT DISTINCT ON (catalog_workflow.catalog_id, r ->> 'id')
+                r ->> 'id' AS rid,
+                r ->> 'username' AS reviewer,
                 catalog_workflow.created_at
             FROM catalog_workflow
             INNER JOIN catalog
                 ON catalog.id = catalog_workflow.catalog_id
                 AND catalog.deleted_at IS NULL
             {join_clauses}
+            CROSS JOIN LATERAL jsonb_array_elements((catalog_workflow.detail -> 'reviewers')::jsonb) AS r
             WHERE
                 catalog_workflow.workflow_status = 'REVIEW_REQUESTED_COMISSION'
-                AND catalog_workflow.detail -> 'reviewers' -> 0 ->> 'id' IS NOT NULL
-                AND catalog_workflow.detail -> 'reviewers' -> 0 ->> 'username' IS NOT NULL
+                AND r ->> 'id' IS NOT NULL
+                AND r ->> 'username' IS NOT NULL
             {filter_clauses}
             ORDER BY
                 catalog_workflow.catalog_id,
+                r ->> 'id',
                 catalog_workflow.created_at DESC
         ) cw
         GROUP BY rid, reviewer;
@@ -143,3 +153,147 @@ async def get_catalog_review_commission_stats(
 
     result = await session.execute(text(SQL), params)
     return result.mappings().all()
+
+
+def get_hierarchy_joins(level: str, current_joins_str: str) -> str:
+    required_joins = []
+
+    j_assets = 'LEFT JOIN assets ON assets.id = catalog.asset_id'
+    j_locations = 'LEFT JOIN locations ON assets.location_id = locations.id'
+    j_sectors = 'LEFT JOIN sectors ON locations.sector_id = sectors.id'
+    j_agencys = 'LEFT JOIN agencys ON sectors.agency_id = agencys.id'
+    j_units = 'LEFT JOIN units ON agencys.unit_id = units.id'
+
+    if level in ['location', 'sector', 'agency', 'unit']:
+        if 'JOIN assets' not in current_joins_str:
+            required_joins.append(j_assets)
+        if 'JOIN locations' not in current_joins_str:
+            required_joins.append(j_locations)
+
+    if level in ['sector', 'agency', 'unit']:
+        if 'JOIN sectors' not in current_joins_str:
+            required_joins.append(j_sectors)
+
+    if level in ['agency', 'unit']:
+        if 'JOIN agencys' not in current_joins_str:
+            required_joins.append(j_agencys)
+
+    if level == 'unit':
+        if 'JOIN units' not in current_joins_str:
+            required_joins.append(j_units)
+
+    return '\n'.join(required_joins)
+
+
+async def _get_grouped_stats(
+    session: Session,
+    filters: CatalogStatisticsFilters,
+    id_column: str,
+    name_column: str,
+    level_key: str,
+):
+    filter_joins, filter_clauses, params = build_catalog_filters(filters)
+
+    mandatory_joins = get_hierarchy_joins(level_key, filter_joins)
+
+    SQL = f"""
+        WITH wc_status AS (
+            SELECT DISTINCT ON (catalog_id)
+                catalog_workflow.workflow_status, catalog_id
+            FROM catalog_workflow
+            INNER JOIN catalog 
+                ON catalog.id = catalog_workflow.catalog_id 
+                AND catalog.deleted_at IS NULL
+            ORDER BY catalog_workflow.catalog_id, 
+                     catalog_workflow.created_at DESC
+        )
+        SELECT 
+            {id_column} AS id,
+            {name_column} AS name,
+            wc_status.workflow_status AS status, 
+            COUNT(*) AS count
+        FROM wc_status
+            LEFT JOIN catalog ON catalog.id = wc_status.catalog_id
+            {filter_joins}
+            {mandatory_joins} -- Adiciona os joins de estrutura se faltarem
+        WHERE 1 = 1
+            {filter_clauses}
+        GROUP BY 
+            {id_column}, 
+            {name_column}, 
+            wc_status.workflow_status
+        ORDER BY
+            {name_column},
+            wc_status.workflow_status
+    """
+
+    result = await session.execute(text(SQL), params)
+    return result.mappings().all()
+
+
+@router.get(
+    '/catalog/workflow-status-grouped/unit',
+    response_model=list[WorkflowStatusGrouped],
+)
+async def get_catalog_workflow_status_by_unit(
+    session: Session,
+    filters: CatalogStatisticsFilters = Depends(),
+):
+    return await _get_grouped_stats(
+        session,
+        filters,
+        id_column='units.id',
+        name_column='units.unit_name',
+        level_key='unit',
+    )
+
+
+@router.get(
+    '/catalog/workflow-status-grouped/agency',
+    response_model=list[WorkflowStatusGrouped],
+)
+async def get_catalog_workflow_status_by_agency(
+    session: Session,
+    filters: CatalogStatisticsFilters = Depends(),
+):
+    return await _get_grouped_stats(
+        session,
+        filters,
+        id_column='agencys.id',
+        name_column='agencys.agency_name',
+        level_key='agency',
+    )
+
+
+@router.get(
+    '/catalog/workflow-status-grouped/sector',
+    response_model=list[WorkflowStatusGrouped],
+)
+async def get_catalog_workflow_status_by_sector(
+    session: Session,
+    filters: CatalogStatisticsFilters = Depends(),
+):
+    return await _get_grouped_stats(
+        session,
+        filters,
+        id_column='sectors.id',
+        name_column='sectors.sector_name',
+        level_key='sector',
+    )
+
+
+@router.get(
+    '/catalog/workflow-status-grouped/location',
+    response_model=list[WorkflowStatusGrouped],
+)
+async def get_catalog_workflow_status_by_location(
+    session: Session,
+    filters: CatalogStatisticsFilters = Depends(),
+):
+    return await _get_grouped_stats(
+        session,
+        filters,
+        id_column='locations.id',
+        name_column='locations.location_name',
+        level_key='location',
+    )
