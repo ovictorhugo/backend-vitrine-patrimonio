@@ -1,8 +1,10 @@
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, desc, func, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
 from vitrine.core.database import get_session
@@ -135,37 +137,31 @@ def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
                 CollectionItem.collection.has(Collection.deleted_at.is_(None)),
             ),
         ).where(CollectionItem.id.is_(None))
-
     needs_latest_workflow = filters.reviewer_id or filters.workflow_status
 
     if needs_latest_workflow:
-        latest = select(
-            CatalogWorkFlow.id,
+        window_function = func.row_number().over(
+            partition_by=CatalogWorkFlow.catalog_id,
+            order_by=desc(CatalogWorkFlow.created_at),
+        )
+        latest_workflow_subquery = select(
             CatalogWorkFlow.catalog_id,
             CatalogWorkFlow.workflow_status,
             CatalogWorkFlow.detail,
-            func.row_number()
-            .over(
-                partition_by=CatalogWorkFlow.catalog_id,
-                order_by=CatalogWorkFlow.created_at.desc(),
-            )
-            .label('rn'),
+            window_function.label('rn'),
         ).subquery()
-
+        latest = aliased(latest_workflow_subquery)
         query = query.join(latest, Catalog.id == latest.c.catalog_id).where(
             latest.c.rn == 1
         )
 
     if filters.reviewer_id:
-        query = query.where(
-            CatalogWorkFlow.detail['reviewers'].contains([
-                {'id': str(filters.reviewer_id)}
-            ])
-        )
+        search_json = {'reviewers': [{'id': str(filters.reviewer_id)}]}
+        query = query.where(latest.c.detail.cast(JSONB).op('@>')(search_json))
 
     if filters.workflow_status:
         query = query.where(
-            CatalogWorkFlow.workflow_status == filters.workflow_status
+            latest.c.workflow_status == filters.workflow_status
         )
 
     return query

@@ -120,35 +120,36 @@ async def get_catalog_review_commission_stats(
     join_clauses, filter_clauses, params = build_catalog_filters(filters)
 
     SQL = f"""
-        SELECT
-            rid AS reviewer_id,
-            reviewer,
-            COUNT(*) AS total,
-            COUNT(*) FILTER (WHERE DATE(cw.created_at) = CURRENT_DATE) AS d0,
-            COUNT(*) FILTER (WHERE cw.created_at >= CURRENT_DATE - INTERVAL '3 days') AS d3,
-            COUNT(*) FILTER (WHERE cw.created_at < CURRENT_DATE - INTERVAL '7 days') AS w1
-        FROM (
-            SELECT DISTINCT ON (catalog_workflow.catalog_id, r ->> 'id')
-                r ->> 'id' AS rid,
-                r ->> 'username' AS reviewer,
-                catalog_workflow.created_at
+        WITH wc_status AS (
+            SELECT DISTINCT ON (catalog_workflow.catalog_id)
+                catalog_workflow.catalog_id,
+                catalog_workflow.created_at,
+                catalog_workflow.detail,
+                catalog_workflow.workflow_status
             FROM catalog_workflow
             INNER JOIN catalog
                 ON catalog.id = catalog_workflow.catalog_id
                 AND catalog.deleted_at IS NULL
-            {join_clauses}
-            CROSS JOIN LATERAL jsonb_array_elements((catalog_workflow.detail -> 'reviewers')::jsonb) AS r
-            WHERE
-                catalog_workflow.workflow_status = 'REVIEW_REQUESTED_COMISSION'
-                AND r ->> 'id' IS NOT NULL
-                AND r ->> 'username' IS NOT NULL
+            ORDER BY catalog_workflow.catalog_id,
+                    catalog_workflow.created_at DESC
+        )
+        SELECT
+            reviewer_data ->> 'id' AS reviewer_id,
+            reviewer_data ->> 'username' AS reviewer,
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE DATE(ws.created_at) = CURRENT_DATE) AS d0,
+            COUNT(*) FILTER (WHERE ws.created_at >= CURRENT_DATE - INTERVAL '3 days') AS d3,
+            COUNT(*) FILTER (WHERE ws.created_at < CURRENT_DATE - INTERVAL '7 days') AS w1
+        FROM wc_status ws
+        INNER JOIN catalog ON catalog.id = ws.catalog_id
+        CROSS JOIN LATERAL jsonb_array_elements(ws.detail -> 'reviewers') AS reviewer_data
+        {join_clauses}
+        WHERE
+            1 = 1
             {filter_clauses}
-            ORDER BY
-                catalog_workflow.catalog_id,
-                r ->> 'id',
-                catalog_workflow.created_at DESC
-        ) cw
-        GROUP BY rid, reviewer;
+        GROUP BY
+            reviewer_data ->> 'id',
+            reviewer_data ->> 'username';
     """
 
     result = await session.execute(text(SQL), params)

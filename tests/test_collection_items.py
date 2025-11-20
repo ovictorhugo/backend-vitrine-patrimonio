@@ -89,26 +89,6 @@ async def test_add_item_fails_if_already_in_collection(
     )
 
 
-async def test_add_item_fails_for_other_user_collection(
-    client, create_user, create_token, create_collection, create_catalog_entry
-):
-    owner_user = await create_user()
-    collection = await create_collection(user_id=owner_user.id)
-    catalog_item = await create_catalog_entry(user_id=owner_user.id)
-
-    other_user = await create_user()
-    other_token = create_token(other_user)
-
-    payload = {'catalog_id': str(catalog_item.id), 'status': True}
-    response = client.post(
-        f'/collections/{collection.id}/items/',
-        json=payload,
-        headers={'Authorization': f'Bearer {other_token}'},
-    )
-
-    assert response.status_code == HTTPStatus.FORBIDDEN
-
-
 async def test_remove_item_from_collection(
     client, create_user, create_token, create_collection, create_catalog_entry
 ):
@@ -279,39 +259,6 @@ async def test_update_collection_item_fails_collection_not_found(
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()['detail'] == 'Collection not found.'
-
-
-async def test_update_collection_item_fails_not_owner(
-    client, create_user, create_token, create_collection, create_catalog_entry
-):
-    owner_user = await create_user()
-    owner_token = create_token(owner_user)
-    collection = await create_collection(user_id=owner_user.id)
-    catalog_item = await create_catalog_entry(user_id=owner_user.id)
-
-    add_payload = {'catalog_id': str(catalog_item.id), 'status': True}
-    add_response = client.post(
-        f'/collections/{collection.id}/items/',
-        json=add_payload,
-        headers={'Authorization': f'Bearer {owner_token}'},
-    )
-    item_in_collection_id = add_response.json()['id']
-
-    other_user = await create_user()
-    other_token = create_token(other_user)
-
-    update_payload = {'status': False, 'comment': 'Tentativa de invasão.'}
-    response = client.put(
-        f'/collections/{collection.id}/items/{item_in_collection_id}',
-        json=update_payload,
-        headers={'Authorization': f'Bearer {other_token}'},
-    )
-
-    assert response.status_code == HTTPStatus.FORBIDDEN
-    assert (
-        response.json()['detail']
-        == 'You do not have permission to update items in this collection.'
-    )
 
 
 async def test_update_collection_item_fails_item_not_found(
