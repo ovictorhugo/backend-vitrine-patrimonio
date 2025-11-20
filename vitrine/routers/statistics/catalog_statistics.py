@@ -97,7 +97,7 @@ async def get_catalog_count_by_collection_status(
             END AS status
         FROM wc_status
             INNER JOIN catalog ON catalog.id = wc_status.catalog_id
-            LEFT JOIN collection_items ON catalog.id = collection_items.catalog_id
+            INNER JOIN collection_items ON wc_status.catalog_id = collection_items.catalog_id
             {join_clauses}
         WHERE
             wc_status.workflow_status = :workflow_status
@@ -151,7 +151,7 @@ async def get_catalog_review_commission_stats(
             reviewer_data ->> 'id',
             reviewer_data ->> 'username';
     """
-
+    print(SQL)
     result = await session.execute(text(SQL), params)
     return result.mappings().all()
 
