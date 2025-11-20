@@ -95,9 +95,9 @@ async def get_catalog_count_by_collection_status(
                 WHEN collection_items.status IS NULL THEN 'NOT_IN_COLLECTION'
                 ELSE UPPER(CAST(collection_items.status AS TEXT))
             END AS status
-        FROM wc_status
-            INNER JOIN catalog ON catalog.id = wc_status.catalog_id
-            INNER JOIN collection_items ON wc_status.catalog_id = collection_items.catalog_id
+        FROM catalog
+            LEFT JOIN wc_status ON catalog.id = wc_status.catalog_id
+            LEFT JOIN collection_items ON wc_status.catalog_id = collection_items.catalog_id
             {join_clauses}
         WHERE
             wc_status.workflow_status = :workflow_status
