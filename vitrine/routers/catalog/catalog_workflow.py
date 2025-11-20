@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import desc, func, select
+from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
 
 from vitrine.core.dependencies import CurrentUser, Session
@@ -10,6 +11,7 @@ from vitrine.models import (
     Catalog,
     CatalogWorkFlow,
     Role,
+    SystemIdentity,
     SystemSetting,
     User,
 )
@@ -104,12 +106,18 @@ async def update_workflow_reviewers(
     session: Session,
     current_user: CurrentUser,
 ):
-    result = await session.execute(
+    query = (
         select(CatalogWorkFlow)
+        .options(
+            joinedload(CatalogWorkFlow.user)
+            .joinedload(User.system_identity)
+            .joinedload(SystemIdentity.legal_guardian)
+        )
         .where(CatalogWorkFlow.catalog_id == catalog_id)
         .order_by(desc(CatalogWorkFlow.created_at))
         .limit(1)
     )
+    result = await session.execute(query)
     workflow = result.scalar_one_or_none()
 
     if not workflow:
