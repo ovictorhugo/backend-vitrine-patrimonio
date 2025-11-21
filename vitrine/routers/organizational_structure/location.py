@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import (
+    Agency,
     LegalGuardian,
     Location,
     LocationInventory,
@@ -101,6 +102,7 @@ async def read_locations(
         )
     )
 
+    # Filtro de Texto (Full Text Search)
     if filters.q:
         prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
         ts_query = func.to_tsquery('portuguese', prefix_query)
@@ -114,9 +116,21 @@ async def read_locations(
             Location.legal_guardian_id == filters.legal_guardian_id
         )
 
+    if filters.agency_id or filters.unit_id:
+        query = query.join(Location.sector)
+
+    if filters.agency_id:
+        query = query.where(Sector.agency_id == filters.agency_id)
+
+    if filters.unit_id:
+        query = query.join(Sector.agency).where(
+            Agency.unit_id == filters.unit_id
+        )
+
     query = query.offset(filters.offset).limit(filters.limit)
     result = await session.scalars(query)
     locations = result.all()
+
     return {'locations': locations}
 
 

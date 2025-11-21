@@ -395,3 +395,128 @@ async def test_read_my_locations_ignores_deleted_ones(
     data = response.json()
     assert len(data['locations']) == 1
     assert data['locations'][0]['id'] == str(location_active.id)
+
+
+@pytest.mark.asyncio
+async def test_read_locations_filter_by_agency(
+    client,
+    create_user,
+    create_token,
+    create_unit,
+    create_agency,
+    create_sector,
+    create_location,
+    create_legal_guardian,
+):
+    user = await create_user()
+    token = create_token(user)
+    guardian = await create_legal_guardian(user_id=user.id)
+
+    unit = await create_unit()
+    agency_target = await create_agency(
+        unit_id=unit.id, agency_name='Agência Alvo'
+    )
+    sector_target = await create_sector(agency_id=agency_target.id)
+    location_target = await create_location(
+        sector_id=sector_target.id,
+        legal_guardian_id=guardian.id,
+        location_name='Sala da Agência Alvo',
+    )
+
+    agency_noise = await create_agency(
+        unit_id=unit.id, agency_name='Agência Ruído'
+    )
+    sector_noise = await create_sector(agency_id=agency_noise.id)
+    await create_location(
+        sector_id=sector_noise.id,
+        legal_guardian_id=guardian.id,
+        location_name='Sala da Agência Ruído',
+    )
+
+    response = client.get(
+        f'/locations/?agency_id={agency_target.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+
+    assert len(data['locations']) == 1
+    assert data['locations'][0]['id'] == str(location_target.id)
+
+
+@pytest.mark.asyncio
+async def test_read_locations_filter_by_unit(
+    client,
+    create_user,
+    create_token,
+    create_unit,
+    create_agency,
+    create_sector,
+    create_location,
+    create_legal_guardian,
+):
+    user = await create_user()
+    token = create_token(user)
+    guardian = await create_legal_guardian(user_id=user.id)
+
+    unit_target = await create_unit(unit_name='Unidade Alvo')
+    agency_target = await create_agency(unit_id=unit_target.id)
+    sector_target = await create_sector(agency_id=agency_target.id)
+    location_target = await create_location(
+        sector_id=sector_target.id,
+        legal_guardian_id=guardian.id,
+        location_name='Local na Unidade Alvo',
+    )
+
+    unit_noise = await create_unit(unit_name='Unidade Ruído')
+    agency_noise = await create_agency(unit_id=unit_noise.id)
+    sector_noise = await create_sector(agency_id=agency_noise.id)
+    await create_location(
+        sector_id=sector_noise.id,
+        legal_guardian_id=guardian.id,
+        location_name='Local na Unidade Ruído',
+    )
+
+    response = client.get(
+        f'/locations/?unit_id={unit_target.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+
+    assert len(data['locations']) == 1
+    assert data['locations'][0]['id'] == str(location_target.id)
+
+
+@pytest.mark.asyncio
+async def test_read_locations_combined_filters_empty_result(
+    client,
+    create_user,
+    create_token,
+    create_unit,
+    create_agency,
+    create_sector,
+    create_location,
+    create_legal_guardian,
+):
+    user = await create_user()
+    token = create_token(user)
+    guardian = await create_legal_guardian(user_id=user.id)
+
+    unit_1 = await create_unit()
+
+    unit_2 = await create_unit()
+    agency_2 = await create_agency(unit_id=unit_2.id)
+    sector_2 = await create_sector(agency_id=agency_2.id)
+    await create_location(sector_id=sector_2.id, legal_guardian_id=guardian.id)
+
+    response = client.get(
+        f'/locations/?unit_id={unit_1.id}&agency_id={agency_2.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert len(data['locations']) == 0

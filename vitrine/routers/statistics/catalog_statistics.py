@@ -45,7 +45,7 @@ async def get_catalog_count_by_workflow_status(
     SQL = f"""
         WITH wc_status AS (
             SELECT DISTINCT ON (catalog_id)
-                catalog_workflow.workflow_status, catalog_id
+                catalog_workflow.workflow_status, catalog_id, detail
             FROM catalog_workflow
             INNER JOIN catalog
                 ON catalog.id = catalog_workflow.catalog_id

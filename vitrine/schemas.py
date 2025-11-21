@@ -252,6 +252,12 @@ class FilterLocation(FilterPage):
     sector_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID do setor'
     )
+    agency_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID do órgão (Agency)'
+    )
+    unit_id: Optional[UUID] = Field(
+        default=None, description='Filtrar por ID da unidade (Unit)'
+    )
     legal_guardian_id: Optional[UUID] = Field(
         default=None, description='Filtrar por ID do responsável legal'
     )
@@ -745,7 +751,9 @@ class CatalogImageList(BaseModel):
 
 class CatalogStatisticsFilters(BaseModel):
     q: Optional[str] = Field(default=None)
+    workflow_status: Optional[str] = Field(default=None, exclude=True)
     material_id: Optional[UUID] = Field(default=None)
+    reviewer_id: Optional[UUID] = Field(default=None)
     unit_id: Optional[UUID] = Field(default=None)
     agency_id: Optional[UUID] = Field(default=None)
     sector_id: Optional[UUID] = Field(default=None)
