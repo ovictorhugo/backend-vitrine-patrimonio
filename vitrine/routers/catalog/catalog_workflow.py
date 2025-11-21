@@ -23,6 +23,17 @@ from vitrine.schemas import (
 router = APIRouter(prefix='/catalog', tags=['Vitrine - Workflow de Anúncios'])
 
 
+async def _get_comission_sample_size(session: Session) -> int:
+    try:
+        stmt = select(SystemSetting.value).where(
+            SystemSetting.key == 'COMISSION_SAMPLE_SIZE'
+        )
+        sample_size = await session.scalar(stmt)
+        return int(sample_size) if sample_size is not None else 5
+    except Exception:
+        return 5
+
+
 @router.post(
     '/{catalog_id}/workflow',
     status_code=HTTPStatus.CREATED,
@@ -47,16 +58,7 @@ async def add_workflow_step(
         )
 
     if workflow_data.workflow_status == 'REVIEW_REQUESTED_COMISSION':
-        try:
-            stmt = select(SystemSetting.value).where(
-                SystemSetting.key == 'COMISSION_SAMPLE_SIZE'
-            )
-            sample_size = await session.scalar(stmt)
-            comission_sample_size = (
-                int(sample_size) if sample_size is not None else 5
-            )
-        except Exception:
-            comission_sample_size = 5
+        comission_sample_size = await _get_comission_sample_size(session)
 
         stmt = (
             select(User)
@@ -79,6 +81,27 @@ async def add_workflow_step(
             {'id': str(user.id), 'username': user.username}
             for user in random_comission_users
         ]
+
+    elif workflow_data.workflow_status == 'DESFAZIMENTO':
+        stmt_last_wf = (
+            select(CatalogWorkFlow)
+            .where(CatalogWorkFlow.catalog_id == catalog_id)
+            .order_by(CatalogWorkFlow.created_at.desc())
+            .limit(1)
+        )
+        last_workflow = await session.scalar(stmt_last_wf)
+
+        if (
+            last_workflow
+            and last_workflow.detail
+            and 'reviewers' in last_workflow.detail
+        ):
+            if workflow_data.detail is None:
+                workflow_data.detail = {}
+
+            workflow_data.detail['reviewers'] = last_workflow.detail[
+                'reviewers'
+            ]
 
     new_workflow_entry = CatalogWorkFlow(
         catalog_id=catalog_id,
