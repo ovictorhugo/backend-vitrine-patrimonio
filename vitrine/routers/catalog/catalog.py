@@ -208,10 +208,23 @@ async def update_catalog_entry(
     options = [
         selectinload(Catalog.images),
         selectinload(Catalog.files),
+        selectinload(Catalog.user).options(
+            selectinload(User.system_identity).options(
+                selectinload(SystemIdentity.legal_guardian)
+            )
+        ),
         selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user),
+            selectinload(CatalogWorkFlow.user).options(
+                selectinload(User.system_identity).options(
+                    selectinload(SystemIdentity.legal_guardian)
+                )
+            ),
             selectinload(CatalogWorkFlow.transfer_requests).options(
-                selectinload(WorkflowTransfer.user),
+                selectinload(WorkflowTransfer.user).options(
+                    selectinload(User.system_identity).options(
+                        selectinload(SystemIdentity.legal_guardian)
+                    )
+                ),
                 selectinload(WorkflowTransfer.location),
             ),
         ),
@@ -236,12 +249,7 @@ async def update_catalog_entry(
 
     db_catalog_loaded = await session.get(Catalog, catalog_id, options=options)
 
-    if not db_catalog_loaded:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail='Catalog entry not found after update',
-        )
-
+    print(CatalogPublic.model_validate(db_catalog_loaded))
     return db_catalog_loaded
 
 

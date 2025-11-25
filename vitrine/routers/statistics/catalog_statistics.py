@@ -54,8 +54,8 @@ async def get_catalog_count_by_workflow_status(
                 catalog_workflow.created_at DESC
         )
         SELECT workflow_status AS status, COUNT(*) AS count
-        FROM wc_status
-            LEFT JOIN catalog ON catalog.id = wc_status.catalog_id
+        FROM wc_status AS ws
+            LEFT JOIN catalog ON catalog.id = ws.catalog_id
             {join_clauses}
         WHERE 1 = 1
             {filter_clauses}
