@@ -121,13 +121,13 @@ def build_catalog_filters(filters):
         params['csv_code'] = f'%{filters.csv_code}%'
 
     if filters.reviewer_id:
-        clause = 'wc_status.detail @> CAST(:reviewer_json AS JSONB)'
+        clause = 'wc.detail @> CAST(:reviewer_json AS JSONB)'
         filter_clauses.append(clause)
         reviewer_payload = {'reviewers': [{'id': str(filters.reviewer_id)}]}
         params['reviewer_json'] = json.dumps(reviewer_payload)
 
     if filters.workflow_status:
-        filter_clauses.append('wc_status.workflow_status = :workflow_status')
+        filter_clauses.append('wc.workflow_status = :workflow_status')
         params['workflow_status'] = filters.workflow_status
 
     final_joins = '\n'.join(joins.values())
