@@ -151,7 +151,6 @@ async def get_catalog_review_commission_stats(
             reviewer_data ->> 'id',
             reviewer_data ->> 'username';
     """
-    print(SQL)
     result = await session.execute(text(SQL), params)
     return result.mappings().all()
 
