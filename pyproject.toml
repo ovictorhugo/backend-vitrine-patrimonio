@@ -91,6 +91,7 @@ fastexcel = "^0.14.0"
 python-jose = "^3.5.0"
 testcontainers = {extras = ["mailpit"], version = "^4.13.1"}
 apscheduler = "^3.11.0"
+weasyprint = "^66.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"

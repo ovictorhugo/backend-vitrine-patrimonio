@@ -11,7 +11,9 @@ services:
       - "5432:5432"
 
   vitrine_api:
-    image: gleidsoncosta/vitrine-api:latest
+    build: .
+    container_name: vitrine_api
+    #image: gleidsoncosta/vitrine-api:latest
     entrypoint: ./entrypoint.sh
     ports:
       - "5055:8000"
@@ -23,6 +25,7 @@ services:
       - ./.env
     volumes:
       - storage:/app/vitrine/storage
+      - .:/app
 
   vitrine_mailpit:
     image: axllent/mailpit:v1.21
