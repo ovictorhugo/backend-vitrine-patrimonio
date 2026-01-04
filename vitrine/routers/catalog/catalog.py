@@ -1,19 +1,15 @@
 from datetime import datetime
 from http import HTTPStatus
+from io import BytesIO
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-
-
-from pathlib import Path
 from weasyprint import HTML
-from io import BytesIO
-from fastapi.responses import StreamingResponse
-from vitrine.routers import catalog
-from ..utils import render_item_html
 
 from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import (
@@ -37,6 +33,8 @@ from vitrine.schemas import (
     Message,
 )
 from vitrine.services import filter_service
+
+from ..utils import render_item_html
 
 _ASSET_FIELDS = set(FilterAsset.model_fields.keys())
 _NON_JOIN_FIELDS = {'limit', 'offset'}
@@ -174,7 +172,6 @@ async def read_catalog_entries(
     result = await session.scalars(query)
     entries = result.all()
 
-
     return {'catalog_entries': entries}
 
 
@@ -280,7 +277,7 @@ async def delete_catalog_entry(
     return {'message': 'Catalog entry deactivated'}
 
 
-@router.get("/pdf/")
+@router.get('/pdf/')
 async def export_catalog_pdf(
     session: Session,
     filters: Annotated[FilterCatalog, Depends()],
@@ -341,18 +338,17 @@ async def export_catalog_pdf(
     result = await session.scalars(query)
     entries = result.all()
     total = len(entries)
-    print(f"Existe um total de: {total} resultados")
+    print(f'Existe um total de: {total} resultados')
 
-    
-    items_html = "".join(
+    items_html = ''.join(
         render_item_html(entry, idx, total)
         for idx, entry in enumerate(entries)
     )
 
-    
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / "assets" ).resolve()
-    lexend_regular = (ASSETS_DIR / "Lexend-Regular.ttf").resolve().as_uri()
-
+    ASSETS_DIR = (
+        Path(__file__).resolve().parent.parent.parent / 'assets'
+    ).resolve()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Regular.ttf').resolve().as_uri()
 
     full_html = f"""
               <!DOCTYPE html>
@@ -390,13 +386,14 @@ async def export_catalog_pdf(
 
     return StreamingResponse(
         BytesIO(pdf_bytes),
-        media_type="application/pdf",
+        media_type='application/pdf',
         headers={
-            "Content-Disposition": 'inline; filename="catalogo.pdf"',
+            'Content-Disposition': 'inline; filename="catalogo.pdf"',
         },
     )
-  
-@router.get("/pdf/{catalog_id}")
+
+
+@router.get('/pdf/{catalog_id}')
 async def export_catalog_pdf(
     session: Session,
     catalog_id: UUID,
@@ -428,18 +425,15 @@ async def export_catalog_pdf(
             status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
         )
 
-    print(f"Existe 1 resultado")
+    print('Existe 1 resultado')
     print(filters)
 
-    
-    items_html = "".join(
-        render_item_html(db_catalog, 1, 1)
-    )
+    items_html = ''.join(render_item_html(db_catalog, 1, 1))
 
-    
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / "assets" ).resolve()
-    lexend_regular = (ASSETS_DIR / "Lexend-Regular.ttf").resolve().as_uri()
-
+    ASSETS_DIR = (
+        Path(__file__).resolve().parent.parent.parent / 'assets'
+    ).resolve()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Regular.ttf').resolve().as_uri()
 
     full_html = f"""
               <!DOCTYPE html>
@@ -477,9 +471,8 @@ async def export_catalog_pdf(
 
     return StreamingResponse(
         BytesIO(pdf_bytes),
-        media_type="application/pdf",
+        media_type='application/pdf',
         headers={
-            "Content-Disposition": 'inline; filename="catalogo.pdf"',
+            'Content-Disposition': 'inline; filename="catalogo.pdf"',
         },
     )
-    

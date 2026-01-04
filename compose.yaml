@@ -13,7 +13,7 @@ services:
   vitrine_api:
     build: .
     container_name: vitrine_api
-    #image: gleidsoncosta/vitrine-api:latest
+    image: gleidsoncosta/vitrine-api:latest
     entrypoint: ./entrypoint.sh
     ports:
       - "5055:8000"
