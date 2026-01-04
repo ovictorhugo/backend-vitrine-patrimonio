@@ -1,16 +1,14 @@
 from http import HTTPStatus
+from io import BytesIO
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-
 from weasyprint import HTML
-from .utils import render_item_html
-from pathlib import Path
-from io import BytesIO
-from fastapi.responses import StreamingResponse
 
 from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import (
@@ -34,6 +32,8 @@ from vitrine.schemas import (
     Message,
 )
 from vitrine.services import filter_service
+
+from .utils import render_item_html
 
 _ASSET_FIELDS = set(FilterAsset.model_fields.keys())
 _NON_JOIN_FIELDS = {'limit', 'offset'}
@@ -273,7 +273,6 @@ async def remove_item_from_collection(
     return {'message': 'Item removed from the collection successfully.'}
 
 
-
 @router.get(
     '/pdf',
     status_code=HTTPStatus.OK,
@@ -333,18 +332,16 @@ async def list_collection_items(
     entries = [item.catalog for item in items]
     total = len(entries)
 
-    
-    items_html = "".join(
+    items_html = ''.join(
         render_item_html(entry, idx, total)
         for idx, entry in enumerate(entries)
     )
 
-    
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / "assets" ).resolve()
-    lexend_regular = (ASSETS_DIR / "Lexend-Regular.ttf").resolve().as_uri()
+    ASSETS_DIR = (
+        Path(__file__).resolve().parent.parent.parent / 'assets'
+    ).resolve()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Regular.ttf').resolve().as_uri()
 
-
-    # 3) HTML completo (documento)
     full_html = f"""
               <!DOCTYPE html>
               <html lang="pt-br">
@@ -381,8 +378,8 @@ async def list_collection_items(
 
     return StreamingResponse(
         BytesIO(pdf_bytes),
-        media_type="application/pdf",
+        media_type='application/pdf',
         headers={
-            "Content-Disposition": 'inline; filename="catalogo.pdf"',
+            'Content-Disposition': 'inline; filename="catalogo.pdf"',
         },
     )
