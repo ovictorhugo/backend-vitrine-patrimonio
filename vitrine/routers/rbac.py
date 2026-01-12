@@ -2,6 +2,7 @@ from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated, List
 from uuid import UUID
+from pydantic import BaseModel, ConfigDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import Text, cast, func, select
@@ -358,3 +359,49 @@ async def remove_role_from_user(
     return {
         'message': 'Role removed from user and reviewers reassigned if applicable'
     }
+
+
+class RoleWithCount(BaseModel):
+    id: UUID
+    name: str
+    user_count: int
+    model_config = ConfigDict(from_attributes=True)
+
+# Modelo da lista de resposta
+class RoleStatisticsList(BaseModel):
+    roles: List[RoleWithCount]
+
+
+@router.get('/statistics', response_model=RoleStatisticsList)
+async def get_roles_statistics(
+    session: Session,
+):
+    query = (
+        select(Role, func.count(User.id).label('total_users'))
+        # 1. Junta Role com a tabela de associação (UserRole)
+        .outerjoin(UserRole, Role.id == UserRole.role_id)
+        # 2. Junta com a tabela User, MAS apenas se o usuário não estiver deletado
+        .outerjoin(User, (UserRole.user_id == User.id) & (User.deleted_at.is_(None)))
+        # 3. Garante que o Role também não esteja deletado
+        .where(Role.deleted_at.is_(None))
+        # 4. Agrupa pelo ID do Role para contar
+        .group_by(Role.id)
+    )
+
+    result = await session.execute(query)
+    # O resultado vem como uma lista de tuplas: (Role_Instance, int_count)
+    
+    # Montamos a resposta mesclando os dados do objeto Role com a contagem
+    response_data = []
+    for role, count in result:
+        # Pydantic consegue ler atributos do objeto SQLAlchemy
+        # Criamos um dict temporário ou usamos o construtor do Pydantic
+        role_data = {
+            "id": role.id,
+            "name": role.name,
+            "description": role.description, # Ajuste conforme seus campos reais
+            "user_count": count
+        }
+        response_data.append(role_data)
+
+    return {'roles': response_data}

@@ -187,6 +187,7 @@ async def update_transfer_status(
         await session.execute(
             update(WorkflowTransfer)
             .where(WorkflowTransfer.workflow_id == db_transfer.workflow_id)
+            .where(WorkflowTransfer.id != transfer_id)
             .values(status='DECLINED')
         )
         new_workflow_entry = CatalogWorkFlow(
@@ -207,8 +208,8 @@ async def update_transfer_status(
             User, new_workflow_entry.detail['transfer_request']['user']['id']
         )
 
-        await mail_service.send_email(mail, catalog_owner, None)
-        await mail_service.send_email(mail, requester, None)
+        await mail_service.send_email(mail, catalog_owner, 'Transferencia_1')
+        await mail_service.send_email(mail, requester, 'Transferencia_2')
 
         session.add(new_workflow_entry)
 
@@ -216,3 +217,21 @@ async def update_transfer_status(
     await session.commit()
     await session.refresh(db_transfer)
     return db_transfer
+
+
+
+
+@router.get(
+    '/mail',
+    status_code=HTTPStatus.OK,
+)
+async def mail_test(
+    session: Session,
+    mail: Mail,
+):
+    catalog_owner = await session.get(User, '3fa85f64-5717-4562-b3fc-2c963f66afa6')
+    requester = catalog_owner
+    await mail_service.send_email(mail, catalog_owner, 'Transferencia_1')
+    await mail_service.send_email(mail, requester, 'Transferencia_2')
+
+    return {"msg":"Tudo ok"}

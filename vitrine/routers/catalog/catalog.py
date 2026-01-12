@@ -1,3 +1,4 @@
+import gc
 from datetime import datetime
 from http import HTTPStatus
 from io import BytesIO
@@ -7,7 +8,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import select,func
 from sqlalchemy.orm import selectinload
 from weasyprint import HTML
 
@@ -276,123 +278,6 @@ async def delete_catalog_entry(
 
     return {'message': 'Catalog entry deactivated'}
 
-
-@router.get('/pdf/')
-async def export_catalog_pdf(
-    session: Session,
-    filters: Annotated[FilterCatalog, Depends()],
-):
-    query = select(Catalog).where(Catalog.deleted_at.is_(None))
-
-    asset_join_needed = any(
-        getattr(filters, field_name) is not None
-        for field_name in ASSET_JOIN_TRIGGER_FIELDS
-    )
-
-    query = filter_service.apply_catalog_filters(query, filters)
-
-    if asset_join_needed:
-        query = query.join(Catalog.asset)
-        query = filter_service.apply_asset_filters(query, filters)
-
-    query = query.options(
-        selectinload(Catalog.images),
-        selectinload(Catalog.files),
-        selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user).options(
-                selectinload(User.system_identity).options(
-                    selectinload(SystemIdentity.legal_guardian)
-                ),
-                selectinload(User.user_role_associations).selectinload(
-                    UserRole.role
-                ),
-            ),
-            selectinload(CatalogWorkFlow.transfer_requests),
-        ),
-        selectinload(Catalog.location)
-        .selectinload(Location.location_inventories)
-        .selectinload(LocationInventory.inventory),
-    )
-
-    if filters.user_id:
-        query = query.where(Catalog.user_id == filters.user_id)
-
-    if filters.role_id:
-        users_with_role = (
-            select(UserRole.user_id)
-            .join(Role, Role.id == UserRole.role_id)
-            .where(
-                Role.id == filters.role_id,
-                UserRole.deleted_at.is_(None),
-                Role.deleted_at.is_(None),
-            )
-            .distinct()
-            .cte('users_with_role')
-        )
-        query = query.join(
-            users_with_role, Catalog.user_id == users_with_role.c.user_id
-        )
-
-    query = query.offset(filters.offset).limit(filters.limit)
-
-    result = await session.scalars(query)
-    entries = result.all()
-    total = len(entries)
-    print(f'Existe um total de: {total} resultados')
-
-    items_html = ''.join(
-        render_item_html(entry, idx, total)
-        for idx, entry in enumerate(entries)
-    )
-
-    ASSETS_DIR = (
-        Path(__file__).resolve().parent.parent.parent / 'assets'
-    ).resolve()
-    lexend_regular = (ASSETS_DIR / 'Lexend-Regular.ttf').resolve().as_uri()
-
-    full_html = f"""
-              <!DOCTYPE html>
-              <html lang="pt-br">
-              <head>
-                  <meta charset="utf-8" />
-                  <title>Relatório</title>
-                  <style>
-                      @page {{
-                        size: A4;
-                        margin: 0; /* Remove margens do PDF para controlarmos no HTML */
-                      }}
-                      
-                      html, body {{
-                          margin: 0;
-                          padding: 0;
-                          height: 100%; /* Garante altura total */
-                          background-color: #ffffff;
-                          font-family: "Lexend","Lexend-Bold", sans-serif;
-                          font-size: 10px;
-                      }}
-                      @font-face {{
-                                font-family: Lexend;
-                                src: url({lexend_regular})
-                            }}                      
-                      img {{ max-width: 100%; }}
-                  </style>
-              </head>
-              <body>
-                  {items_html}
-              </body>
-              </html>
-        """
-    pdf_bytes: bytes = HTML(string=full_html, encoding='utf-8').write_pdf()
-
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
-        media_type='application/pdf',
-        headers={
-            'Content-Disposition': 'inline; filename="catalogo.pdf"',
-        },
-    )
-
-
 @router.get('/pdf/{catalog_id}')
 async def export_catalog_pdf(
     session: Session,
@@ -476,3 +361,210 @@ async def export_catalog_pdf(
             'Content-Disposition': 'inline; filename="catalogo.pdf"',
         },
     )
+
+
+def render_document_batch(html_content: str):
+    """
+    Renderiza o HTML e retorna o OBJETO Document do WeasyPrint (na memória),
+    em vez de escrever um arquivo em disco.
+    """
+    return HTML(string=html_content, encoding='utf-8').render()
+
+
+@router.get('/pdf/')
+async def export_catalog_pdf(
+    session: Session,
+    filters: Annotated[FilterCatalog, Depends()],
+):
+    query = select(Catalog).where(Catalog.deleted_at.is_(None))
+
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
+    )
+
+    query = filter_service.apply_catalog_filters(query, filters)
+
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
+
+    query = query.options(
+        selectinload(Catalog.images),
+        selectinload(Catalog.files),
+        selectinload(Catalog.workflow_history).options(
+            selectinload(CatalogWorkFlow.user).options(
+                selectinload(User.system_identity).options(
+                    selectinload(SystemIdentity.legal_guardian)
+                ),
+                selectinload(User.user_role_associations).selectinload(
+                    UserRole.role
+                ),
+            ),
+            selectinload(CatalogWorkFlow.transfer_requests),
+        ),
+        selectinload(Catalog.location)
+        .selectinload(Location.location_inventories)
+        .selectinload(LocationInventory.inventory),
+    )
+
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
+
+    if filters.role_id:
+        users_with_role = (
+            select(UserRole.user_id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                Role.id == filters.role_id,
+                UserRole.deleted_at.is_(None),
+                Role.deleted_at.is_(None),
+            )
+            .distinct()
+            .cte('users_with_role')
+        )
+        query = query.join(
+            users_with_role, Catalog.user_id == users_with_role.c.user_id
+        )
+
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    entries = result.all()
+    total_items = len(entries)
+    print(f'Existe um total de: {total_items} resultados')
+
+    BATCH_SIZE = 25 
+    ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Regular.ttf').resolve().as_uri()
+
+    main_document = None
+
+    try:
+        for offset in range(0, total_items, BATCH_SIZE):
+            
+            # --- Query do Lote (Igual) ---
+            query = select(Catalog).where(Catalog.deleted_at.is_(None))
+            query = filter_service.apply_catalog_filters(query, filters)
+            
+            if asset_join_needed:
+                query = query.join(Catalog.asset)
+                query = filter_service.apply_asset_filters(query, filters)
+
+            query = query.options(
+                selectinload(Catalog.images),
+                selectinload(Catalog.files),
+                selectinload(Catalog.workflow_history).options(
+                    selectinload(CatalogWorkFlow.user).options(
+                        selectinload(User.system_identity).options(
+                            selectinload(SystemIdentity.legal_guardian)
+                        ),
+                        selectinload(User.user_role_associations).selectinload(UserRole.role),
+                    ),
+                    selectinload(CatalogWorkFlow.transfer_requests),
+                ),
+                selectinload(Catalog.location)
+                .selectinload(Location.location_inventories)
+                .selectinload(LocationInventory.inventory),
+            )
+
+            if filters.user_id:
+                query = query.where(Catalog.user_id == filters.user_id)
+
+            if filters.role_id:
+                users_with_role = (
+                    select(UserRole.user_id)
+                    .join(Role, Role.id == UserRole.role_id)
+                    .where(
+                        Role.id == filters.role_id,
+                        UserRole.deleted_at.is_(None),
+                        Role.deleted_at.is_(None),
+                    )
+                    .distinct()
+                    .cte('users_with_role')
+                )
+                query = query.join(users_with_role, Catalog.user_id == users_with_role.c.user_id)
+
+            query = query.offset(offset).limit(BATCH_SIZE)
+
+            result = await session.scalars(query)
+            entries = result.unique().all()
+            
+            if not entries:
+                break
+
+            # Renderiza HTML
+            items_html = ''.join(
+                render_item_html(entry, offset + idx, total_items)
+                for idx, entry in enumerate(entries)
+            )
+
+            full_html = f"""
+                <!DOCTYPE html>
+                <html lang="pt-br">
+                <head>
+                    <meta charset="utf-8" />
+                    <style>
+                        @page {{
+                            size: A4;
+                            margin: 0;
+                            counter-increment: page;
+                        }}
+                        body {{
+                            counter-reset: page {offset};
+                        }}
+                        html, body {{
+                            margin: 0; padding: 0; background-color: #ffffff;
+                            font-family: "Lexend", sans-serif; font-size: 10px;
+                        }}
+                        @font-face {{ font-family: Lexend; src: url({lexend_regular}); }}
+                        img {{ max-width: 100%; }}
+                    </style>
+                </head>
+                <body>
+                    {items_html}
+                </body>
+                </html>
+            """
+
+            # GERA O DOCUMENTO NA MEMÓRIA (Rodando em thread separada para não travar)
+            batch_document = await run_in_threadpool(render_document_batch, full_html)
+            
+            # --- MÁGICA DO WEASYPRINT AQUI ---
+            if main_document is None:
+                # O primeiro lote vira o documento mestre
+                main_document = batch_document
+            else:
+                # Os lotes seguintes apenas injetam suas páginas no mestre
+                main_document.pages.extend(batch_document.pages)
+
+            # Limpeza agressiva
+            del entries
+            del items_html
+            del full_html
+            del batch_document # Já copiamos as páginas, podemos deletar o objeto
+            gc.collect()
+
+        # 3. Escrita final
+        final_buffer = BytesIO()
+        
+        # O método write_pdf agora grava o mestre (com todas as páginas acumuladas)
+        if main_document:
+            # write_pdf também pode ser pesado, rodamos em threadpool
+            await run_in_threadpool(main_document.write_pdf, final_buffer)
+        else:
+            raise HTTPException(status_code=404, detail="Erro na geração")
+            
+        final_buffer.seek(0)
+
+        return StreamingResponse(
+            final_buffer,
+            media_type='application/pdf',
+            headers={
+                'Content-Disposition': 'inline; filename="catalogo_completo.pdf"',
+            },
+        )
+    
+    except Exception as e:
+        print(f"Erro PDF: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao gerar PDF")
