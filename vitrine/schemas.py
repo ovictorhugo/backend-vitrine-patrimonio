@@ -763,4 +763,54 @@ class CatalogStatisticsFilters(BaseModel):
     asset_status: Optional[UUID] = Field(default=None)
     csv_code: Optional[str] = Field(default=None)
     role_id: Optional[str] = Field(default=None)
-    user_id: Optional[str] = Field(default=None)
+    user_id: Optional[str] = Field(default=None)    
+
+class TransferCreate(BaseModel):
+    owner: UUID
+    new_guardian: UUID
+    catalog_id: UUID
+    location_id: UUID
+
+class UserSignerSimple(BaseModel):
+    id: UUID
+    username: str
+    email: EmailStr
+    provider: Optional[str] = Field(default=None)
+    linkedin: Optional[str] = Field(default=None)
+    lattes_id: Optional[str] = Field(default=None)
+    orcid: Optional[str] = Field(default=None)
+    ramal: Optional[str] = Field(default=None)
+    photo_url: Optional[str] = Field(default=None)
+    background_url: Optional[str] = Field(default=None)
+    matricula: Optional[str] = Field(default=None)
+    verify: bool | None = Field(default=None)
+    institution_id: Optional[UUID] = Field(default=None)
+    model_config = ConfigDict(from_attributes=True)
+
+class CatalogSimple(BaseModel):
+    id: UUID
+    asset: AssetPublic
+    model_config = ConfigDict(from_attributes=True)
+
+class TransferSignerPublic(BaseModel):
+    id: UUID
+    isSigned: bool
+    signedAt: Optional[datetime] = None
+    user: Optional[UserSignerSimple] = None 
+    token: UUID
+
+    model_config = ConfigDict(from_attributes=True)
+
+class TransferDocumentSchema(BaseModel):
+    id: UUID
+    status: str
+    current_step: int
+    file_path: Optional[str] = None
+    catalog: CatalogSimple
+    location: LocationPublic
+    signers: List[TransferSignerPublic]
+
+    model_config = ConfigDict(from_attributes=True)
+
+class PendingDocumentSignsResponse(BaseModel):
+    pending: List[TransferDocumentSchema]

@@ -313,12 +313,12 @@ async def export_catalog_pdf(
     print('Existe 1 resultado')
     print(filters)
 
-    items_html = ''.join(render_item_html(db_catalog, 1, 1))
+    items_html = ''.join(render_item_html(db_catalog, 0, 1))
 
     ASSETS_DIR = (
         Path(__file__).resolve().parent.parent.parent / 'assets'
     ).resolve()
-    lexend_regular = (ASSETS_DIR / 'Lexend-Regular.ttf').resolve().as_uri()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
 
     full_html = f"""
               <!DOCTYPE html>
@@ -329,15 +329,15 @@ async def export_catalog_pdf(
                   <style>
                       @page {{
                         size: A4;
-                        margin: 0; /* Remove margens do PDF para controlarmos no HTML */
+                        margin: 0;
                       }}
                       
                       html, body {{
                           margin: 0;
                           padding: 0;
-                          height: 100%; /* Garante altura total */
+                          height: 100%;
                           background-color: #ffffff;
-                          font-family: "Lexend","Lexend-Bold", sans-serif;
+                          font-family: "Lexend", sans-serif;
                           font-size: 10px;
                       }}
                       @font-face {{
@@ -436,7 +436,7 @@ async def export_catalog_pdf(
 
     BATCH_SIZE = 25 
     ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
-    lexend_regular = (ASSETS_DIR / 'Lexend-Regular.ttf').resolve().as_uri()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
 
     main_document = None
 

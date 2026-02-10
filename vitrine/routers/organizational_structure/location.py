@@ -143,29 +143,31 @@ async def read_my_locations(
     query = (
         select(Location)
         .join(LegalGuardian, Location.legal_guardian_id == LegalGuardian.id)
-        .join(
-            SystemIdentity,
-            LegalGuardian.id == SystemIdentity.legal_guardian_id,
-        )
         .where(
-            SystemIdentity.user_id == current_user.id,
+            LegalGuardian.user_id == current_user.id, # Link direto
             Location.deleted_at.is_(None),
-        )
-        .options(
-            selectinload(Location.location_inventories).selectinload(
-                LocationInventory.inventory
-            )
         )
     )
 
     if filters.q:
-        prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
-        ts_query = func.to_tsquery('portuguese', prefix_query)
-        query = query.where(Location.tsv.op('@@')(ts_query))
+        # 1. Sanitização: Remove caracteres especiais que quebram o tsquery (& | ! ( ) < >)
+        # Mantém apenas letras, números e espaços.
+        clean_q = re.sub(r'[^\w\s]', '', filters.q)
+        
+        if clean_q.strip():
+            # Cria a query apenas se sobrou algo após a limpeza
+            prefix_query = ' & '.join(word + ':*' for word in clean_q.split())
+            ts_query = func.to_tsquery('portuguese', prefix_query)
+            query = query.where(Location.tsv.op('@@')(ts_query))
 
     if filters.sector_id:
         query = query.where(Location.sector_id == filters.sector_id)
 
+    # 2. Correção Crítica: Ordenação determinística para paginação
+    # Ordene por ID ou Nome para garantir que as páginas não "pulem" itens
+    query = query.order_by(Location.id.desc())
+
+    # Aplica paginação
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)

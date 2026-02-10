@@ -1345,3 +1345,63 @@ class SystemSetting(AuditMixin):
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
+
+from uuid import UUID, uuid4
+from datetime import datetime
+from sqlalchemy import ForeignKey, Index, column, select
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+@table_registry.mapped_as_dataclass
+class TransferDocument(AuditMixin):
+    __tablename__ = 'transfer_documents'
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+    
+    catalog_id: Mapped[UUID] = mapped_column(ForeignKey("catalog.id"), nullable=False)
+    catalog: Mapped["Catalog"] = relationship(init=False)
+    location_id: Mapped[UUID] = mapped_column(ForeignKey("locations.id"), nullable=False)
+    location: Mapped["Location"] = relationship(init=False)
+    signers: Mapped[list["TransferSigner"]] = relationship(
+        init=False, 
+        back_populates="transfer_document",
+        cascade="all, delete-orphan"
+    )
+    
+    file_path: Mapped[str] = mapped_column(nullable=True)
+    current_step: Mapped[int] = mapped_column(default=0)
+    status: Mapped[str] = mapped_column(default="PENDING", index=True)
+
+
+@table_registry.mapped_as_dataclass
+class TransferSigner(AuditMixin):
+    __tablename__ = 'transfer_signers'
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+
+    transfer_document_id: Mapped[UUID] = mapped_column(ForeignKey("transfer_documents.id"), nullable=False)
+    transfer_document: Mapped["TransferDocument"] = relationship(
+        init=False,
+        back_populates="signers"
+    )
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user: Mapped["User"] = relationship(
+        init=False, 
+        foreign_keys=[user_id]
+    )
+    signedAt: Mapped[datetime | None] = mapped_column(nullable=True)
+    isSigned: Mapped[bool] = mapped_column(default=False)
+    
+    token: Mapped[UUID] = mapped_column(init=False, insert_default=uuid4, index=True, nullable=False)
+
+    __table_args__ = (
+        Index(
+            'ix_uq_transfer_signers_token_active',
+            'token',
+            unique=True,
+            postgresql_where=(column('deleted_at').is_(None)),
+        ),
+    )

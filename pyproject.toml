@@ -6,7 +6,7 @@ authors = [
     {name = "gmcosta",email = "geu_costa@outlook.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.13,<4.0"
+requires-python = ">=3.12,<4.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -92,6 +92,7 @@ python-jose = "^3.5.0"
 testcontainers = {extras = ["mailpit"], version = "^4.13.1"}
 apscheduler = "^3.11.0"
 weasyprint = "^66.0"
+pyhanko = {extras = ["crypto"], version = "^0.32.0"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"

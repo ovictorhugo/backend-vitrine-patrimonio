@@ -2,6 +2,158 @@ from typing import Optional, Tuple
 import html as html_lib
 from pathlib import Path
 import os
+from io import BytesIO
+
+from pyhanko.sign import signers, fields
+from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+from pyhanko.sign.fields import SigFieldSpec 
+
+from pyhanko.pdf_utils.reader import PdfFileReader
+from pyhanko.sign.validation import (
+    async_validate_pdf_signature, DocumentSecurityStore, 
+)
+from pyhanko.sign.general import load_cert_from_pemder
+from pyhanko_certvalidator import ValidationContext
+
+#KEY_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
+#CERT_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
+
+KEY_PATH = "local_key.pem"
+CERT_PATH = "local_cert.pem"
+
+
+async def seal_pdf_digitally(pdf_bytes: bytes) -> bytes:
+    """
+    Recebe o PDF em bytes e aplica a assinatura digital de forma ASSÍNCRONA.
+    """
+    
+    # 1. Resolver caminhos
+    # Ajuste o .parent conforme a profundidade da sua pasta utils.py
+    base_folder = (Path(__file__).resolve().parent.parent.parent / "certs").resolve()
+    full_key_path = base_folder / KEY_PATH
+    full_cert_path = base_folder / CERT_PATH
+    
+    if not full_key_path.exists() or not full_cert_path.exists():
+        print(f"⚠️ AVISO: Certificados não encontrados. PDF sem assinatura.")
+        return pdf_bytes
+
+    try:
+        # 2. Carregar o Assinador
+        signer = signers.SimpleSigner.load(
+            key_file=str(full_key_path),
+            cert_file=str(full_cert_path),
+        )
+
+        pdf_buffer_input = BytesIO(pdf_bytes)
+        w = IncrementalPdfFileWriter(pdf_buffer_input)
+
+        # 3. Adicionar o campo de assinatura
+        field_spec = SigFieldSpec(sig_field_name='SignatureUFMG')
+        
+        # --- CORREÇÃO AQUI ---
+        # Usamos 'fields' diretamente, e não 'signers.fields'
+        fields.append_signature_field(w, field_spec)
+        # ---------------------
+
+        pdf_buffer_output = BytesIO()
+
+        # 4. Configurar Metadados
+        meta = signers.PdfSignatureMetadata(
+            field_name='SignatureUFMG',
+            reason='Conferido pelo Sistema Vitrine de Patrimônio',
+            location='Universidade Federal de Minas Gerais',
+            contact_info='https://sistemapatrimonio.eng.ufmg.br'
+        )
+        
+        # 5. Instanciar o PdfSigner
+        pdf_signer = signers.PdfSigner(
+            signature_meta=meta,
+            signer=signer,
+        )
+
+        # 6. Assinar de forma assíncrona
+        await pdf_signer.async_sign_pdf(
+            w, 
+            output=pdf_buffer_output
+        )
+
+        return pdf_buffer_output.getvalue()
+
+    except Exception as e:
+        # Imprime o traceback completo para facilitar o debug se der outro erro
+        import traceback
+        traceback.print_exc()
+        print(f"❌ Erro crítico ao assinar PDF: {e}")
+        return pdf_bytes
+    
+
+async def verify_pdf_signature(pdf_bytes: bytes) -> dict:
+    """
+    Verifica se o PDF possui uma assinatura válida feita com o certificado do servidor.
+    """
+    base_folder = (Path(__file__).resolve().parent.parent.parent / "certs").resolve()
+    full_cert_path = base_folder / CERT_PATH
+
+    if not full_cert_path.exists():
+        return {
+            "valid": False, 
+            "message": "Certificado raiz para validação não encontrado no servidor."
+        }
+
+    try:
+        # 1. Carrega o PDF
+        root = PdfFileReader(BytesIO(pdf_bytes))
+        
+        # 2. Verifica se existem assinaturas
+        if not root.embedded_signatures:
+            return {
+                "valid": False, 
+                "message": "O arquivo não possui assinaturas digitais."
+            }
+
+        # 3. Configura o Contexto de Validação
+        root_cert = load_cert_from_pemder(str(full_cert_path))
+        vc = ValidationContext(trust_roots=[root_cert])
+
+        # 4. Carrega o Document Security Store (DSS) corretamente
+        # CORREÇÃO AQUI: Instanciamos a classe em vez de acessar atributo
+        dss = DocumentSecurityStore(root)
+
+        # 5. Valida a última assinatura
+        sig_status = await async_validate_pdf_signature(
+            root.embedded_signatures[-1], 
+            vc,
+            dss
+        )
+
+        # 6. Analisa o resultado
+        is_intact = sig_status.intact
+        is_trusted = sig_status.valid
+
+        if is_intact and is_trusted:
+            signer_name = sig_status.signing_cert.subject.human_friendly
+            return {
+                "valid": True,
+                "message": "Assinatura Válida e Íntegra.",
+                "signer": signer_name,
+                "timestamp": sig_status.validation_time.isoformat() if sig_status.validation_time else None
+            }
+        elif is_intact and not is_trusted:
+            return {
+                "valid": False,
+                "message": "Documento íntegro, mas certificado não confiável (assinatura desconhecida ou auto-assinada)."
+            }
+        else:
+             return {
+                "valid": False,
+                "message": "Assinatura INVÁLIDA ou documento alterado."
+            }
+
+    except Exception as e:
+        print(f"Erro na validação: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"valid": False, "message": "Erro ao processar arquivo PDF."}
 
 
 def render_item_html(item, index: int, total_items: int) -> str:
@@ -654,13 +806,13 @@ def render_item_html(item, index: int, total_items: int) -> str:
     html = f"""
     <div
         style="
-            position: relative;       /* Cria o contexto para o rodapé absoluto */
+            position: relative;       
             width: 100%;
-            height: 297mm;            /* Altura EXATA da folha A4 */
+            height: 100%;            
             box-sizing: border-box;
             background-color: #f9fafb;
-            page-break-after: always; /* Garante que o próximo item vá para outra página */
-            overflow: hidden;         /* Previne scrollbars indesejadas */
+            page-break-after: always; 
+            overflow: hidden;         
         "
     >
         
@@ -804,6 +956,474 @@ def render_item_html(item, index: int, total_items: int) -> str:
     """
     return html
 
+
+def render_transfer_item(item,signers,location) -> str:
+    """
+    Gera um HTML estilizado para um item do catálogo, inspirado no template do front.
+    Cada item ocupa 1 página (page-break-after: always).
+    """
+
+    # Nome do material
+    material_name = item.asset.material.material_name
+    material_name = html_lib.escape(material_name)
+
+    # Descrição do bem
+    asset_description = item.asset.asset_description
+    asset_description = html_lib.escape(asset_description)
+
+    # Código + dígito verificador
+    code_concat = ""
+    try:
+        asset_code = item.asset.asset_code or ""
+        asset_check_digit = item.asset.asset_check_digit or ""
+        code_concat = asset_code + "-" + asset_check_digit
+    except AttributeError:
+        code_concat = getattr(item, "asset_code_with_digit", "") or ""
+    asset_code_with_digit = html_lib.escape(code_concat or "Sem código")
+
+    # ATM
+    atm_number = None
+    try:
+        atm_number = item.asset.atm_number
+    except AttributeError:
+        atm_number = getattr(item, "atm_number", None)
+    atm_number_esc = html_lib.escape(atm_number) if atm_number else ""
+
+    # Responsável / curador
+    legal_guardian_name = item.asset.legal_guardian.legal_guardians_name
+    legal_guardian_name_esc = html_lib.escape(legal_guardian_name) if legal_guardian_name else ""
+
+    # Possui plaqueta?
+    is_official = item.asset.is_official
+    if is_official is None:
+        plaqueta_text = " -"
+        bar_color = "#d4d4d8"
+    elif is_official:
+        plaqueta_text = " Sim"
+        bar_color = "#16a34a"
+    else:
+        plaqueta_text = " Não"
+        bar_color = "#f97316"
+
+   # Anunciante
+    announcer_username = getattr(item, "announcer_username", None)
+    announcer_username_esc = html_lib.escape(announcer_username) if announcer_username else ""
+
+    # ATM (Simples, mantido quase igual, apenas garantindo block model)
+    if atm_number_esc:
+        atm_html = f"""
+            <div style="margin-bottom: 5px;">
+                <p
+                  style="
+                    margin: 0;
+                    font-weight: 600;
+                    font-size: 11px;
+                  " > ATM: {atm_number_esc}
+                </p>
+            </div>
+        """
+    else:
+        atm_html = ""
+
+    if legal_guardian_name_esc:
+        legal_guardian_html = f"""
+            <div
+              style="
+                margin-top: 4px;
+                margin-left: 8px;
+                font-size: 0; 
+              "
+            >            
+              <div style="display: inline-block; vertical-align: middle; font-size: 12px; color: #000;">
+                  <span>{legal_guardian_name_esc}</span>
+              </div>
+            </div>
+        """
+    else:
+        legal_guardian_html = ""
+
+    # ---------- IMAGENS (Refatorado para Inline-Block ao invés de Grid/Flex) ----------
+
+    IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
+    images = getattr(item, "images", []) or []
+    image_cells = []
+
+    # Processamento das imagens (Limita a 4 para manter o grid 2x2)
+    for img in images[:4]:
+        file_path = getattr(img, "file_path", None)
+        has_image = False
+        src_esc = ""
+
+        # Verifica arquivo
+        if file_path:
+            filename = os.path.basename(file_path)
+            full_path = (IMAGES_DIR / filename).resolve()
+            if full_path.is_file():
+                has_image = True
+                src = full_path.as_uri()
+                src_esc = html_lib.escape(src)
+
+        # Estilo base da CÉLULA (Item do Grid)
+        # Nota: Não definimos width nem margin aqui. O Grid Pai controla isso.
+        cell_style = """
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            height: 140px;
+            overflow: hidden; 
+            position: relative;
+            box-sizing: border-box;
+        """
+
+        if has_image:
+            cell = f"""
+            <div style="{cell_style}">
+              <img
+                src="{src_esc}"
+                style="
+                  display: block;
+                  width: 100%;
+                  height: 100%;
+                  object-fit: cover;
+                  object-position: center;
+                "
+              />
+            </div>
+            """
+        else:
+            # Placeholder para imagem ausente
+            # Usamos Flexbox DENTRO da célula apenas para centralizar o texto de erro
+            label = "sem imagem (arquivo não encontrado)" if file_path else "sem imagem"
+            cell = f"""
+            <div style="{cell_style} display: flex; align-items: center; justify-content: center; text-align: center;">
+              <span style="font-size: 10px; color: #9ca3af; padding: 0 10px;">
+                {label}
+              </span>
+            </div>
+            """
+
+        image_cells.append(cell)
+
+    # Container das imagens usando CSS GRID
+    # grid-template-columns: 1fr 1fr -> Cria 2 colunas de larguras iguais
+    images_html = f"""
+        <div style="
+            display: grid;
+            grid-template-columns: 1fr 1fr; 
+            gap: 8px;
+            width: 100%;
+            margin-bottom:8px;
+        ">
+            {"".join(image_cells)}
+        </div>
+    """ if image_cells else """
+        <div style="padding: 10px; text-align: center; background: #f9fafb; border-radius: 6px;">
+          <span style="font-size: 10px; color: #9ca3af;">sem imagens</span>
+        </div>
+    """
+
+
+    # ------------- Assinaturas -----------------------
+
+    signature_cells = []
+
+    for signer in signers:
+        
+      if(signer.user_id):
+        role = signer.user.username
+        name = signer.user.email
+      else:
+        role = "Chefe de departamento não identificado"
+        name = ""
+
+      if(signer.signedAt):
+        date_val = signer.signedAt
+      else:
+        date_val = 0 
+        
+      # Lógica de Estado: Assinado vs Pendente
+      if date_val:
+          # ASSINADO: Cor Verde (ou a Azul #559FB8 que você usava), Data preenchida
+          bar_color = "#10B981" # Verde esmeralda para sucesso
+          # bar_color = "#559FB8" # Azul original (opcional)
+          date_html = f'<span style="color: #111827;">{date_val}</span>'
+          status_label = "Data:"
+      else:
+          # NÃO ASSINADO: Cor Vermelha, Data em branco
+          bar_color = "#EF4444" # Vermelho
+          date_html = '<span style="color: #9ca3af;">(aguardando assinatura)</span>'
+          status_label = "Data:"
+
+      cell = f"""
+      <div
+          style="
+            display: table;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            /* Removemos margin-bottom aqui pois o gap do grid cuida disso */
+          "
+      >
+          <div
+            style="
+              display: table-cell;
+              width: 8px;
+              background-color: {bar_color};
+              border: 1px solid #e5e7eb;
+              border-right: 0;
+              border-radius: 6px 0 0 6px;
+              vertical-align: top;
+            "
+          ></div>
+
+          <div
+            style="
+              display: table-cell;
+              vertical-align: top;
+              background-color: #ffffff;
+              border: 1px solid #e5e7eb;
+              border-radius: 0 6px 6px 0;
+              padding: 10px;
+            "
+          >
+              <p
+                style="
+                  margin: 0 0 4px 0;
+                  font-weight: 700;
+                  font-size: 11px;
+                  color: #374151;
+                  text-transform: uppercase;
+                "
+              >
+                {role}
+              </p>
+              
+              <div style="font-size: 12px; color: #111827; margin-bottom: 4px; font-weight: 500;">
+                  {name}
+              </div>
+
+              <div
+                style="
+                  font-size: 10px;
+                  color: #6b7280;
+                  line-height: 1.4;
+                  border-top: 1px dashed #e5e7eb;
+                  padding-top: 4px;
+                "
+              >
+                <strong>{status_label}</strong> {date_html}
+              </div>
+          </div>
+      </div>
+      """
+      signature_cells.append(cell)
+
+    # 2. Container GRID 2x2
+    signatures_html = f"""
+        <div style="
+            display: grid;
+            grid-template-columns: 1fr 1fr; 
+            gap: 12px;
+            width: 100%;
+            margin-top: 20px;
+            page-break-inside: avoid;
+        ">
+            {"".join(signature_cells)}
+        </div>
+    """
+
+
+    # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
+
+    ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
+    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
+    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+
+    html = f"""
+    <div
+        style="
+            position: relative;
+            width: 100%;
+            height: 297mm;
+            box-sizing: border-box;
+            background-color: #f9fafb;
+            overflow: hidden;
+        "
+    >
+        <table
+            style="
+                width: 100%;
+                border-collapse: collapse;
+                margin: 0;
+                padding: 40px;
+            "
+        >
+            <tr>
+                <td style="width: 150px; padding: 32px 48px 12px 48px; vertical-align: middle;">
+                    <img src="{SP_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
+                </td>
+                <td style="width: 150px; padding: 32px 48px 12px 48px; text-align: right; vertical-align: middle;">
+                    <img src="{EE_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
+                </td>
+            </tr>
+        </table>
+
+        <div style="padding: 0 52px 36px 52px; padding-bottom: 60px;">
+            <section style="display: block; width: 100%; margin-bottom: 20px;">
+                
+                <h2
+                  style="
+                    font-size: 20px;
+                    font-weight: 700;
+                    margin: 0 0 15px 0;
+                    text-transform: uppercase;
+                    color: #111827;
+                    text-align: center;
+                  "
+                >
+                  Transferência Interna de Material Permanente<br>Escola de Engenharia
+                </h2>
+                
+                <div style="
+                    background-color: #fffbeb; 
+                    border: 1px solid #fcd34d; 
+                    color: #92400e; 
+                    padding: 10px; 
+                    border-radius: 6px; 
+                    font-size: 10px; 
+                    margin-bottom: 15px;
+                ">
+                   <strong style="color: #78350f;">ORIENTAÇÕES IMPORTANTES:</strong><br>
+                    1. As assinaturas devem ser realizadas exclusivamente através do <strong>Sistema Patrimônio</strong>.<br>
+                    2. Todas as partes envolvidas já foram devidamente notificadas por e-mail.<br>
+                    3. Assim que todas as assinaturas forem registradas, um novo e-mail será enviado a todas as partes contendo a versão definitiva deste documento.
+                </div>
+
+                <div style="
+                    background-color: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    margin-bottom: 15px;
+                    overflow: hidden;
+                ">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                        <thead>
+                            <tr style="background-color: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
+                                <th style="padding: 8px 12px; text-align: left; width: 15%; color: #374151; font-weight: 600;">CÓDIGO</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 30%; color: #374151; font-weight: 600;">NOME DO BEM</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 55%; color: #374151; font-weight: 600;">DESCRIÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="padding: 10px 12px; vertical-align: top; color: #111827;">
+                                    {asset_code_with_digit}
+                                </td>
+                                <td style="padding: 10px 12px; vertical-align: top; color: #111827;">
+                                    {material_name}
+                                </td>
+                                <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
+                                    {asset_description}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+
+                <section style="display: block; width: 100%; margin-top: 10px;">
+                {images_html}
+                </section>
+
+                <table style="width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 15px;">
+                    <tr>
+                        <td style="width: 50%; vertical-align: top; padding-right: 6px;">
+                            <div style="
+                                background-color: #ffffff;
+                                border: 1px solid #e5e7eb;
+                                border-radius: 6px;
+                                padding: 12px;
+                            ">
+                                <h3 style="margin: 0 0 10px 0; font-size: 11px; font-weight: 700; color: #111827; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;">
+                                    LOCAL DE ORIGEM DO BEM
+                                </h3>
+                                
+                                <table style="width: 100%; font-size: 10px; color: #374151; border-collapse: collapse;">
+                                    <tr><td style="padding: 4px 0;"><strong>Guardião: </strong> {signers[0].user.username}</td></tr>
+                                    <tr><td style="padding: 4px 0;"><strong>Unidade: {item.location.sector.agency.agency_name}</strong></td></tr>
+                                    <tr><td style="padding: 4px 0;"><strong>Depto./Setor: </strong> {item.location.sector.sector_name}</td></tr>
+                                    <tr><td style="padding: 4px 0;"><strong>Sala: </strong>{item.location.location_name}</td></tr>
+                                    </table>
+                            </div>
+                        </td>
+
+                        <td style="width: 50%; vertical-align: top; padding-left: 6px;">
+                            <div style="
+                                background-color: #ffffff;
+                                border: 1px solid #e5e7eb;
+                                border-radius: 6px;
+                                padding: 12px;
+                            ">
+                                <h3 style="margin: 0 0 10px 0; font-size: 11px; font-weight: 700; color: #111827; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;">
+                                    LOCAL DE DESTINO DO BEM
+                                </h3>
+
+                                <table style="width: 100%; font-size: 10px; color: #374151; border-collapse: collapse;">
+                                    <tr><td style="padding: 4px 0;"><strong>Guardião: </strong> {signers[1].user.username}</td></tr>
+                                    <tr><td style="padding: 4px 0;"><strong>Unidade: {location.sector.agency.agency_name}</strong></td></tr>
+                                    <tr><td style="padding: 4px 0;"><strong>Depto./Setor: </strong> {location.sector.sector_name}</td></tr>
+                                    <tr><td style="padding: 4px 0;"><strong>Sala: </strong>{location.location_name}</td></tr>
+                                    </table>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </section>
+                {signatures_html}
+        </div>
+
+        
+
+
+        <div 
+            style="
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 50px;
+                padding: 0 24px 20px 24px;
+            "
+        >
+             <div style="border-top: 1px solid #e5e7eb; padding-top: 10px;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="text-align: center; padding-bottom: 6px;">
+                         <p
+                            style="
+                              margin: 0;
+                              color: #6b7280;
+                              font-size: 11px;
+                              font-weight: 500;
+                            "
+                          >
+                            Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
+                          </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align: right; color: #6b7280; font-size: 10px;">
+                        Página 1 de 1
+                    </td>
+                </tr>
+              </table>
+          </div>
+        </div>
+    </div>
+"""
+    return html
+
+
 def get_workflow_info_from_history(item) -> Tuple[Optional[str], Optional[str]]:
     """
     Retorna (workflow_commission_username, workflow_description) a partir de item.workflow_history.
@@ -840,5 +1460,5 @@ def get_workflow_info_from_history(item) -> Tuple[Optional[str], Optional[str]]:
                 undo_justification = detail.get("justificativa")
             else:
                 undo_justification = getattr(detail, "justificativa", None)
-
+                
     return commission_username, undo_justification
