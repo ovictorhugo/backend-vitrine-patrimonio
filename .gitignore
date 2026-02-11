@@ -185,3 +185,5 @@ pyrightconfig.json
 # Generated using ignr.py - github.com/Antrikshy/ignr.py
 
 database.db
+
+certs/
