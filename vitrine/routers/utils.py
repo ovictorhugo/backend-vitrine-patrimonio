@@ -15,11 +15,11 @@ from pyhanko.sign.validation import (
 from pyhanko.sign.general import load_cert_from_pemder
 from pyhanko_certvalidator import ValidationContext
 
-#KEY_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
-#CERT_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
+KEY_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
+CERT_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
 
-KEY_PATH = "local_key.pem"
-CERT_PATH = "local_cert.pem"
+#KEY_PATH = "local_key.pem"
+#CERT_PATH = "local_cert.pem"
 
 
 async def seal_pdf_digitally(pdf_bytes: bytes) -> bytes:
@@ -29,7 +29,7 @@ async def seal_pdf_digitally(pdf_bytes: bytes) -> bytes:
     
     # 1. Resolver caminhos
     # Ajuste o .parent conforme a profundidade da sua pasta utils.py
-    base_folder = (Path(__file__).resolve().parent.parent.parent / "certs").resolve()
+    base_folder = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent).resolve()
     full_key_path = base_folder / KEY_PATH
     full_cert_path = base_folder / CERT_PATH
     
