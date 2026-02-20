@@ -417,7 +417,7 @@ class RequestTransferPublic(RequestTransferSchema):
     status: str
     location_id: UUID = Field(exclude=True)
     user: UserPublic
-    location: LocationPublic
+    location: Optional[LocationPublic] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -484,7 +484,7 @@ class CatalogPublic(CatalogSchema):
 
     asset: AssetPublic
     user: UserPublic
-    location: LocationPublic
+    location: Optional[LocationPublic] = None
     images: List[CatalogImagePublic]
     files: List[CatalogFilePublic]
     workflow_history: List[CatalogWorkFlowPublic]

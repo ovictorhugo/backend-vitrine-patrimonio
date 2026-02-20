@@ -129,9 +129,11 @@ async def read_catalog_entries(
         query = filter_service.apply_asset_filters(query, filters)
 
     query = query.options(
-        selectinload(Catalog.images),
-        selectinload(Catalog.files),
+        # O SQLAlchemy já vai carregar images, files e location automaticamente!
+        
+        # Mantemos apenas o que precisa de carregamento profundo e explícito:
         selectinload(Catalog.workflow_history).options(
+            selectinload(CatalogWorkFlow.transfer_requests),
             selectinload(CatalogWorkFlow.user).options(
                 selectinload(User.system_identity).options(
                     selectinload(SystemIdentity.legal_guardian)
@@ -140,13 +142,14 @@ async def read_catalog_entries(
                     UserRole.role
                 ),
             ),
-            selectinload(CatalogWorkFlow.transfer_requests),
         ),
-        selectinload(Catalog.location)
-        .selectinload(Location.location_inventories)
-        .selectinload(LocationInventory.inventory),
+        
+        # O user principal do Catalog tem lazy='selectin', mas se o Pydantic
+        # exigir a identity dele no schema CatalogPublic, fazemos o link profundo aqui:
+        selectinload(Catalog.user).options(
+            selectinload(User.system_identity)
+        )
     )
-
     if filters.user_id:
         query = query.where(Catalog.user_id == filters.user_id)
 

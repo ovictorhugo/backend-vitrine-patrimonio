@@ -142,9 +142,8 @@ async def read_my_locations(
 ):
     query = (
         select(Location)
-        .join(LegalGuardian, Location.legal_guardian_id == LegalGuardian.id)
         .where(
-            LegalGuardian.user_id == current_user.id, # Link direto
+            Location.user_id == current_user.id,
             Location.deleted_at.is_(None),
         )
     )
