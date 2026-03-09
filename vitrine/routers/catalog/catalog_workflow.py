@@ -2,8 +2,8 @@ from http import HTTPStatus
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import desc, func, select
-from sqlalchemy.orm import joinedload
+from sqlalchemy import desc, func, select, and_
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
 from vitrine.core.dependencies import CurrentUser, Session
@@ -14,10 +14,14 @@ from vitrine.models import (
     SystemIdentity,
     SystemSetting,
     User,
+    UserRole,
+    Location,
+    LocationInventory,
 )
 from vitrine.schemas import (
     CatalogWorkFlowPublic,
     CatalogWorkFlowSchema,
+    CatalogList,
 )
 
 router = APIRouter(prefix='/catalog', tags=['Vitrine - Workflow de Anúncios'])
@@ -185,3 +189,48 @@ async def update_workflow_reviewers(
     await session.refresh(workflow, attribute_names=['transfer_requests'])
 
     return workflow
+
+@router.get('/emprestimos/my', response_model=CatalogList)
+async def read_audiovisual_catalogs(
+    session: Session,
+    current_user:CurrentUser
+):
+    options = [
+        selectinload(Catalog.images),
+        selectinload(Catalog.asset),
+        selectinload(Catalog.files),
+        selectinload(Catalog.workflow_history).options(
+            selectinload(CatalogWorkFlow.user).options(
+                selectinload(User.system_identity).options(
+                    selectinload(SystemIdentity.legal_guardian)
+                ),
+                selectinload(User.user_role_associations).selectinload(
+                    UserRole.role
+                ),
+            ),
+            selectinload(CatalogWorkFlow.transfer_requests),
+        ),
+        selectinload(Catalog.location)
+        .selectinload(Location.location_inventories)
+        .selectinload(LocationInventory.inventory),
+    ]
+
+    query = (
+        select(Catalog)
+        .where(
+            Catalog.deleted_at.is_(None),
+            Catalog.workflow_history.any(
+                and_(
+                    CatalogWorkFlow.workflow_status == 'AUDIOVISUAL_EMPRESTIMO',
+                    CatalogWorkFlow.detail['user']['id'].astext == str(current_user.id)
+                )
+            )
+        )
+        .options(*options)
+        .order_by(Catalog.created_at.desc()) 
+    )
+
+    result = await session.scalars(query)
+    entries = result.unique().all() 
+
+    return {'catalog_entries': entries}

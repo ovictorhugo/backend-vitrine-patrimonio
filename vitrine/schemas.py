@@ -814,3 +814,52 @@ class TransferDocumentSchema(BaseModel):
 
 class PendingDocumentSignsResponse(BaseModel):
     pending: List[TransferDocumentSchema]
+
+# --- LOAN ---
+
+class LoanSchema(BaseModel):
+    """Schema para entrada e saída de dados de empréstimo"""
+    id: Optional[UUID] = None
+    loanable_item_id: UUID
+    requester_id: Optional[UUID] = None
+    temporary_guardian_id: UUID
+    
+    start_at: datetime
+    end_at: Optional[datetime] = None
+    returned_at: Optional[datetime] = None
+    
+    is_confirmed: bool = False
+    is_executed: bool = False
+    is_returned: bool = False
+    is_maintenance: bool = False
+    
+    lend_detail: Optional[str] = None
+    returned_detail: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    
+    requester: Optional["UserPublic"] = None
+    temporary_guardian: Optional["UserPublic"] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- LOANABLE ITEM ---
+
+class LoanableItemPublic(BaseModel):
+    """Schema único para visualização e criação de itens de empréstimo"""
+    id: UUID = None
+    catalog_id: UUID
+    legal_guardian_id: UUID
+    owner_notes: Optional[str] = None
+    
+    # Informações completas para o retorno
+    catalog: Optional["CatalogPublic"] = None
+    guardian: Optional["UserPublic"] = None
+    loans: List[LoanSchema] = []
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LoanableItemList(BaseModel):
+    """Lista para retornos paginados ou agrupados"""
+    loanable_items: List[LoanableItemPublic]

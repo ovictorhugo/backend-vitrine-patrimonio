@@ -1405,3 +1405,74 @@ class TransferSigner(AuditMixin):
             postgresql_where=(column('deleted_at').is_(None)),
         ),
     )
+
+
+@table_registry.mapped_as_dataclass
+class LoanableItem(AuditMixin):
+    __tablename__ = 'loanable_items'
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )
+    
+    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), unique=True)
+    legal_guardian_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+
+    
+    owner_notes: Mapped[str | None] = mapped_column(nullable=True)
+
+    # Relacionamentos
+    catalog: Mapped['Catalog'] = relationship(init=False, lazy='selectin')
+    legal_guardian: Mapped['User'] = relationship(
+        init=False, 
+        lazy='selectin',
+        foreign_keys=[legal_guardian_id] # Especificando a FK correta
+    )
+    loans: Mapped[list['Loan']] = relationship(
+        back_populates='loanable_item',
+        init=False,
+        lazy='selectin',
+        cascade='all, delete-orphan',
+        order_by='Loan.start_at.desc()'
+    )
+
+@table_registry.mapped_as_dataclass
+class Loan(AuditMixin):
+    __tablename__ = 'loans'
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid.uuid4
+    )   
+    
+    loanable_item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('loanable_items.id'))
+    
+    requester_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))  
+    temporary_guardian_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    
+    start_at: Mapped[datetime] = mapped_column(nullable=False)
+    end_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    returned_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    # Observações
+    lend_detail: Mapped[str | None] = mapped_column(nullable=True)
+    returned_detail: Mapped[str | None] = mapped_column(nullable=True) 
+    rejection_reason: Mapped[str | None] = mapped_column(nullable=True)
+    
+    is_confirmed: Mapped[bool] = mapped_column(default=False)
+    is_executed: Mapped[bool] = mapped_column(default=False) 
+    is_returned: Mapped[bool] = mapped_column(default=False)
+    is_maintenance: Mapped[bool] = mapped_column(default=False)
+    
+    
+    loanable_item: Mapped['LoanableItem'] = relationship(
+        back_populates='loans', 
+        init=False
+    )
+    requester: Mapped['User'] = relationship(
+        init=False, 
+        foreign_keys=[requester_id] # Especificando quem é o requester
+    )
+    temporary_guardian: Mapped['User'] = relationship(
+        init=False, 
+        foreign_keys=[temporary_guardian_id] # Especificando quem é o guardian
+    )
