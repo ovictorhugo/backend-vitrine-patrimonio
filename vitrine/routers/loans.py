@@ -6,6 +6,12 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from datetime import datetime
+from pathlib import Path
+from weasyprint import HTML
+from io import BytesIO
+from fastapi.responses import StreamingResponse
+
+from .utils import render_loanable_item
 
 from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import (Catalog, 
@@ -364,12 +370,11 @@ async def get_loanable_item_by_catalog(
         )
     
     
-@router.patch('/{loan_id}/confirm', response_model=LoanSchema)
+@router.patch('/confirm/{loan_id}')
 async def confirm_loan(
     loan_id: UUID,
     confirm: bool,
     session: Session,
-    current_user: CurrentUser,
     rejection_reason: Optional[str] = None,
 ):
     # 1. Busca o empréstimo e o item (para verificar quem é o dono)
@@ -388,18 +393,19 @@ async def confirm_loan(
         db_loan.rejection_reason = None
     else:
         db_loan.is_confirmed = False
+        db_loan.is_executed = True
+        db_loan.is_returned = True
         db_loan.rejection_reason = rejection_reason
 
     await session.commit()
     await session.refresh(db_loan)
-    return db_loan
+    return {"msg": "Updated"}
 
 
-@router.patch('/{loan_id}/execute', response_model=LoanSchema)
+@router.patch('/execute/{loan_id}')
 async def execute_loan(
     loan_id: UUID,
     session: Session,
-    current_user: CurrentUser,
 ):
     """Marca que o item foi fisicamente entregue/retirado"""
     db_loan = await session.get(Loan, loan_id)
@@ -416,14 +422,13 @@ async def execute_loan(
     db_loan.is_executed = True
     await session.commit()
     await session.refresh(db_loan)
-    return db_loan
+    return {"msg": "Updated"}
 
 
-@router.patch('/{loan_id}/return', response_model=LoanSchema)
+@router.patch('/return/{loan_id}')
 async def return_loan(
     loan_id: UUID,
     session: Session,
-    current_user: CurrentUser,
 ):
     """Finaliza o empréstimo ou a manutenção"""
     db_loan = await session.get(Loan, loan_id)
@@ -440,4 +445,99 @@ async def return_loan(
     db_loan.is_returned = True
     await session.commit()
     await session.refresh(db_loan)
-    return db_loan
+    return {"msg": "Updated"}
+
+
+@router.get('/pdf/{loan_id}')
+async def export_catalog_pdf(
+    session: Session,
+    loan_id: UUID,
+):
+    stmt = (
+        select(LoanableItem)
+        .where(
+            LoanableItem.id == loan_id,
+            LoanableItem.deleted_at.is_(None)
+        )
+        .options(
+            selectinload(LoanableItem.legal_guardian),
+            selectinload(LoanableItem.loans),
+            selectinload(LoanableItem.catalog).options(
+                selectinload(Catalog.images),
+                selectinload(Catalog.user),
+                selectinload(Catalog.asset).options(
+                    selectinload(Asset.material),
+                    selectinload(Asset.legal_guardian)
+                ),
+                selectinload(Catalog.location).options(
+                    selectinload(Location.sector).options(
+                        selectinload(Sector.agency).options(
+                            selectinload(Agency.unit)
+                        )
+                    )
+                ),
+                selectinload(Catalog.workflow_history).options(
+                    selectinload(CatalogWorkFlow.user),
+                    selectinload(CatalogWorkFlow.transfer_requests)
+                ),
+            )
+        )
+    )
+
+    result = await session.execute(stmt)
+    item = result.unique().scalar_one_or_none()
+
+    if not item:
+        raise HTTPException(    
+            status_code=404, 
+            detail="Este item de patrimônio não possui um registro de empréstimo (LoanableItem)."
+        )
+
+    items_html = ''.join(render_loanable_item(item))
+
+    ASSETS_DIR = (
+        Path(__file__).resolve().parent.parent.parent / 'assets'
+    ).resolve()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
+
+    full_html = f"""
+              <!DOCTYPE html>
+              <html lang="pt-br">
+              <head>
+                  <meta charset="utf-8" />
+                  <title>Relatório</title>
+                  <style>
+                      @page {{
+                        size: A4;
+                        margin: 0;
+                      }}
+                      
+                      html, body {{
+                          margin: 0;
+                          padding: 0;
+                          height: 100%;
+                          background-color: #ffffff;
+                          font-family: "Lexend", sans-serif;
+                          font-size: 10px;
+                      }}
+                      @font-face {{
+                                font-family: Lexend;
+                                src: url({lexend_regular})
+                            }}                      
+                      img {{ max-width: 100%; }}
+                  </style>
+              </head>
+              <body>
+                  {items_html}
+              </body>
+              </html>
+        """
+    pdf_bytes: bytes = HTML(string=full_html, encoding='utf-8').write_pdf()
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type='application/pdf',
+        headers={
+            'Content-Disposition': 'inline; filename="catalogo.pdf"',
+        },
+    )

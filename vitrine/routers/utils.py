@@ -1462,3 +1462,297 @@ def get_workflow_info_from_history(item) -> Tuple[Optional[str], Optional[str]]:
                 undo_justification = getattr(detail, "justificativa", None)
                 
     return commission_username, undo_justification
+
+
+def render_loanable_item(item) -> str:
+    """
+    Gera um HTML estilizado para um item de empréstumo.
+    """
+
+    # Nome do material
+    material_name = item.catalog.asset.material.material_name
+    material_name = html_lib.escape(material_name)
+
+    # Descrição do bem
+    asset_description = item.catalog.asset.asset_description
+    asset_description = html_lib.escape(asset_description)
+
+    # Código + dígito verificador
+    code_concat = ""
+    try:
+        asset_code = item.catalog.asset.asset_code or ""
+        asset_check_digit = item.asset.asset_check_digit or ""
+        code_concat = asset_code + "-" + asset_check_digit
+    except AttributeError:
+        code_concat = getattr(item, "asset_code_with_digit", "") or ""
+    asset_code_with_digit = html_lib.escape(code_concat or "Sem código")
+
+    # ATM
+    atm_number = None
+    try:
+        atm_number = item.catalog.asset.atm_number
+    except AttributeError:
+        atm_number = getattr(item, "atm_number", None)
+    atm_number_esc = html_lib.escape(atm_number) if atm_number else ""
+
+    # Responsável / curador
+    legal_guardian_name = item.catalog.asset.legal_guardian.legal_guardians_name
+    legal_guardian_name_esc = html_lib.escape(legal_guardian_name) if legal_guardian_name else ""
+
+    # Possui plaqueta?
+    is_official = item.catalog.asset.is_official
+    if is_official is None:
+        plaqueta_text = " -"
+        bar_color = "#d4d4d8"
+    elif is_official:
+        plaqueta_text = " Sim"
+        bar_color = "#16a34a"
+    else:
+        plaqueta_text = " Não"
+        bar_color = "#f97316"
+
+   # Anunciante
+    announcer_username = getattr(item, "announcer_username", None)
+    announcer_username_esc = html_lib.escape(announcer_username) if announcer_username else ""
+
+    # ATM (Simples, mantido quase igual, apenas garantindo block model)
+    if atm_number_esc:
+        atm_html = f"""
+            <div style="margin-bottom: 5px;">
+                <p
+                  style="
+                    margin: 0;
+                    font-weight: 600;
+                    font-size: 11px;
+                  " > ATM: {atm_number_esc}
+                </p>
+            </div>
+        """
+    else:
+        atm_html = ""
+
+    if legal_guardian_name_esc:
+        legal_guardian_html = f"""
+            <div
+              style="
+                margin-top: 4px;
+                margin-left: 8px;
+                font-size: 0; 
+              "
+            >            
+              <div style="display: inline-block; vertical-align: middle; font-size: 12px; color: #000;">
+                  <span>{legal_guardian_name_esc}</span>
+              </div>
+            </div>
+        """
+    else:
+        legal_guardian_html = ""
+
+    # ---------- IMAGENS (Refatorado para Inline-Block ao invés de Grid/Flex) ----------
+
+    IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
+    images = getattr(item, "images", []) or []
+    image_cells = []
+
+    # Processamento das imagens (Limita a 4 para manter o grid 2x2)
+    for img in images[:4]:
+        file_path = getattr(img, "file_path", None)
+        has_image = False
+        src_esc = ""
+
+        # Verifica arquivo
+        if file_path:
+            filename = os.path.basename(file_path)
+            full_path = (IMAGES_DIR / filename).resolve()
+            if full_path.is_file():
+                has_image = True
+                src = full_path.as_uri()
+                src_esc = html_lib.escape(src)
+
+        # Estilo base da CÉLULA (Item do Grid)
+        # Nota: Não definimos width nem margin aqui. O Grid Pai controla isso.
+        cell_style = """
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            height: 140px;
+            overflow: hidden; 
+            position: relative;
+            box-sizing: border-box;
+        """
+
+        if has_image:
+            cell = f"""
+            <div style="{cell_style}">
+              <img
+                src="{src_esc}"
+                style="
+                  display: block;
+                  width: 100%;
+                  height: 100%;
+                  object-fit: cover;
+                  object-position: center;
+                "
+              />
+            </div>
+            """
+        else:
+            # Placeholder para imagem ausente
+            # Usamos Flexbox DENTRO da célula apenas para centralizar o texto de erro
+            label = "sem imagem (arquivo não encontrado)" if file_path else "sem imagem"
+            cell = f"""
+            <div style="{cell_style} display: flex; align-items: center; justify-content: center; text-align: center;">
+              <span style="font-size: 10px; color: #9ca3af; padding: 0 10px;">
+                {label}
+              </span>
+            </div>
+            """
+
+        image_cells.append(cell)
+
+    # Container das imagens usando CSS GRID
+    # grid-template-columns: 1fr 1fr -> Cria 2 colunas de larguras iguais
+    images_html = f"""
+        <div style="
+            display: grid;
+            grid-template-columns: 1fr 1fr; 
+            gap: 8px;
+            width: 100%;
+            margin-bottom:8px;
+        ">
+            {"".join(image_cells)}
+        </div>
+    """ if image_cells else """
+        <div style="padding: 10px; text-align: center; background: #f9fafb; border-radius: 6px;">
+          <span style="font-size: 10px; color: #9ca3af;">sem imagens</span>
+        </div>
+    """
+
+    # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
+
+    ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
+    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
+    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+
+    html = f"""
+    <div
+        style="
+            position: relative;
+            width: 100%;
+            height: 297mm;
+            box-sizing: border-box;
+            background-color: #f9fafb;
+            overflow: hidden;
+        "
+    >
+        <table
+            style="
+                width: 100%;
+                border-collapse: collapse;
+                margin: 0;
+                padding: 40px;
+            "
+        >
+            <tr>
+                <td style="width: 150px; padding: 32px 48px 12px 48px; vertical-align: middle;">
+                    <img src="{SP_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
+                </td>
+                <td style="width: 150px; padding: 32px 48px 12px 48px; text-align: right; vertical-align: middle;">
+                    <img src="{EE_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
+                </td>
+            </tr>
+        </table>
+
+        <div style="padding: 0 52px 36px 52px; padding-bottom: 60px;">
+            <section style="display: block; width: 100%; margin-bottom: 20px;">
+                
+                <h2
+                  style="
+                    font-size: 20px;
+                    font-weight: 700;
+                    margin: 0 0 15px 0;
+                    text-transform: uppercase;
+                    color: #111827;
+                    text-align: center;
+                  "
+                >
+                  Histórico de Empréstimos
+                </h2>
+
+                <div style="
+                    background-color: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    margin-bottom: 15px;
+                    overflow: hidden;
+                ">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                        <thead>
+                            <tr style="background-color: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
+                                <th style="padding: 8px 12px; text-align: left; width: 15%; color: #374151; font-weight: 600;">CÓDIGO</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 30%; color: #374151; font-weight: 600;">NOME DO BEM</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 55%; color: #374151; font-weight: 600;">DESCRIÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="padding: 10px 12px; vertical-align: top; color: #111827;">
+                                    {asset_code_with_digit}
+                                </td>
+                                <td style="padding: 10px 12px; vertical-align: top; color: #111827;">
+                                    {material_name}
+                                </td>
+                                <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
+                                    {asset_description}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+
+                <section style="display: block; width: 100%; margin-top: 10px;">
+                {images_html}
+                </section>
+
+                
+            </section>
+        </div>
+
+        <div 
+            style="
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 50px;
+                padding: 0 24px 20px 24px;
+            "
+        >
+             <div style="border-top: 1px solid #e5e7eb; padding-top: 10px;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="text-align: center; padding-bottom: 6px;">
+                         <p
+                            style="
+                              margin: 0;
+                              color: #6b7280;
+                              font-size: 11px;
+                              font-weight: 500;
+                            "
+                          >
+                            Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
+                          </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align: right; color: #6b7280; font-size: 10px;">
+                        Página 1 de 1
+                    </td>
+                </tr>
+              </table>
+          </div>
+        </div>
+    </div>
+"""
+    return html
