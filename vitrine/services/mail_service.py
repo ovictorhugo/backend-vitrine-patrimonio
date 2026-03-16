@@ -1,5 +1,5 @@
 from email.message import EmailMessage
-from typing import Any
+from typing import Optional
 
 from vitrine.core.dependencies import Mail
 from vitrine.core.settings import Settings
@@ -32,9 +32,35 @@ emails = {
 
 async def send_email(mail: Mail, user: User, content: str):
     msg = EmailMessage()
-    print(content)
     msg['Subject'] = emails[content]["Assunto"]
     msg['From'] = Settings().SMTP_USER
-    msg['To'] = 'joaomont@ufmg.br' #user.email
+    msg['To'] = user.email
     msg.set_content(emails[content]["Conteudo"])
+    mail.send_message(msg)
+
+
+async def send_custom_email(
+    mail: Mail, 
+    user: User, 
+    subject: str, 
+    content: str, 
+    attachment_bytes: Optional[bytes] = None,
+    attachment_filename: str = "documento.pdf"
+):
+    """Envia um e-mail customizado, com suporte opcional a anexo em PDF."""
+    msg = EmailMessage()
+    msg['Subject'] = subject
+    msg['From'] = Settings().SMTP_USER
+    msg['To'] = user.email
+    msg.set_content(content)
+
+    # Verifica se um anexo foi passado
+    if attachment_bytes:
+        msg.add_attachment(
+            attachment_bytes,
+            maintype='application',
+            subtype='pdf',
+            filename=attachment_filename
+        )
+
     mail.send_message(msg)

@@ -1,6 +1,7 @@
 from typing import Optional, Tuple
 import html as html_lib
 from pathlib import Path
+from datetime import datetime
 import os
 from io import BytesIO
 
@@ -14,6 +15,7 @@ from pyhanko.sign.validation import (
 )
 from pyhanko.sign.general import load_cert_from_pemder
 from pyhanko_certvalidator import ValidationContext
+
 
 KEY_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
 CERT_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
@@ -1481,11 +1483,10 @@ def render_loanable_item(item) -> str:
     code_concat = ""
     try:
         asset_code = item.catalog.asset.asset_code or ""
-        asset_check_digit = item.asset.asset_check_digit or ""
+        asset_check_digit = item.catalog.asset.asset_check_digit or ""
         code_concat = asset_code + "-" + asset_check_digit
     except AttributeError:
-        code_concat = getattr(item, "asset_code_with_digit", "") or ""
-    asset_code_with_digit = html_lib.escape(code_concat or "Sem código")
+        code_concat = getattr(item, "asset_code", "") or ""
 
     # ATM
     atm_number = None
@@ -1499,21 +1500,6 @@ def render_loanable_item(item) -> str:
     legal_guardian_name = item.catalog.asset.legal_guardian.legal_guardians_name
     legal_guardian_name_esc = html_lib.escape(legal_guardian_name) if legal_guardian_name else ""
 
-    # Possui plaqueta?
-    is_official = item.catalog.asset.is_official
-    if is_official is None:
-        plaqueta_text = " -"
-        bar_color = "#d4d4d8"
-    elif is_official:
-        plaqueta_text = " Sim"
-        bar_color = "#16a34a"
-    else:
-        plaqueta_text = " Não"
-        bar_color = "#f97316"
-
-   # Anunciante
-    announcer_username = getattr(item, "announcer_username", None)
-    announcer_username_esc = html_lib.escape(announcer_username) if announcer_username else ""
 
     # ATM (Simples, mantido quase igual, apenas garantindo block model)
     if atm_number_esc:
@@ -1537,10 +1523,9 @@ def render_loanable_item(item) -> str:
               style="
                 margin-top: 4px;
                 margin-left: 8px;
-                font-size: 0; 
               "
             >            
-              <div style="display: inline-block; vertical-align: middle; font-size: 12px; color: #000;">
+              <div style="display: inline-block; vertical-align: middle; font-size: 12px; font-weight: 600px; color: #000;">
                   <span>{legal_guardian_name_esc}</span>
               </div>
             </div>
@@ -1628,6 +1613,109 @@ def render_loanable_item(item) -> str:
         </div>
     """
 
+    def format_pdf_date(dt) -> str:
+        if not dt: return "-"
+        # Caso dt seja datetime, apenas formata
+        if isinstance(dt, datetime):
+            return dt.strftime("%d/%m/%Y %H:%M")
+        return str(dt)
+
+    # Vamos gerar as linhas da tabela iterando sobre "loan.loans"
+    loans_list = getattr(item, 'loans', [])
+    loans_html_rows = []
+
+    if not loans_list:
+        loans_html_rows.append("""
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+                <td colspan="5" style="padding: 15px 12px; text-align: center; color: #6b7280;">
+                    Nenhum histórico de empréstimo registrado para este item.
+                </td>
+            </tr>
+        """)
+    else:
+        for l in loans_list:
+            # 1. Nomes dos usuários
+            requester_name = getattr(l.requester, 'username', getattr(l.requester, 'email', 'N/A')) if l.requester else 'N/A'
+            guardian_name = getattr(l.temporary_guardian, 'username', getattr(l.temporary_guardian, 'email', 'N/A')) if l.temporary_guardian else 'N/A'
+
+            # 2. Definição do Status e Cores da Badge
+            status_text = "EMPRESTADO"
+            color_bg = "#dbeafe" # Azul claro
+            color_text = "#1d4ed8" # Azul escuro
+
+            # Verifica se está atrasado (ignorando timezone para simplificar)
+            is_atrasado = False
+            if l.end_at and not l.is_returned:
+                try:
+                    is_atrasado = l.end_at.replace(tzinfo=None) < datetime.now()
+                except:
+                    pass
+
+            if l.is_maintenance:
+                status_text = "MANUTENÇÃO"
+                color_bg = "#fef3c7" # Amarelo claro
+                color_text = "#b45309" # Amarelo escuro
+            elif l.is_returned and not l.is_confirmed:
+                status_text = "RECUSADO"
+                color_bg = "#fee2e2" # Vermelho claro
+                color_text = "#b91c1c" # Vermelho escuro
+            elif l.is_returned:
+                status_text = "DEVOLVIDO"
+                color_bg = "#d1fae5" # Verde claro
+                color_text = "#047857" # Verde escuro
+            elif not l.is_executed:
+                status_text = "PEDIDO"
+                color_bg = "#f3f4f6" # Cinza claro
+                color_text = "#374151" # Cinza escuro
+            elif is_atrasado:
+                status_text = "ATRASADO"
+                color_bg = "#fee2e2"
+                color_text = "#b91c1c"
+
+            # 3. Estrutura a linha principal
+            # Se NÃO houver observações, adicionamos a borda inferior aqui. Se houver, a borda vai para a linha da observação.
+            border_style = "" if (l.lend_detail or l.rejection_reason) else "border-bottom: 1px solid #e5e7eb;"
+            
+            row_html = f"""
+            <tr style="{border_style}">
+                <td style="padding: 10px 12px; vertical-align: top;">
+                    <span style="background-color: {color_bg}; color: {color_text}; padding: 3px 6px; border-radius: 4px; font-weight: 700; font-size: 9px;">
+                        {status_text}
+                    </span>
+                </td>
+                <td style="padding: 10px 12px; vertical-align: top; color: #111827;">
+                    {html_lib.escape(requester_name)}
+                </td>
+                <td style="padding: 10px 12px; vertical-align: top; color: #111827;">
+                    {html_lib.escape(guardian_name)}
+                </td>
+                <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
+                    {format_pdf_date(l.start_at)}
+                </td>
+                <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
+                    {format_pdf_date(l.returned_at) if l.returned_at else format_pdf_date(l.end_at)}
+                </td>
+            </tr>
+            """
+            
+            # 4. Linha secundária para observações e motivos de recusa (se existirem)
+            if l.lend_detail or l.rejection_reason:
+                obs = html_lib.escape(l.lend_detail) if l.lend_detail else ""
+                rej = f"<strong style='color: #b91c1c;'>Motivo Recusa:</strong> {html_lib.escape(l.rejection_reason)}" if l.rejection_reason else ""
+                
+                row_html += f"""
+                <tr style="border-bottom: 1px solid #e5e7eb; background-color: #f9fafb;">
+                    <td colspan="5" style="padding: 4px 12px 10px 12px; font-size: 9px; color: #6b7280; font-style: italic;">
+                        <strong>Obs:</strong> {obs} {rej}
+                    </td>
+                </tr>
+                """
+
+            loans_html_rows.append(row_html)
+
+    # Une todas as linhas criadas para injetar no HTML
+    loans_tbody_html = "".join(loans_html_rows)
+
     # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
 
     ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
@@ -1663,7 +1751,7 @@ def render_loanable_item(item) -> str:
             </tr>
         </table>
 
-        <div style="padding: 0 52px 36px 52px; padding-bottom: 60px;">
+        <div style="padding: 0 26px 36px 26px; padding-bottom: 30px;">
             <section style="display: block; width: 100%; margin-bottom: 20px;">
                 
                 <h2
@@ -1679,43 +1767,122 @@ def render_loanable_item(item) -> str:
                   Histórico de Empréstimos
                 </h2>
 
+                <div
+                    style="
+                      display: table;
+                      width: 100%;
+                      border-collapse: separate;
+                      border-spacing: 0;
+                      margin-bottom: 10px;
+                    "
+                  >
+                    <div
+                      style="
+                        display: table-cell;
+                        width: 8px;
+                        background-color: #559FB8;
+                        border: 1px solid #e5e7eb;
+                        border-right: 0;
+                        border-radius: 6px 0 0 6px;
+                        vertical-align: top;
+                      "
+                    ></div>
+
+                    <div
+                      style="
+                        display: table-cell;
+                        vertical-align: top;
+                        background-color: #ffffff;
+                        border: 1px solid #e5e7eb;
+                        border-radius: 0 6px 6px 0;
+                        padding: 10px;
+                      "
+                    >
+                        <div style="margin-bottom: 8px;">
+                            <div style="display: inline-block; width: 60%; vertical-align: middle;">
+                                 <div style="
+                                    display: flex;">
+                                    <p style="margin: 0; font-weight: 600; font-size: 16px;">
+                                        {material_name}
+                                    </p>
+                                    <p style="margin: 2px 0 0 8px; font-weight: 600; font-size: 12px;">
+                                        {code_concat}
+                                    </p>
+                                  </div>
+                                <div style="
+                                display: flex;
+                                margin-top:5px;
+                                margin-bottom:5px;">
+                                <div
+                                    style="
+                                    display: inline-block;
+                                    vertical-align: middle;
+                                    width: 20px;
+                                    height: 20px;
+                                    background: #e5e7eb;
+                                    border-radius: 3px;
+                                    text-align: center;
+                                    box-sizing: border-box;
+                                    "
+                                >
+                                    <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="#6b7280"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    >
+                                    <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M7 10a4 4 0 1 1 10 0 4 4 0 1 1-10 0" />
+                                    <path d="M4 21v-2a4 4 0 0 1 3-3.87" />
+                                    </svg>
+                                </div> 
+                                {legal_guardian_html}
+                            </div>
+                            </div>
+                        </div>
+
+                        <div style="font-size: 10px; color: #4b5563;margin-left:16px;">
+                            {asset_description}
+                        </div>
+                    </div>
+                </div>
+
+                <section style="display: block; width: 100%; margin-top: 10px;">
+                {images_html}
+                </section>
+            </section>
+
+            <section style="display: block; width: 100%; margin-top: 20px; margin-bottom: 20px;">
+    
+                <h3 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px;">
+                    REGISTRO DE EMPRÉSTIMOS
+                </h3>
+
                 <div style="
                     background-color: #ffffff;
                     border: 1px solid #e5e7eb;
                     border-radius: 6px;
-                    margin-bottom: 15px;
                     overflow: hidden;
                 ">
                     <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
                         <thead>
                             <tr style="background-color: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
-                                <th style="padding: 8px 12px; text-align: left; width: 15%; color: #374151; font-weight: 600;">CÓDIGO</th>
-                                <th style="padding: 8px 12px; text-align: left; width: 30%; color: #374151; font-weight: 600;">NOME DO BEM</th>
-                                <th style="padding: 8px 12px; text-align: left; width: 55%; color: #374151; font-weight: 600;">DESCRIÇÃO</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 14%; color: #374151; font-weight: 600;">STATUS</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 25%; color: #374151; font-weight: 600;">SOLICITANTE</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 25%; color: #374151; font-weight: 600;">RESPONSÁVEL</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 18%; color: #374151; font-weight: 600;">INÍCIO</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 18%; color: #374151; font-weight: 600;">FIM / RETORNO</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td style="padding: 10px 12px; vertical-align: top; color: #111827;">
-                                    {asset_code_with_digit}
-                                </td>
-                                <td style="padding: 10px 12px; vertical-align: top; color: #111827;">
-                                    {material_name}
-                                </td>
-                                <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
-                                    {asset_description}
-                                </td>
-                            </tr>
+                            {loans_tbody_html}
                         </tbody>
                     </table>
                 </div>
-
-
-                <section style="display: block; width: 100%; margin-top: 10px;">
-                {images_html}
-                </section>
-
-                
             </section>
         </div>
 
@@ -1748,6 +1915,199 @@ def render_loanable_item(item) -> str:
                 <tr>
                     <td style="text-align: right; color: #6b7280; font-size: 10px;">
                         Página 1 de 1
+                    </td>
+                </tr>
+              </table>
+          </div>
+        </div>
+    </div>
+"""
+    return html
+
+
+def render_all_loanable_items(items: list) -> str:
+    """
+    Gera um HTML estilizado listando todos os itens de empréstimo disponíveis.
+    """
+    
+    # 1. Gerar as linhas da tabela iterando sobre a lista de itens
+    rows_html = []
+    
+    for item in items:
+        # Nome do material
+        try:
+            material_name = item.catalog.asset.material.material_name
+        except AttributeError:
+            material_name = "Sem nome"
+        material_name_esc = html_lib.escape(material_name)
+
+        # Código + dígito verificador
+        try:
+            asset_code = item.catalog.asset.asset_code or ""
+            asset_check_digit = item.catalog.asset.asset_check_digit or ""
+            code_concat = f"{asset_code}-{asset_check_digit}" if asset_check_digit else asset_code
+        except AttributeError:
+            code_concat = getattr(item, "asset_code", "") or ""
+        code_concat_esc = html_lib.escape(code_concat)
+
+        # ATM
+        try:
+            atm_number = item.catalog.asset.atm_number
+        except AttributeError:
+            atm_number = getattr(item, "atm_number", None)
+        
+        # Oculta se for None ou a string "None"
+        if not atm_number or str(atm_number).lower() == "none":
+            atm_number_esc = "-"
+        else:
+            atm_number_esc = html_lib.escape(str(atm_number))
+
+        # Cadastrado em (usando created_at do AuditMixin)
+        created_at = getattr(item, "created_at", None)
+        if created_at:
+            if isinstance(created_at, str):
+                try:
+                    created_date = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    created_str = created_date.strftime("%d/%m/%Y")
+                except:
+                    created_str = created_at[:10]
+            else:
+                created_str = created_at.strftime("%d/%m/%Y")
+        else:
+            created_str = "-"
+
+        # Quantidade de Empréstimos (tamanho do array loans)
+        loans_count = len(getattr(item, "loans", []))
+
+        # Cria a linha HTML para este item
+        row = f"""
+        <tr style="border-bottom: 1px solid #e5e7eb; page-break-inside: avoid;">
+            <td style="padding: 10px 12px; vertical-align: top; color: #111827; font-weight: 500;">
+                {material_name_esc}
+            </td>
+            <td style="padding: 10px 12px; vertical-align: top; color: #111827;">
+                {code_concat_esc}
+            </td>
+            <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
+                {atm_number_esc}
+            </td>
+            <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
+                {created_str}
+            </td>
+            <td style="padding: 10px 12px; vertical-align: top; color: #559FB8; font-weight: 600;">
+                {loans_count}
+            </td>
+        </tr>
+        """
+        rows_html.append(row)
+
+    # Une todas as linhas
+    loans_tbody_html = "".join(rows_html)
+
+    # Se a lista estiver vazia por algum motivo
+    if not loans_tbody_html:
+        loans_tbody_html = """
+        <tr>
+            <td colspan="5" style="padding: 20px; text-align: center; color: #6b7280; font-style: italic;">
+                Nenhum item encontrado.
+            </td>
+        </tr>
+        """
+
+    # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
+    ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
+    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
+    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+
+    html = f"""
+    <div
+        style="
+            position: relative;
+            width: 100%;
+            min-height: 297mm;
+            box-sizing: border-box;
+            background-color: #f9fafb;
+            overflow: hidden;
+        "
+    >
+        <table
+            style="
+                width: 100%;
+                border-collapse: collapse;
+                margin: 0;
+                padding: 40px;
+            "
+        >
+            <tr>
+                <td style="width: 150px; padding: 32px 48px 12px 48px; vertical-align: middle;">
+                    <img src="{SP_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
+                </td>
+                <td style="width: 150px; padding: 32px 48px 12px 48px; text-align: right; vertical-align: middle;">
+                    <img src="{EE_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
+                </td>
+            </tr>
+        </table>
+
+        <div style="padding: 0 26px 36px 26px; padding-bottom: 60px;">
+            <section style="display: block; width: 100%; margin-top: 10px; margin-bottom: 20px;">
+    
+                <h3 style="margin: 0 0 15px 0; font-size: 15px; font-weight: 700; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">
+                    CATÁLOGO DE ITENS DE EMPRÉSTIMO
+                </h3>
+
+                <div style="
+                    background-color: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    overflow: hidden;
+                ">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                        <thead>
+                            <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
+                                <th style="padding: 10px 12px; text-align: left; width: 35%; color: #374151; font-weight: 700;">NOME</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 20%; color: #374151; font-weight: 700;">CÓDIGO</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 15%; color: #374151; font-weight: 700;">ATM</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 15%; color: #374151; font-weight: 700;">CADASTRO EM</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 15%; color: #374151; font-weight: 700;">EMPRÉSTIMOS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loans_tbody_html}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <div 
+            style="
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 50px;
+                padding: 0 24px 20px 24px;
+            "
+        >
+             <div style="border-top: 1px solid #e5e7eb; padding-top: 10px;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="text-align: center; padding-bottom: 6px;">
+                         <p
+                            style="
+                              margin: 0;
+                              color: #6b7280;
+                              font-size: 11px;
+                              font-weight: 500;
+                            "
+                          >
+                            Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
+                          </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align: right; color: #6b7280; font-size: 10px;">
+                        Página 1
                     </td>
                 </tr>
               </table>
