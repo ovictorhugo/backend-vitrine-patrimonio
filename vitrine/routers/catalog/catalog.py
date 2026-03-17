@@ -7,9 +7,9 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select,func
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from weasyprint import HTML
 
@@ -129,11 +129,10 @@ async def read_catalog_entries(
         query = filter_service.apply_asset_filters(query, filters)
 
     query = query.options(
-        # O SQLAlchemy já vai carregar images, files e location automaticamente!
-        
-        # Mantemos apenas o que precisa de carregamento profundo e explícito:
         selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.transfer_requests),
+            selectinload(CatalogWorkFlow.transfer_requests).options(
+                selectinload(WorkflowTransfer.location)
+            ),
             selectinload(CatalogWorkFlow.user).options(
                 selectinload(User.system_identity).options(
                     selectinload(SystemIdentity.legal_guardian)
@@ -143,12 +142,7 @@ async def read_catalog_entries(
                 ),
             ),
         ),
-        
-        # O user principal do Catalog tem lazy='selectin', mas se o Pydantic
-        # exigir a identity dele no schema CatalogPublic, fazemos o link profundo aqui:
-        selectinload(Catalog.user).options(
-            selectinload(User.system_identity)
-        )
+        selectinload(Catalog.user).options(selectinload(User.system_identity)),
     )
     if filters.user_id:
         query = query.where(Catalog.user_id == filters.user_id)
@@ -171,9 +165,6 @@ async def read_catalog_entries(
 
     query = query.offset(filters.offset).limit(filters.limit)
 
-    print('QUERY PRINCIPAL')
-    print(query)
-
     result = await session.scalars(query)
     entries = result.all()
 
@@ -194,7 +185,9 @@ async def read_catalog_entry(catalog_id: UUID, session: Session):
                     UserRole.role
                 ),
             ),
-            selectinload(CatalogWorkFlow.transfer_requests),
+            selectinload(CatalogWorkFlow.transfer_requests).options(
+                selectinload(WorkflowTransfer.location)
+            ),
         ),
         selectinload(Catalog.location)
         .selectinload(Location.location_inventories)
@@ -280,6 +273,7 @@ async def delete_catalog_entry(
     await session.commit()
 
     return {'message': 'Catalog entry deactivated'}
+
 
 @router.get('/pdf/{catalog_id}')
 async def export_catalog_pdf(
@@ -437,19 +431,20 @@ async def export_catalog_pdf(
     total_items = len(entries)
     print(f'Existe um total de: {total_items} resultados')
 
-    BATCH_SIZE = 25 
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
+    BATCH_SIZE = 25
+    ASSETS_DIR = (
+        Path(__file__).resolve().parent.parent.parent / 'assets'
+    ).resolve()
     lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
 
     main_document = None
 
     try:
         for offset in range(0, total_items, BATCH_SIZE):
-            
             # --- Query do Lote (Igual) ---
             query = select(Catalog).where(Catalog.deleted_at.is_(None))
             query = filter_service.apply_catalog_filters(query, filters)
-            
+
             if asset_join_needed:
                 query = query.join(Catalog.asset)
                 query = filter_service.apply_asset_filters(query, filters)
@@ -462,7 +457,9 @@ async def export_catalog_pdf(
                         selectinload(User.system_identity).options(
                             selectinload(SystemIdentity.legal_guardian)
                         ),
-                        selectinload(User.user_role_associations).selectinload(UserRole.role),
+                        selectinload(User.user_role_associations).selectinload(
+                            UserRole.role
+                        ),
                     ),
                     selectinload(CatalogWorkFlow.transfer_requests),
                 ),
@@ -486,13 +483,16 @@ async def export_catalog_pdf(
                     .distinct()
                     .cte('users_with_role')
                 )
-                query = query.join(users_with_role, Catalog.user_id == users_with_role.c.user_id)
+                query = query.join(
+                    users_with_role,
+                    Catalog.user_id == users_with_role.c.user_id,
+                )
 
             query = query.offset(offset).limit(BATCH_SIZE)
 
             result = await session.scalars(query)
             entries = result.unique().all()
-            
+
             if not entries:
                 break
 
@@ -531,8 +531,10 @@ async def export_catalog_pdf(
             """
 
             # GERA O DOCUMENTO NA MEMÓRIA (Rodando em thread separada para não travar)
-            batch_document = await run_in_threadpool(render_document_batch, full_html)
-            
+            batch_document = await run_in_threadpool(
+                render_document_batch, full_html
+            )
+
             # --- MÁGICA DO WEASYPRINT AQUI ---
             if main_document is None:
                 # O primeiro lote vira o documento mestre
@@ -545,19 +547,21 @@ async def export_catalog_pdf(
             del entries
             del items_html
             del full_html
-            del batch_document # Já copiamos as páginas, podemos deletar o objeto
+            del (
+                batch_document
+            )  # Já copiamos as páginas, podemos deletar o objeto
             gc.collect()
 
         # 3. Escrita final
         final_buffer = BytesIO()
-        
+
         # O método write_pdf agora grava o mestre (com todas as páginas acumuladas)
         if main_document:
             # write_pdf também pode ser pesado, rodamos em threadpool
             await run_in_threadpool(main_document.write_pdf, final_buffer)
         else:
-            raise HTTPException(status_code=404, detail="Erro na geração")
-            
+            raise HTTPException(status_code=404, detail='Erro na geração')
+
         final_buffer.seek(0)
 
         return StreamingResponse(
@@ -567,7 +571,9 @@ async def export_catalog_pdf(
                 'Content-Disposition': 'inline; filename="catalogo_completo.pdf"',
             },
         )
-    
+
     except Exception as e:
-        print(f"Erro PDF: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno ao gerar PDF")
+        print(f'Erro PDF: {e}')
+        raise HTTPException(
+            status_code=500, detail='Erro interno ao gerar PDF'
+        )
