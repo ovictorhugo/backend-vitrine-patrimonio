@@ -1420,6 +1420,7 @@ class LoanableItem(AuditMixin):
 
     
     owner_notes: Mapped[str | None] = mapped_column(nullable=True)
+    last_check: Mapped[datetime] = mapped_column(nullable=True)
     in_maintenance: Mapped[bool] = mapped_column(default=False, nullable=True)
 
     # Relacionamentos

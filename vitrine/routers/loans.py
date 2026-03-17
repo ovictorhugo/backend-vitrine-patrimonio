@@ -3,7 +3,7 @@ from typing import Optional, List
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import select,or_
 from sqlalchemy.orm import selectinload
 from datetime import datetime
 from pathlib import Path
@@ -111,6 +111,7 @@ async def create_loanable_item(
     # 3. Cria o item vinculando ao legal_guardian (dono/cadastrador)
     db_item = LoanableItem(
         catalog_id=db_catalog.id,
+        last_check= datetime.now(),
         legal_guardian_id=current_user.id, # Definido pelo usuário logado
         owner_notes=None
     )
@@ -156,88 +157,6 @@ async def request_loan(
     await session.commit()
     await session.refresh(db_loan)
     return db_loan
-
-
-@router.get('/one', response_model=List[LoanSchema])
-async def list_loans(
-    session: Session,
-    status: Optional[str] = None, # pendente, ativo, atrasado, concluido
-    offset: int = Query(0, ge=0), # Adicionado para suportar a paginação do Kanban
-    limit: int = Query(24, gt=0, le=100), # Adicionado para suportar a paginação do Kanban
-):
-    # Carregamento profundo idêntico ao do GET /items, 
-    # garantindo que o Empréstimo devolva a foto e os detalhes completos do equipamento
-    stmt = (
-        select(Loan)
-        .options(
-            selectinload(Loan.requester),
-            selectinload(Loan.temporary_guardian),
-            
-            # Mergulhando fundo no Loanable Item atrelado a este empréstimo
-            selectinload(Loan.loanable_item).options(
-                selectinload(LoanableItem.legal_guardian),
-                
-                selectinload(LoanableItem.catalog).options(
-                    selectinload(Catalog.images),
-                    selectinload(Catalog.files),
-                    selectinload(Catalog.user),
-                    
-                    # Asset -> Material e Responsável
-                    selectinload(Catalog.asset).options(
-                        selectinload(Asset.material),
-                        selectinload(Asset.legal_guardian)
-                    ),
-                    
-                    # Location -> Sector -> Agency -> Unit
-                    selectinload(Catalog.location).options(
-                        selectinload(Location.sector).options(
-                            selectinload(Sector.agency).options(
-                                selectinload(Agency.unit)
-                            )
-                        ),
-                        selectinload(Location.location_inventories).selectinload(
-                            LocationInventory.inventory
-                        )
-                    ),
-                    
-                    # Workflow History
-                    selectinload(Catalog.workflow_history).options(
-                        selectinload(CatalogWorkFlow.user).options(
-                            selectinload(User.system_identity).options(
-                                selectinload(SystemIdentity.legal_guardian)
-                            ),
-                            selectinload(User.user_role_associations).selectinload(
-                                UserRole.role
-                            ),
-                        ),
-                        selectinload(CatalogWorkFlow.transfer_requests),
-                    )
-                )
-            )
-        )
-        .order_by(Loan.start_at.desc())
-    )
-
-    # Filtros de negócio
-    now = datetime.now()
-    if status == 'atrasado':
-        stmt = stmt.where(
-            Loan.is_executed == True,
-            Loan.is_returned == False,
-            Loan.end_at < now
-        )
-    elif status == 'pendente':
-        stmt = stmt.where(Loan.is_confirmed == False, Loan.rejection_reason.is_(None))
-    elif status == 'ativo':
-        stmt = stmt.where(Loan.is_executed == True, Loan.is_returned == False)
-
-    # Aplica a paginação que o frontend envia
-    stmt = stmt.offset(offset).limit(limit)
-
-    result = await session.execute(stmt)
-    
-    # Retorna usando o unique() para evitar duplicação por conta das listas (images, workflow, etc)
-    return result.unique().scalars().all()
 
 
 @router.get('/', response_model=LoanableItemList)
@@ -315,12 +234,87 @@ async def list_loanable_items(
 
     return {'loanable_items': items}
 
+@router.get('/my', response_model=LoanableItemList)
+async def list_my_loanable_items(
+    session: Session, # ou AsyncSession
+    current_user: CurrentUser,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(24, gt=0, le=100),
+):
+    stmt = (
+        select(LoanableItem)
+        .join(Loan) # Faz a junção das tabelas
+        .where(
+            LoanableItem.deleted_at.is_(None),
+            Loan.is_returned.is_(False), # Garante que o empréstimo não foi finalizado
+            or_(
+                Loan.requester_id == current_user.id,
+                Loan.temporary_guardian_id == current_user.id
+            ) # O usuário precisa ser o solicitante ou o guardião temporário
+        )
+        .options(
+            # 1. Responsável pelo Item
+            selectinload(LoanableItem.legal_guardian),
+            
+            # 2. Histórico de Empréstimos
+            selectinload(LoanableItem.loans),
+
+            # 3. Catálogo e toda a sua árvore de dependências (Cópia exata do original)
+            selectinload(LoanableItem.catalog).options(
+                selectinload(Catalog.images),
+                selectinload(Catalog.files),
+                selectinload(Catalog.user),
+                
+                selectinload(Catalog.asset).options(
+                    selectinload(Asset.material),
+                    selectinload(Asset.legal_guardian)
+                ),
+                
+                selectinload(Catalog.location).options(
+                    selectinload(Location.sector).options(
+                        selectinload(Sector.agency).options(
+                            selectinload(Agency.unit)
+                        )
+                    ),
+                    selectinload(Location.location_inventories).selectinload(
+                        LocationInventory.inventory
+                    )
+                ),
+                
+                selectinload(Catalog.workflow_history).options(
+                    selectinload(CatalogWorkFlow.user).options(
+                        selectinload(User.system_identity).options(
+                            selectinload(SystemIdentity.legal_guardian)
+                        ),
+                        selectinload(User.user_role_associations).selectinload(
+                            UserRole.role
+                        ),
+                    ),
+                    selectinload(CatalogWorkFlow.transfer_requests),
+                ),
+            )
+        )
+        .order_by(LoanableItem.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
+    result = await session.execute(stmt)
+    items = result.unique().scalars().all()
+
+    try:
+        LoanableItemList.model_validate({'loanable_items': items})
+    except Exception as e:
+        print("====== ERRO DE VALIDAÇÃO DO SCHEMA ======")
+        print(e)
+        raise e
+
+    return {'loanable_items': items}
 
 @router.get('/all_pdf')
 async def export_all_catalog_pdf(
     session: Session,
 ):
-    print("AAAAAAAAA")
     stmt = (
         select(LoanableItem)
         .where(
@@ -361,11 +355,9 @@ async def export_all_catalog_pdf(
             detail="Nenhum item de patrimônio disponível no momento."
         )
 
-    print("AAAAAAAAA")
     # Passa a lista 'items' para a nova função de renderização
     items_html = ''.join(render_all_loanable_items(items))
 
-    print("AAAAAAAAA")
     ASSETS_DIR = (
         Path(__file__).resolve().parent.parent.parent / 'assets'
     ).resolve()
@@ -467,7 +459,6 @@ async def get_loanable_item_by_catalog(
             detail="Erro na estrutura de dados do item de empréstimo."
         )
     
-    
 @router.patch('/confirm/{loan_id}')
 async def confirm_loan(
     loan_id: UUID,
@@ -515,7 +506,6 @@ async def confirm_loan(
 
     return {"msg": "Updated"}
 
-
 @router.patch('/execute/{loan_id}')
 async def execute_loan(
     loan_id: UUID,
@@ -556,8 +546,10 @@ async def return_loan(
             detail='Cannot return an item that was never executed/delivered.'
         )
 
+    now = datetime.now()
     db_loan.is_returned = True
     db_loan.rejection_reason = rejection_reason
+    db_loan.returned_at = now
     
     await session.commit()
     await session.refresh(db_loan)
@@ -629,8 +621,11 @@ async def end_maintenance(
         )
 
     # 3. Atualiza o status do item
-    db_item.in_maintenance = False
+    now = datetime.now()
     
+    db_item.in_maintenance = False
+    db_item.last_check = now
+
     # 4. Busca o empréstimo ativo de manutenção mais recente
     query = select(Loan).where(
         Loan.loanable_item_id == item_id,
@@ -643,7 +638,6 @@ async def end_maintenance(
     
     # 5. Finaliza o empréstimo (adiciona end_at e returned_at)
     if active_maintenance_loan:
-        now = datetime.now()
         active_maintenance_loan.end_at = now
         active_maintenance_loan.returned_at = now
         active_maintenance_loan.is_returned = True

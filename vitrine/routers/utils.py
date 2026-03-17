@@ -1643,11 +1643,22 @@ def render_loanable_item(item) -> str:
             color_bg = "#dbeafe" # Azul claro
             color_text = "#1d4ed8" # Azul escuro
 
-            # Verifica se está atrasado (ignorando timezone para simplificar)
+            # Verifica se está atrasado (ainda não devolvido)
             is_atrasado = False
             if l.end_at and not l.is_returned:
                 try:
                     is_atrasado = l.end_at.replace(tzinfo=None) < datetime.now()
+                except:
+                    pass
+
+            # Verifica se FOI devolvido em atraso (ignorando as horas, comparando apenas as datas)
+            is_devolvido_em_atraso = False
+            if l.is_returned and l.end_at and l.returned_at:
+                try:
+                    end_date = l.end_at.replace(tzinfo=None).date()
+                    returned_date = l.returned_at.replace(tzinfo=None).date()
+                    if returned_date > end_date:
+                        is_devolvido_em_atraso = True
                 except:
                     pass
 
@@ -1657,6 +1668,10 @@ def render_loanable_item(item) -> str:
                 color_text = "#b45309" # Amarelo escuro
             elif l.is_returned and not l.is_confirmed:
                 status_text = "RECUSADO"
+                color_bg = "#fee2e2" # Vermelho claro
+                color_text = "#b91c1c" # Vermelho escuro
+            elif is_devolvido_em_atraso:
+                status_text = "DEVOLVIDO EM ATRASO"
                 color_bg = "#fee2e2" # Vermelho claro
                 color_text = "#b91c1c" # Vermelho escuro
             elif l.is_returned:
@@ -1673,13 +1688,12 @@ def render_loanable_item(item) -> str:
                 color_text = "#b91c1c"
 
             # 3. Estrutura a linha principal
-            # Se NÃO houver observações, adicionamos a borda inferior aqui. Se houver, a borda vai para a linha da observação.
             border_style = "" if (l.lend_detail or l.rejection_reason) else "border-bottom: 1px solid #e5e7eb;"
             
             row_html = f"""
             <tr style="{border_style}">
                 <td style="padding: 10px 12px; vertical-align: top;">
-                    <span style="background-color: {color_bg}; color: {color_text}; padding: 3px 6px; border-radius: 4px; font-weight: 700; font-size: 9px;">
+                    <span style="display: inline-block; text-align: center; background-color: {color_bg}; color: {color_text}; padding: 3px 6px; border-radius: 4px; font-weight: 700; font-size: 9px;">
                         {status_text}
                     </span>
                 </td>
@@ -1713,6 +1727,7 @@ def render_loanable_item(item) -> str:
 
             loans_html_rows.append(row_html)
 
+            
     # Une todas as linhas criadas para injetar no HTML
     loans_tbody_html = "".join(loans_html_rows)
 

@@ -852,6 +852,7 @@ class LoanableItemPublic(BaseModel):
     legal_guardian_id: UUID
     owner_notes: Optional[str] = None
     in_maintenance: Optional[bool] = None
+    last_check: Optional[datetime] = None
     
     # Informações completas para o retorno
     catalog: Optional["CatalogPublic"] = None
