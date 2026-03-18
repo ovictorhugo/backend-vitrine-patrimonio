@@ -2131,3 +2131,274 @@ def render_all_loanable_items(items: list) -> str:
     </div>
 """
     return html
+
+def render_loan_terms(item, loan) -> str:
+    """
+    Gera um HTML estilizado de um Termo de Cessão de Uso de Bem Móvel.
+    Preenche automaticamente os dados do empréstimo e do item.
+    """
+
+    # --- 1. DADOS DO ITEM (ANEXO I) ---
+    material_name = getattr(item.catalog.asset.material, "material_name", "")
+    asset_description = getattr(item.catalog.asset, "asset_description", "")
+    
+    code_concat = ""
+    try:
+        asset_code = item.catalog.asset.asset_code or ""
+        asset_check_digit = item.catalog.asset.asset_check_digit or ""
+        code_concat = f"{asset_code}-{asset_check_digit}" if asset_check_digit else asset_code
+    except AttributeError:
+        code_concat = getattr(item, "asset_code", "") or ""
+
+    atm_number = getattr(item.catalog.asset, "atm_number", getattr(item, "atm_number", ""))
+    
+    item_full_description = f"{material_name} - {asset_description}".strip(" -")
+    if code_concat:
+        item_full_description += f". Código do Bem: {code_concat}"
+    if atm_number and str(atm_number).lower() != "none":
+        item_full_description += f". ATM: {atm_number}"
+        
+    item_full_description_esc = html_lib.escape(item_full_description)
+
+    # --- 2. DADOS DO EMPRÉSTIMO ---
+    # Cessionário (Priorizamos o guardião temporário, ou o solicitante se não houver)
+    cessionario = loan.temporary_guardian or loan.requester
+    cessionario_name = getattr(cessionario, 'username', getattr(cessionario, 'email', '_________________________________'))
+    cessionario_name_esc = html_lib.escape(cessionario_name)
+
+    # Datas e Prazos
+    start_date = loan.start_at
+    end_date = loan.end_at
+    
+    if start_date and end_date:
+        # Pega a diferença em dias ignorando as horas
+        prazo_dias = (end_date.replace(tzinfo=None).date() - start_date.replace(tzinfo=None).date()).days
+        prazo_dias_str = str(prazo_dias)
+    else:
+        prazo_dias_str = "_______"
+
+    start_date_str = start_date.strftime('%d/%m/%Y') if start_date else "_____/_____/_______"
+    
+
+    finalidade_esc = "_______________________________________________________________________________________________________________________________"
+    
+    # Data da Assinatura (Hoje)
+    hoje = datetime.now()
+    meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+    dia_hoje = hoje.strftime("%d")
+    mes_hoje = meses[hoje.month - 1]
+    ano_hoje = hoje.strftime("%Y")
+
+
+    # --- 3. HTML FINAL DO DOCUMENTO ---
+
+    ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
+    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
+    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+
+    html = f"""
+    <div
+        style="
+            position: relative;
+            width: 100%;
+            height: 297mm;
+            box-sizing: border-box;
+            background-color: #ffffff;
+            overflow: hidden;
+            font-family: 'Lexend', sans-serif;
+            font-size: 11px;
+            color: #000000;
+        "
+    >
+        <table
+            style="
+                width: 100%;
+                border-collapse: collapse;
+                margin: 0;
+                padding: 40px;
+                padding-bottom: 0;
+            "
+        >
+            <tr>
+                <td style="width: 150px; padding: 20px 48px 10px 48px; vertical-align: middle;">
+                    <img src="{SP_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
+                </td>
+                <td style="width: 150px; padding: 20px 48px 10px 48px; text-align: right; vertical-align: middle;">
+                    <img src="{EE_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
+                </td>
+            </tr>
+        </table>
+
+        <div style="padding: 0 40px 20px 40px;">
+            <h2
+              style="
+                font-size: 18px;
+                font-weight: 700;
+                margin-bottom: 16px;
+                text-align: center;
+              "
+            >
+              TERMO DE CESSÃO DE USO DE BEM MÓVEL
+            </h2>
+
+            <div style="text-align: justify; line-height: 1.5; font-size: 11px;">
+                <p style="margin-bottom: 10px;">
+                    A UNIVERSIDADE FEDERAL DE MINAS GERAIS, por intermédio da Escola de Engenharia,
+                    doravante designada UFMG, e, <strong>{cessionario_name_esc}</strong>, domiciliado(a) na
+                    _____________________________________________________ no __________, bairro: ___________________, cidade:
+                    __________________________, portador(a) do CPF: ________________________, CI:
+                    ________________________, celular: ____________________________ doravante
+                    designado <strong>CESSIONÁRIO</strong>, firmam o presente termo de cessão de uso de bem(ns) móvel(is),
+                    que se regerá pelas cláusulas e condições seguintes:
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    <strong>1</strong> - O presente termo tem por objeto a cessão gratuita de uso de bem(ns) móvel(is),
+                    relacionado(s) no Anexo I, parte integrante deste instrumento, doravante designado objeto da
+                    cessão de uso, pertencente à UFMG em favor do CESSIONÁRIO, transferindo-lhe, por
+                    conseguinte, em caráter provisório, a sua posse e a responsabilidade.
+                </p>
+
+                <p style="margin-bottom: 15px;">
+                    <strong>2</strong> - A presente cessão de uso tem como finalidade(s):
+                </p>
+                <p style="margin-top: 10px;">
+                    {finalidade_esc}
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    <strong>3</strong> - Ao objeto da cessão de uso não poderá ser dada destinação diversa daquela, sob pena
+                    de rescisão e perdas e danos.
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    <strong>4</strong> - O presente termo de cessão de uso vigorará pelo prazo de <strong>{prazo_dias_str}</strong> dias, contados
+                    a partir de <strong>{start_date_str}</strong>.
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    <strong>5</strong> - As despesas decorrentes da retirada e devolução do objeto da cessão de uso, bem como
+                    todas aquelas inerentes a sua manutenção e conservação correrão por conta do
+                    CESSIONÁRIO, incumbindo-lhe, ainda, nas mesmas condições, a sua guarda até a efetiva
+                    devolução.
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    <strong>6</strong> - Finda, a qualquer tempo, a cessão de uso, deverá o CESSIONÁRIO restituir o objeto da
+                    cessão de uso em perfeitas condições de uso e conservação, salvo as deteriorações
+                    decorrente do seu uso normal.
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    <strong>7</strong> - Caso seja verificado qualquer dano ao objeto da cessão de uso que não decorra de
+                    deteriorações do uso normal, poderá a UFMG exigir a reposição das partes danificadas ou o
+                    pagamento do valor correspondente ao prejuízo em dinheiro.
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    <strong>8</strong> - A devolução será formalizada por meio de baixa no presente termo de cessão de uso.
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    <strong>9</strong> - O descumprimento, pelo CESSIONÁRIO, de qualquer de suas obrigações dará a UFMG
+                    o direito de considerar rescindida de pleno direito a presente cessão e exigir a reparação de
+                    danos.
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    <strong>10</strong> - Será considerado descumprimento das condições avençadas, para fins de rescisão, o
+                    mau uso do objeto da cessão de uso, a alteração de sua destinação.
+                </p>
+
+                <p style="margin-bottom: 10px;">
+                    E assim, por estarem de acordo, assinam o presente termo em 02 (duas) vias de igual teor,
+                    na presença de testemunhas.<br><br>
+                    Belo Horizonte, {dia_hoje} de {mes_hoje} de {ano_hoje}.
+                </p>
+                
+                <h3 style="font-size: 13px; font-weight: 700; margin-bottom: 10px;">
+                    Descrição do bem objeto do termo de cessão de uso: 
+                </h3>
+                <p style="margin-bottom: 10px; padding: 10px; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px;">
+                    {item_full_description_esc}
+                </p>
+
+                <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; margin-top: 40px;">
+                    <tr>
+                        <td style="width: 50%; padding: 10px;">
+                            ______________________________________________________<br>
+                            <strong>UFMG</strong><br>
+                            Siape:........................................
+                        </td>
+                        <td style="width: 50%; padding: 10px;">
+                            ______________________________________________________<br>
+                            <strong>CESSIONÁRIO</strong><br>
+                            CPF:........................................
+                        </td>
+                    </tr>
+                </table>
+
+                <p><strong>Testemunhas:</strong></p>
+                <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; margin-top: 10px; margin-bottom: 10px;">
+                    <tr>
+                        <td style="width: 50%; padding: 10px;">
+                            ______________________________________________________<br>
+                            Nome:...............................................................<br>
+                            CPF:.................................................................
+                        </td>
+                        <td style="width: 50%; padding: 10px;">
+                            ______________________________________________________<br>
+                            Nome:...............................................................<br>
+                            CPF:.................................................................
+                        </td>
+                    </tr>
+                </table>
+
+                <div 
+                    style="
+                        position: absolute;
+                        bottom: 0;
+                        left: 0;
+                        right: 0;
+                        height: 50px;
+                        padding: 0 24px 20px 24px;
+                    "
+                >
+                    <div style="border-top: 1px solid #e5e7eb; padding-top: 10px;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="text-align: center; padding-bottom: 6px;">
+                                    <p
+                                        style="
+                                        margin: 0;
+                                        color: #6b7280;
+                                        font-size: 11px;
+                                        font-weight: 500;
+                                        "
+                                    >
+                                        Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: right; color: #6b7280; font-size: 10px;">
+                                    Página 1 de 1
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+
+                <div style="border: 1px solid #e5e7eb; padding: 15px; margin-top: 25px; border-radius: 4px; background-color:#f9fafb; page-break-before: always;">
+                    <p style="margin-bottom: 25px; font-weight: 700;">BAIXA / ENTREGA do objeto da cessão de uso: _____/__________/______.</p>
+                    <p style="margin-bottom: 15px;">Conferência do bem: ____________________________________________________________________</p>
+                    <p style="margin-bottom: 5px;">Nome:...................................................................................................................................................</p>
+                    <p style="margin: 0;">Siape:.............................................................</p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+"""
+    return html

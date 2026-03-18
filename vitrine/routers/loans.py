@@ -11,7 +11,7 @@ from weasyprint import HTML
 from io import BytesIO
 from fastapi.responses import StreamingResponse
 
-from .utils import render_loanable_item, render_all_loanable_items
+from .utils import render_loanable_item, render_all_loanable_items, render_loan_terms
 from ..services import mail_service
 
 from vitrine.core.dependencies import CurrentUser, Session, Mail
@@ -458,19 +458,21 @@ async def get_loanable_item_by_catalog(
             status_code=500, 
             detail="Erro na estrutura de dados do item de empréstimo."
         )
-    
+
 @router.patch('/confirm/{loan_id}')
 async def confirm_loan(
     loan_id: UUID,
     confirm: bool,
-    session: Session,
+    session: Session, # ou AsyncSession
     mail: Mail,
     rejection_reason: Optional[str] = None,
 ):
-    # 1. Busca o empréstimo e o item (para verificar quem é o dono)
     query = (
         select(Loan)
-        .options(selectinload(Loan.loanable_item))
+        .options(
+            selectinload(Loan.loanable_item),
+            selectinload(Loan.requester)
+        )
         .where(Loan.id == loan_id)
     )
     db_loan = await session.scalar(query)
@@ -478,34 +480,148 @@ async def confirm_loan(
     if not db_loan:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail='Loan not found.')
 
-    if confirm:
-        db_loan.is_confirmed = True
-        db_loan.rejection_reason = None
-        mail_service.send_custom_email(mail=mail,user=db_loan.requester_id,subject='Confirmação de Empréstimo - Vitrine Patrimônio',content=(
-            "Prezado(a),\n\n"
-            "Informamos que o seu pedido de empréstimo foi aceito pelo setor responsável.\n\n"
-            "Favor baixar o termo de compromisso, assiná-lo e entregar à equipe do Audiovisual ao pegar seu item.\n\n"
-            "Atenciosamente,\n"
-            "Equipe Vitrine Patrimônio"
-        ))
-    else:
-        db_loan.is_confirmed = False
-        db_loan.is_executed = True
-        db_loan.is_returned = True
-        db_loan.rejection_reason = rejection_reason
-        mail_service.send_custom_email(mail=mail,user=db_loan.requester_id,subject='Empréstimo recusado - Vitrine Patrimônio',content=(
-            "Prezado(a),\n\n"
-            "Informamos que o seu pedido de empréstimo foi recusado pelo setor responsável.\n\n"
-            "Caso haja dǘvidas ,  à equipe do Audiovisual ao pegar seu item.\n\n"
-            "Atenciosamente,\n"
-            "Equipe Vitrine Patrimônio"
-        ))
+    try:
+        if confirm:
+            db_loan.is_confirmed = True
+            db_loan.rejection_reason = None
 
-    await session.commit()
-    await session.refresh(db_loan)
+            stmt = (
+                select(Loan)
+                .where(Loan.id == loan_id)
+                .options(
+                    selectinload(Loan.requester),
+                    selectinload(Loan.temporary_guardian),
+                    selectinload(Loan.loanable_item).options(
+                        selectinload(LoanableItem.legal_guardian),
+                        selectinload(LoanableItem.loans),
+                        selectinload(LoanableItem.catalog).options(
+                            selectinload(Catalog.images),
+                            selectinload(Catalog.user),
+                            selectinload(Catalog.asset).options(
+                                selectinload(Asset.material),
+                                selectinload(Asset.legal_guardian)
+                            ),
+                            selectinload(Catalog.location).options(
+                                selectinload(Location.sector).options(
+                                    selectinload(Sector.agency).options(
+                                        selectinload(Agency.unit)
+                                    )
+                                )
+                            ),
+                            selectinload(Catalog.workflow_history).options(
+                                selectinload(CatalogWorkFlow.user),
+                                selectinload(CatalogWorkFlow.transfer_requests)
+                            ),
+                        )
+                    )
+                )
+            )
 
-    return {"msg": "Updated"}
+            result = await session.execute(stmt)
+            loan = result.unique().scalar_one_or_none()
+            item = loan.loanable_item if loan else None
 
+            if not item:
+                raise HTTPException(    
+                    status_code=404, 
+                    detail="O item associado a este empréstimo não foi encontrado ou foi excluído."
+                )
+
+            # Ajustada a ordem dos parâmetros para bater com a função que criamos (loan, item)
+            items_html = ''.join(render_loan_terms(item,loan)) 
+
+            ASSETS_DIR = (
+                Path(__file__).resolve().parent.parent.parent / 'assets'
+            ).resolve()
+            lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
+
+            full_html = f"""
+                    <!DOCTYPE html>
+                    <html lang="pt-br">
+                    <head>
+                        <meta charset="utf-8" />
+                        <title>Termo de Empréstimo</title>
+                        <style>
+                            @page {{
+                                size: A4;
+                                margin: 0;
+                            }}
+                            
+                            html, body {{
+                                margin: 0;
+                                padding: 0;
+                                height: 100%;
+                                background-color: #f9fafb;
+                                font-family: "Lexend", sans-serif;
+                                font-size: 10px;
+                            }}
+                            @font-face {{
+                                        font-family: Lexend;
+                                        src: url({lexend_regular})
+                                    }}                      
+                            img {{ max-width: 100%; }}
+                        </style>
+                    </head>
+                    <body>
+                        {items_html}
+                    </body>
+                    </html>
+                """
+            pdf_bytes: bytes = HTML(string=full_html, encoding='utf-8').write_pdf()
+            
+            # CORREÇÃO: Usando 'await', passando o objeto 'requester' inteiro e chamando a função base
+            await mail_service.send_custom_email(
+                mail=mail,
+                user=db_loan.requester, 
+                subject='Confirmação de Empréstimo - Vitrine Patrimônio',
+                content=(
+                    "Prezado(a),\n\n"
+                    "Informamos que o seu pedido de empréstimo foi aceito pelo setor responsável.\n\n"
+                    "Favor baixar o termo de compromisso, assiná-lo e entregar à equipe do Audiovisual ao pegar seu item.\n\n"
+                    "Atenciosamente,\n"
+                    "Equipe Vitrine Patrimônio"
+                ),
+                attachment_filename="Termo_de_compromisso.pdf",
+                attachment_bytes=pdf_bytes
+            )
+
+        else:
+            # Fluxo de Recusa
+            db_loan.is_confirmed = False
+            db_loan.is_executed = True
+            db_loan.is_returned = True
+            db_loan.rejection_reason = rejection_reason
+            
+            # CORREÇÃO: Usando 'await' e passando o objeto 'requester' inteiro
+            await mail_service.send_custom_email(
+                mail=mail,
+                user=db_loan.requester,
+                subject='Empréstimo recusado - Vitrine Patrimônio',
+                content=(
+                    "Prezado(a),\n\n"
+                    "Informamos que o seu pedido de empréstimo foi recusado pelo setor responsável.\n\n"
+                    "Caso haja dúvidas, procure a equipe do Audiovisual.\n\n"
+                    "Atenciosamente,\n"
+                    "Equipe Vitrine Patrimônio"
+                )
+            )
+
+        # Se tudo deu certo, salva no banco
+        await session.commit()
+        await session.refresh(db_loan)
+
+        return {"msg": "Updated"}
+
+    except Exception as e:
+        # Se QUALQUER coisa der errado (PDF falhar, email não enviar, etc), 
+        # nós desfazemos a operação no banco de dados e avisamos o frontend.
+        await session.rollback()
+        print(f"Erro ao confirmar empréstimo: {e}") # Ajuda a debugar no terminal
+        
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=f"Não foi possível concluir a ação. Erro interno: {str(e)}"
+        )
 @router.patch('/execute/{loan_id}')
 async def execute_loan(
     loan_id: UUID,
@@ -737,5 +853,117 @@ async def export_catalog_pdf(
         media_type='application/pdf',
         headers={
             'Content-Disposition': 'inline; filename="catalogo.pdf"',
+        },
+    )
+
+@router.get('/terms_pdf/{loan_id}')
+async def export_terms_pdf(
+    session: Session,
+    loan_id: UUID,
+):
+    # 1. Busca a partir da tabela Loan, não LoanableItem
+    stmt = (
+        select(Loan)
+        .where(
+            Loan.id == loan_id
+        )
+        .options(
+            # Carrega as pessoas envolvidas no empréstimo
+            selectinload(Loan.requester),
+            selectinload(Loan.temporary_guardian),
+            
+            # Carrega o item e TODA a árvore de dependências dele
+            selectinload(Loan.loanable_item).options(
+                selectinload(LoanableItem.legal_guardian),
+                selectinload(LoanableItem.catalog).options(
+                    selectinload(Catalog.images),
+                    selectinload(Catalog.user),
+                    selectinload(Catalog.asset).options(
+                        selectinload(Asset.material),
+                        selectinload(Asset.legal_guardian)
+                    ),
+                    selectinload(Catalog.location).options(
+                        selectinload(Location.sector).options(
+                            selectinload(Sector.agency).options(
+                                selectinload(Agency.unit)
+                            )
+                        )
+                    ),
+                    selectinload(Catalog.workflow_history).options(
+                        selectinload(CatalogWorkFlow.user),
+                        selectinload(CatalogWorkFlow.transfer_requests)
+                    ),
+                )
+            )
+        )
+    )
+
+    result = await session.execute(stmt)
+    loan = result.unique().scalar_one_or_none()
+
+    # 2. Verifica se o empréstimo existe
+    if not loan:
+        raise HTTPException(    
+            status_code=404, 
+            detail="Empréstimo não encontrado."
+        )
+
+    # 3. Salva o item em uma variável separada
+    item = loan.loanable_item
+
+    if not item:
+        raise HTTPException(    
+            status_code=404, 
+            detail="O item associado a este empréstimo não foi encontrado ou foi excluído."
+        )
+
+    # 4. Passa as duas variáveis para a função de renderização
+    items_html = ''.join(render_loan_terms(item, loan))
+
+    ASSETS_DIR = (
+        Path(__file__).resolve().parent.parent.parent / 'assets'
+    ).resolve()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
+
+    full_html = f"""
+              <!DOCTYPE html>
+              <html lang="pt-br">
+              <head>
+                  <meta charset="utf-8" />
+                  <title>Termo de Empréstimo</title>
+                  <style>
+                      @page {{
+                        size: A4;
+                        margin: 0;
+                      }}
+                      
+                      html, body {{
+                          margin: 0;
+                          padding: 0;
+                          height: 100%;
+                          background-color: #f9fafb;
+                          font-family: "Lexend", sans-serif;
+                          font-size: 10px;
+                      }}
+                      @font-face {{
+                                font-family: Lexend;
+                                src: url({lexend_regular})
+                            }}                      
+                      img {{ max-width: 100%; }}
+                  </style>
+              </head>
+              <body>
+                  {items_html}
+              </body>
+              </html>
+        """
+    pdf_bytes: bytes = HTML(string=full_html, encoding='utf-8').write_pdf()
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type='application/pdf',
+        headers={
+            # Sugestão: Alterado o nome do arquivo baixado
+            'Content-Disposition': 'inline; filename="termo_emprestimo.pdf"',
         },
     )
