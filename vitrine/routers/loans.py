@@ -720,7 +720,8 @@ async def send_maintenance(
 @router.patch('/end_maintenance/{item_id}')
 async def end_maintenance(
     item_id: UUID,
-    session: Session, 
+    session: Session,
+    is_vistoria: bool = False, 
 ):
     """Retira o item da manutenção e finaliza o empréstimo em aberto"""
     
@@ -740,7 +741,8 @@ async def end_maintenance(
     now = datetime.now()
     
     db_item.in_maintenance = False
-    db_item.last_check = now
+    if is_vistoria:
+        db_item.last_check = now
 
     # 4. Busca o empréstimo ativo de manutenção mais recente
     query = select(Loan).where(
@@ -852,7 +854,7 @@ async def export_catalog_pdf(
         BytesIO(pdf_bytes),
         media_type='application/pdf',
         headers={
-            'Content-Disposition': 'inline; filename="catalogo.pdf"',
+            'Content-Disposition': 'inline; filename="Item.pdf"',
         },
     )
 

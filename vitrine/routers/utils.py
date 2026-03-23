@@ -1662,11 +1662,17 @@ def render_loanable_item(item) -> str:
                 except:
                     pass
 
-            if l.is_maintenance:
+            # Nova condição de Recusa (Prioridade alta)
+            if l.rejection_reason:
+                status_text = "RECUSADO"
+                color_bg = "#e0e7ff" # Azul claro (indigo-100)
+                color_text = "#1e3a8a" # Azul escuro (indigo-900)
+            elif l.is_maintenance:
                 status_text = "MANUTENÇÃO"
                 color_bg = "#fef3c7" # Amarelo claro
                 color_text = "#b45309" # Amarelo escuro
             elif l.is_returned and not l.is_confirmed:
+                # Mantido como fallback caso seja recusado sem motivo escrito
                 status_text = "RECUSADO"
                 color_bg = "#fee2e2" # Vermelho claro
                 color_text = "#b91c1c" # Vermelho escuro
@@ -1715,7 +1721,9 @@ def render_loanable_item(item) -> str:
             # 4. Linha secundária para observações e motivos de recusa (se existirem)
             if l.lend_detail or l.rejection_reason:
                 obs = html_lib.escape(l.lend_detail) if l.lend_detail else ""
-                rej = f"<strong style='color: #b91c1c;'>Motivo Recusa:</strong> {html_lib.escape(l.rejection_reason)}" if l.rejection_reason else ""
+                
+                # A cor do motivo da recusa foi alterada para azul escuro para combinar com a nova regra
+                rej = f"<strong style='color: #1e3a8a;'>Motivo Recusa:</strong> {html_lib.escape(l.rejection_reason)}" if l.rejection_reason else ""
                 
                 row_html += f"""
                 <tr style="border-bottom: 1px solid #e5e7eb; background-color: #f9fafb;">
@@ -1992,9 +2000,74 @@ def render_all_loanable_items(items: list) -> str:
             created_str = "-"
 
         # Quantidade de Empréstimos (tamanho do array loans)
-        loans_count = len(getattr(item, "loans", []))
+        loans = getattr(item, "loans", [])
+        loans_count = len(loans)
+        
+        # --- LÓGICA: Cálculo de dias (Manutenção, Atraso e Empréstimos Normais) ---
+        total_delay_days = 0
+        total_maintenance_days = 0
+        total_loan_days = 0
+        now = datetime.now()
+        
+        for l in loans:
+            start_date = getattr(l, "start_at", None)
+            is_executed = getattr(l, "is_executed", False)
+            is_maintenance = getattr(l, "is_maintenance", False)
+            
+            # Se não tem data de início ou ainda é só um pedido pendente, ignora o cálculo
+            if not start_date or (not is_executed and not is_maintenance):
+                continue
 
-        # Cria a linha HTML para este item
+            try:
+                start_dt = start_date.replace(tzinfo=None).date()
+                
+                # 1. LÓGICA DE MANUTENÇÃO
+                if is_maintenance:
+                    end_date_maint = getattr(l, "returned_at", getattr(l, "end_at", None))
+                    end_dt = end_date_maint.replace(tzinfo=None).date() if end_date_maint else now.date()
+                    
+                    # Adicionamos + 1 para que o mesmo dia conte como 1 diária de manutenção
+                    maint_days = (end_dt - start_dt).days + 1
+                    if maint_days > 0:
+                        total_maintenance_days += maint_days
+                        
+                # 2. LÓGICA DE EMPRÉSTIMO NORMAL E ATRASO
+                else:
+                    end_date = getattr(l, "end_at", None)
+                    returned_date = getattr(l, "returned_at", None)
+                    
+                    actual_return_dt = returned_date.replace(tzinfo=None).date() if returned_date else now.date()
+                    expected_end_dt = end_date.replace(tzinfo=None).date() if end_date else actual_return_dt
+                    
+                    # A) Cálculo de Atraso
+                    # Aqui não soma 1. Se devolveu no dia previsto, atraso é 0. Se devolveu 1 dia depois, atraso é 1.
+                    if actual_return_dt > expected_end_dt:
+                        delay = (actual_return_dt - expected_end_dt).days
+                        total_delay_days += delay
+                        
+                    # B) Cálculo de Dias Normais
+                    normal_end_dt = min(actual_return_dt, expected_end_dt)
+                    
+                    # Adicionamos + 1 para garantir o mínimo de 1 dia de uso
+                    normal_days = (normal_end_dt - start_dt).days + 1
+                    
+                    if normal_days > 0:
+                        total_loan_days += normal_days
+                        
+            except Exception:
+                pass # Ignora erros de data mal formatada no banco
+        
+        # Formatação visual para a tabela
+        delay_str = str(total_delay_days) if total_delay_days > 0 else "-"
+        color_delay = "#b91c1c" if total_delay_days > 0 else "#6b7280" # Vermelho
+        
+        maint_str = str(total_maintenance_days) if total_maintenance_days > 0 else "-"
+        color_maint = "#b45309" if total_maintenance_days > 0 else "#6b7280" # Amarelo escuro
+        
+        loan_days_str = str(total_loan_days) if total_loan_days > 0 else "-"
+        color_loan_days = "#059669" if total_loan_days > 0 else "#6b7280" # Verde escuro
+
+        # Cria a linha HTML para este item (Agora com OITO colunas no total)
         row = f"""
         <tr style="border-bottom: 1px solid #e5e7eb; page-break-inside: avoid;">
             <td style="padding: 10px 12px; vertical-align: top; color: #111827; font-weight: 500;">
@@ -2011,6 +2084,25 @@ def render_all_loanable_items(items: list) -> str:
             </td>
             <td style="padding: 10px 12px; vertical-align: top; color: #559FB8; font-weight: 600;">
                 {loans_count}
+            </td>
+            <td style="padding: 10px 12px; vertical-align: top; color: {color_loan_days}; font-weight: 600;">
+                {loan_days_str}
+            </td>
+            <td style="padding: 10px 12px; vertical-align: top; color: {color_delay}; font-weight: 600;">
+                {delay_str}
+            </td>
+            <td style="padding: 10px 12px; vertical-align: top; color: {color_maint}; font-weight: 600;">
+                {maint_str}
+            </td>
+        </tr>
+        """
+        obs = html_lib.escape(item.catalog.asset.asset_description) if item.catalog.asset.asset_description else ""
+        
+        # ATENÇÃO: colspan alterado para 8!
+        row += f"""
+        <tr style="border-bottom: 1px solid #e5e7eb; background-color: #f9fafb;">
+            <td colspan="8" style="padding: 4px 12px 16px 12px; font-size: 9px; color: #6b7280; font-style: italic;">
+                <strong>Descrição:</strong> {obs}
             </td>
         </tr>
         """
@@ -2067,7 +2159,7 @@ def render_all_loanable_items(items: list) -> str:
             <section style="display: block; width: 100%; margin-top: 10px; margin-bottom: 20px;">
     
                 <h3 style="margin: 0 0 15px 0; font-size: 15px; font-weight: 700; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">
-                    CATÁLOGO DE ITENS DE EMPRÉSTIMO
+                    INVENTÁRIO AUDIOVISUAL 
                 </h3>
 
                 <div style="
@@ -2079,11 +2171,14 @@ def render_all_loanable_items(items: list) -> str:
                     <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
                         <thead>
                             <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
-                                <th style="padding: 10px 12px; text-align: left; width: 35%; color: #374151; font-weight: 700;">NOME</th>
-                                <th style="padding: 10px 12px; text-align: left; width: 20%; color: #374151; font-weight: 700;">CÓDIGO</th>
-                                <th style="padding: 10px 12px; text-align: left; width: 15%; color: #374151; font-weight: 700;">ATM</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 25%; color: #374151; font-weight: 700;">NOME</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 14%; color: #374151; font-weight: 700;">CÓDIGO</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 10%; color: #374151; font-weight: 700;">ATM</th>
                                 <th style="padding: 10px 12px; text-align: left; width: 15%; color: #374151; font-weight: 700;">CADASTRO EM</th>
-                                <th style="padding: 10px 12px; text-align: left; width: 15%; color: #374151; font-weight: 700;">EMPRÉSTIMOS</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 9%; color: #374151; font-weight: 700;">USOS</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 9%; color: #374151; font-weight: 700;">USO (DIAS)</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 9%; color: #374151; font-weight: 700;">ATRASO (DIAS)</th>
+                                <th style="padding: 10px 12px; text-align: left; width: 9%; color: #374151; font-weight: 700;">MANUT. (DIAS)</th>
                             </tr>
                         </thead>
                         <tbody>
