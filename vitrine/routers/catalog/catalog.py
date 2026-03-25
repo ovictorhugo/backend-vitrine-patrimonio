@@ -5,6 +5,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
+import tempfile
+import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -12,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from weasyprint import HTML
+from playwright.async_api import async_playwright
 
 from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import (
@@ -249,12 +252,10 @@ async def update_catalog_entry(
     db_catalog.conservation_status = catalog_data.conservation_status
     db_catalog.description = catalog_data.description
 
+    session.expire_on_commit = False
     await session.commit()
 
-    db_catalog_loaded = await session.get(Catalog, catalog_id, options=options)
-
-    print(CatalogPublic.model_validate(db_catalog_loaded))
-    return db_catalog_loaded
+    return db_catalog
 
 
 @router.delete('/{catalog_id}', response_model=Message)
@@ -359,20 +360,13 @@ async def export_catalog_pdf(
         },
     )
 
-
-def render_document_batch(html_content: str):
-    """
-    Renderiza o HTML e retorna o OBJETO Document do WeasyPrint (na memória),
-    em vez de escrever um arquivo em disco.
-    """
-    return HTML(string=html_content, encoding='utf-8').render()
-
 @router.get('/pdf/')
 async def export_catalog_pdf(
     session: Session,
     filters: Annotated[FilterCatalog, Depends()],
 ):
 
+    # --- QUERY E CONTAGEM (Mantidos iguais, estão perfeitos) ---
     base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
     base_query = filter_service.apply_catalog_filters(base_query, filters)
 
@@ -429,9 +423,11 @@ async def export_catalog_pdf(
     ).resolve()
     lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
 
-    main_document = None
+    # 2. LISTA PARA ACUMULAR O HTML (Em vez de PDFs)
+    all_items_html = []
 
     try:
+        # Loop apenas para não travar o banco de dados
         for offset in range(0, total_items, BATCH_SIZE):
             batch_query = base_query.offset(offset).limit(BATCH_SIZE)
 
@@ -441,90 +437,108 @@ async def export_catalog_pdf(
             if not entries:
                 break
 
+            # Renderiza os itens e adiciona à nossa lista gigante
             items_html = ''.join(
                 render_item_html(entry, offset + idx, total_items)
                 for idx, entry in enumerate(entries)
             )
-
-            full_html = f"""
-                <!DOCTYPE html>
-                <html lang="pt-br">
-                <head>
-                    <meta charset="utf-8" />
-                    <style>
-                        /* Liberamos um espaço de 60px no fundo da página A4 para o rodapé não encostar no texto */
-                        @page {{
-                            size: A4;
-                            margin: 0;
-                            padding-bottom: 60px; 
-                            counter-increment: page;
-                        }}
-                        body {{
-                            counter-reset: page {offset};
-                        }}
-                        html, body {{
-                            margin: 0; padding: 0; background-color: #f9fafb;
-                            font-family: "Lexend", sans-serif; font-size: 10px;
-                        }}
-                        @font-face {{ font-family: Lexend; src: url({lexend_regular}); }}
-                        img {{ max-width: 100%; }}
-                        
-                        .rodape-fixo {{
-                            position: fixed;
-                            bottom: 0;
-                            left: 0;
-                            right: 0;
-                            padding: 0 24px 0 24px;
-                        }}
-                    </style>
-                </head>
-                <body>
-                    <div class="rodape-fixo">
-                        <div style="border-top: 1px solid #e5e7eb; padding-top: 10px;">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <tr>
-                                    <td style="text-align: center;">
-                                        <p style="margin: 0; color: #6b7280; font-size: 11px; font-weight: 500;">
-                                            Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </div>
-                    </div>
-                    
-                    {items_html}
-                </body>
-                </html>
-            """
             
-            batch_document = await run_in_threadpool(
-                render_document_batch, full_html
-            )
-
-            if main_document is None:
-                main_document = batch_document
-            else:
-                main_document.pages.extend(batch_document.pages)
+            all_items_html.append(items_html)
 
             del entries
             del items_html
-            del full_html
-            del batch_document 
 
-        # 3. Escrita final
-        final_buffer = BytesIO()
+        # 3. MONTA O HTML FINAL FORA DO LOOP
+        # Junta todas as páginas de todos os lotes em uma única string
+        final_items_html = "".join(all_items_html)
 
-        if main_document:
-            # write_pdf também pode ser pesado, rodamos em threadpool
-            await run_in_threadpool(main_document.write_pdf, final_buffer)
-        else:
-            raise HTTPException(status_code=404, detail='Erro na geração')
+        full_html = f"""
+            <!DOCTYPE html>
+            <html lang="pt-br">
+            <head>
+                <meta charset="utf-8" />
+                <style>
+                    @page {{
+                        size: A4;
+                        margin: 0;
+                        padding-bottom: 60px; 
+                    }}
+                    html, body {{
+                        margin: 0; padding: 0; background-color: #f9fafb;
+                        font-family: "Lexend", sans-serif; font-size: 10px;
+                    }}
+                    /* A fonte local vai carregar sem problemas agora! */
+                    @font-face {{ font-family: Lexend; src: url({lexend_regular}); }}
+                    img {{ max-width: 100%; }}
+                    
+                    .rodape-fixo {{
+                        position: fixed;
+                        bottom: 0;
+                        left: 0;
+                        right: 0;
+                        padding: 0 24px 0 24px;
+                        z-index: 1000; 
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="rodape-fixo">
+                    <div style="border-top: 1px solid #e5e7eb; padding-top: 10px;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="text-align: center;">
+                                    <p style="margin: 0; color: #6b7280; font-size: 11px; font-weight: 500;">
+                                        Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                {final_items_html}
+            </body>
+            </html>
+        """
 
-        final_buffer.seek(0)
+        # Salva o HTML gigante em um arquivo temporário
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8') as f:
+            f.write(full_html)
+            temp_html_path = f.name
 
+        # 4. GERAÇÃO DO PDF COM PLAYWRIGHT (Lendo o arquivo)
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox', 
+                        '--disable-setuid-sandbox', 
+                        '--disable-dev-shm-usage',
+                        '--allow-file-access-from-files' # <-- A FLAG MÁGICA AQUI
+                    ]
+                )
+                page = await browser.new_page()
+                
+                # ACESSA O ARQUIVO LOCAL EM VEZ DE INJETAR O HTML NO AR
+                await page.goto(f"file://{temp_html_path}", wait_until="networkidle")
+                
+                pdf_bytes = await page.pdf(
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "0", "right": "0", "bottom": "0", "left": "0"}
+                )
+                
+                await browser.close()
+                
+        finally:
+            # Garante que o arquivo temporário será apagado, mesmo se der erro!
+            if os.path.exists(temp_html_path):
+                os.remove(temp_html_path)
+
+        # 5. RETORNO DO ARQUIVO
         return StreamingResponse(
-            final_buffer,
+            BytesIO(pdf_bytes),
             media_type='application/pdf',
             headers={
                 'Content-Disposition': 'inline; filename="catalogo_completo.pdf"',

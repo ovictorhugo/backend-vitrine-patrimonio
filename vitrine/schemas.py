@@ -493,6 +493,26 @@ class CatalogPublic(CatalogSchema):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SimpleCatalogPublic(CatalogSchema):
+    id: UUID
+    asset_id: UUID = Field(exclude=True)
+    user_id: UUID = Field(exclude=True)
+    location_id: UUID = Field(exclude=True)
+
+    asset: AssetPublic
+    user: UserPublic
+    location: Optional[LocationPublic] = None
+    images: List[CatalogImagePublic] | None
+    files: List[CatalogFilePublic] | None
+    workflow_history: List[CatalogWorkFlowPublic] | None
+
+    created_at: datetime | None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SimpleCatalogList(BaseModel):
+    catalog_entries: List[SimpleCatalogPublic]
+
 class CatalogList(BaseModel):
     catalog_entries: List[CatalogPublic]
 
