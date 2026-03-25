@@ -20,8 +20,32 @@ from pyhanko_certvalidator import ValidationContext
 KEY_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
 CERT_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
 
+IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
+ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
+EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
+SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+
 #KEY_PATH = "local_key.pem"
 #CERT_PATH = "local_cert.pem"
+
+CONSERVATION_MAP = {
+      "UNUSED": [
+        "Ocioso",
+        "Bem permanente em condições de uso, porém sem aproveitamento funcional no setor em que se encontra, carecendo de realocação ou destinação."
+      ],
+      "RECOVERABLE": [
+        "Recuperável",
+        "É um bem que não pode ser usado no momento, mas que pode ser consertado com um custo viável."
+      ],
+      "UNECONOMICAL": [
+        "Anti-econômico",
+        "É um bem que funciona, mas cujo uso não compensa economicamente porque a manutenção é cara, a eficiência é baixa ou o equipamento ficou obsoleto."
+      ],
+      "BROKEN": [
+        "Quebrado",
+        "É um bem que não tem mais condições de uso, porque perdeu suas características essenciais ou porque o reparo custaria mais de 50% do valor de mercado."
+      ],
+}
 
 
 async def seal_pdf_digitally(pdf_bytes: bytes) -> bytes:
@@ -166,25 +190,6 @@ def render_item_html(item, index: int, total_items: int) -> str:
 
     # ---------- CAMPOS BÁSICOS / ESCAPES ----------
 
-    CONSERVATION_MAP = {
-      "UNUSED": [
-        "Ocioso",
-        "Bem permanente em condições de uso, porém sem aproveitamento funcional no setor em que se encontra, carecendo de realocação ou destinação."
-      ],
-      "RECOVERABLE": [
-        "Recuperável",
-        "É um bem que não pode ser usado no momento, mas que pode ser consertado com um custo viável."
-      ],
-      "UNECONOMICAL": [
-        "Anti-econômico",
-        "É um bem que funciona, mas cujo uso não compensa economicamente porque a manutenção é cara, a eficiência é baixa ou o equipamento ficou obsoleto."
-      ],
-      "BROKEN": [
-        "Quebrado",
-        "É um bem que não tem mais condições de uso, porque perdeu suas características essenciais ou porque o reparo custaria mais de 50% do valor de mercado."
-      ],
-}
-
     # Nome do material
     material_name = item.asset.material.material_name
     material_name = html_lib.escape(material_name)
@@ -195,13 +200,16 @@ def render_item_html(item, index: int, total_items: int) -> str:
 
     # Código + dígito verificador
     code_concat = ""
-    try:
+    if item.asset:
         asset_code = item.asset.asset_code or ""
         asset_check_digit = item.asset.asset_check_digit or ""
-        code_concat = asset_code + "-" + asset_check_digit
-    except AttributeError:
+        code_concat = f"{asset_code}-{asset_check_digit}" if asset_code else ""
+    else:
         code_concat = getattr(item, "asset_code_with_digit", "") or ""
     asset_code_with_digit = html_lib.escape(code_concat or "Sem código")
+
+
+    images = getattr(item, "images", []) or []
 
     # ATM
     atm_number = None
@@ -506,7 +514,7 @@ def render_item_html(item, index: int, total_items: int) -> str:
                     margin-bottom: 2px;
                   "
                 >
-                  Parecerista
+                  Anunciante
                 </span>
                 <span
                   style="
@@ -517,33 +525,9 @@ def render_item_html(item, index: int, total_items: int) -> str:
                     line-height: 1.2;
                   "
                 >
-                  {workflow_commission_username_esc}
+                  {announcer_username}
                 </span>
             </div>
-          </div>
-
-          <div style="display: block; width: 100%;">
-              <p
-                style="
-                  margin: 8px 0 2px 0;
-                  font-weight: 600;
-                  font-size: 12px;
-                "
-              >
-                Justificativa
-              </p>
-              <div
-               style="
-                font-size: 10px;
-                color: #6b7280;
-                line-height: 1.4;
-                text-align: justify;
-               "
-              >
-                 <span style="overflow-wrap: break-word; word-wrap: break-word;">
-                    {workflow_description_esc}
-                 </span>
-              </div>
           </div>
         </div>
       </div>
@@ -680,7 +664,6 @@ def render_item_html(item, index: int, total_items: int) -> str:
 
     # ---------- IMAGENS (Refatorado para Inline-Block ao invés de Grid/Flex) ----------
 
-    IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
     images = getattr(item, "images", []) or []
     image_cells = []
     
@@ -801,16 +784,10 @@ def render_item_html(item, index: int, total_items: int) -> str:
 
     # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
 
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
-    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
-    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
-
     html = f"""
     <div
-        style="
-            position: relative;       
-            width: 100%;
-            height: 100%;            
+        style=" 
+            width: 100%;   
             box-sizing: border-box;
             background-color: #f9fafb;
             page-break-after: always; 
@@ -916,48 +893,9 @@ def render_item_html(item, index: int, total_items: int) -> str:
                 {images_html}
             </section>
         </div>
-
-        <div 
-            style="
-                position: absolute;       /* Absoluto em relação ao wrapper de 297mm */
-                bottom: 0;                /* Cola no fundo da folha */
-                left: 0;
-                right: 0;
-                height: 50px;             /* Altura reservada */
-                padding: 0 24px 20px 24px;
-            "
-        >
-             <div style="border-top: 1px solid #e5e7eb; padding-top: 10px;">
-              <table style="width: 100%; border-collapse: collapse;">
-                
-                <tr>
-                    <td style="text-align: center; padding-bottom: 6px;">
-                         <p
-                            style="
-                              margin: 0;
-                              color: #6b7280;
-                              font-size: 11px;
-                              font-weight: 500;
-                            "
-                          >
-                            Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
-                          </p>
-                    </td>
-                </tr>
-
-                <tr>
-                    <td style="text-align: right; color: #6b7280; font-size: 10px;">
-                        Página {page_number} de {total_items}
-                    </td>
-                </tr>
-
-              </table>
-          </div>
-        </div>
     </div>
     """
     return html
-
 
 def render_transfer_item(item,signers,location) -> str:
     """
@@ -1046,7 +984,6 @@ def render_transfer_item(item,signers,location) -> str:
 
     # ---------- IMAGENS (Refatorado para Inline-Block ao invés de Grid/Flex) ----------
 
-    IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
     images = getattr(item, "images", []) or []
     image_cells = []
 
@@ -1237,10 +1174,6 @@ def render_transfer_item(item,signers,location) -> str:
 
     # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
 
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
-    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
-    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
-
     html = f"""
     <div
         style="
@@ -1425,7 +1358,6 @@ def render_transfer_item(item,signers,location) -> str:
 """
     return html
 
-
 def get_workflow_info_from_history(item) -> Tuple[Optional[str], Optional[str]]:
     """
     Retorna (workflow_commission_username, workflow_description) a partir de item.workflow_history.
@@ -1464,7 +1396,6 @@ def get_workflow_info_from_history(item) -> Tuple[Optional[str], Optional[str]]:
                 undo_justification = getattr(detail, "justificativa", None)
                 
     return commission_username, undo_justification
-
 
 def render_loanable_item(item) -> str:
     """
@@ -1535,7 +1466,6 @@ def render_loanable_item(item) -> str:
 
     # ---------- IMAGENS (Refatorado para Inline-Block ao invés de Grid/Flex) ----------
 
-    IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
     images = getattr(item, "images", []) or []
     image_cells = []
 
@@ -1696,6 +1626,11 @@ def render_loanable_item(item) -> str:
             # 3. Estrutura a linha principal
             border_style = "" if (l.lend_detail or l.rejection_reason) else "border-bottom: 1px solid #e5e7eb;"
             
+            # Tratamento para exibir "-" caso não haja data
+            str_start = format_pdf_date(l.start_at) if l.start_at else "-"
+            str_end = format_pdf_date(l.end_at) if l.end_at else "-"
+            str_returned = format_pdf_date(l.returned_at) if l.returned_at else "-"
+
             row_html = f"""
             <tr style="{border_style}">
                 <td style="padding: 10px 12px; vertical-align: top;">
@@ -1710,10 +1645,13 @@ def render_loanable_item(item) -> str:
                     {html_lib.escape(guardian_name)}
                 </td>
                 <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
-                    {format_pdf_date(l.start_at)}
+                    {str_start}
                 </td>
                 <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
-                    {format_pdf_date(l.returned_at) if l.returned_at else format_pdf_date(l.end_at)}
+                    {str_end}
+                </td>
+                <td style="padding: 10px 12px; vertical-align: top; color: #6b7280;">
+                    {str_returned}
                 </td>
             </tr>
             """
@@ -1725,9 +1663,10 @@ def render_loanable_item(item) -> str:
                 # A cor do motivo da recusa foi alterada para azul escuro para combinar com a nova regra
                 rej = f"<strong style='color: #1e3a8a;'>Motivo Recusa:</strong> {html_lib.escape(l.rejection_reason)}" if l.rejection_reason else ""
                 
+                # ATENÇÃO: colspan alterado de 5 para 6
                 row_html += f"""
                 <tr style="border-bottom: 1px solid #e5e7eb; background-color: #f9fafb;">
-                    <td colspan="5" style="padding: 4px 12px 10px 12px; font-size: 9px; color: #6b7280; font-style: italic;">
+                    <td colspan="6" style="padding: 4px 12px 10px 12px; font-size: 9px; color: #6b7280; font-style: italic;">
                         <strong>Obs:</strong> {obs} {rej}
                     </td>
                 </tr>
@@ -1740,10 +1679,6 @@ def render_loanable_item(item) -> str:
     loans_tbody_html = "".join(loans_html_rows)
 
     # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
-
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
-    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
-    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
     html = f"""
     <div
@@ -1894,11 +1829,12 @@ def render_loanable_item(item) -> str:
                     <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
                         <thead>
                             <tr style="background-color: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
-                                <th style="padding: 8px 12px; text-align: left; width: 14%; color: #374151; font-weight: 600;">STATUS</th>
-                                <th style="padding: 8px 12px; text-align: left; width: 25%; color: #374151; font-weight: 600;">SOLICITANTE</th>
-                                <th style="padding: 8px 12px; text-align: left; width: 25%; color: #374151; font-weight: 600;">RESPONSÁVEL</th>
-                                <th style="padding: 8px 12px; text-align: left; width: 18%; color: #374151; font-weight: 600;">INÍCIO</th>
-                                <th style="padding: 8px 12px; text-align: left; width: 18%; color: #374151; font-weight: 600;">FIM / RETORNO</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 12%; color: #374151; font-weight: 600;">STATUS</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 22%; color: #374151; font-weight: 600;">SOLICITANTE</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 22%; color: #374151; font-weight: 600;">RESPONSÁVEL</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 14%; color: #374151; font-weight: 600;">INÍCIO</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 15%; color: #374151; font-weight: 600;">FIM</th>
+                                <th style="padding: 8px 12px; text-align: left; width: 15%; color: #374151; font-weight: 600;">RETORNO</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1946,7 +1882,6 @@ def render_loanable_item(item) -> str:
     </div>
 """
     return html
-
 
 def render_all_loanable_items(items: list) -> str:
     """
@@ -2122,9 +2057,6 @@ def render_all_loanable_items(items: list) -> str:
         """
 
     # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
-    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
-    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
     html = f"""
     <div
@@ -2286,10 +2218,6 @@ def render_loan_terms(item, loan) -> str:
 
 
     # --- 3. HTML FINAL DO DOCUMENTO ---
-
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
-    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
-    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
     html = f"""
     <div

@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from weasyprint import HTML
 
@@ -367,46 +367,26 @@ def render_document_batch(html_content: str):
     """
     return HTML(string=html_content, encoding='utf-8').render()
 
-
 @router.get('/pdf/')
 async def export_catalog_pdf(
     session: Session,
     filters: Annotated[FilterCatalog, Depends()],
 ):
-    query = select(Catalog).where(Catalog.deleted_at.is_(None))
+
+    base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
+    base_query = filter_service.apply_catalog_filters(base_query, filters)
 
     asset_join_needed = any(
         getattr(filters, field_name) is not None
         for field_name in ASSET_JOIN_TRIGGER_FIELDS
     )
 
-    query = filter_service.apply_catalog_filters(query, filters)
-
     if asset_join_needed:
-        query = query.join(Catalog.asset)
-        query = filter_service.apply_asset_filters(query, filters)
-
-    query = query.options(
-        selectinload(Catalog.images),
-        selectinload(Catalog.files),
-        selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user).options(
-                selectinload(User.system_identity).options(
-                    selectinload(SystemIdentity.legal_guardian)
-                ),
-                selectinload(User.user_role_associations).selectinload(
-                    UserRole.role
-                ),
-            ),
-            selectinload(CatalogWorkFlow.transfer_requests),
-        ),
-        selectinload(Catalog.location)
-        .selectinload(Location.location_inventories)
-        .selectinload(LocationInventory.inventory),
-    )
+        base_query = base_query.join(Catalog.asset)
+        base_query = filter_service.apply_asset_filters(base_query, filters)
 
     if filters.user_id:
-        query = query.where(Catalog.user_id == filters.user_id)
+        base_query = base_query.where(Catalog.user_id == filters.user_id)
 
     if filters.role_id:
         users_with_role = (
@@ -420,16 +400,28 @@ async def export_catalog_pdf(
             .distinct()
             .cte('users_with_role')
         )
-        query = query.join(
+        base_query = base_query.join(
             users_with_role, Catalog.user_id == users_with_role.c.user_id
         )
 
-    query = query.offset(filters.offset).limit(filters.limit)
-
-    result = await session.scalars(query)
-    entries = result.all()
-    total_items = len(entries)
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total_items = await session.scalar(count_query) or 0
     print(f'Existe um total de: {total_items} resultados')
+
+    if total_items == 0:
+        raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
+
+    base_query = base_query.options(
+        selectinload(Catalog.images),
+        selectinload(Catalog.workflow_history).options(
+            selectinload(CatalogWorkFlow.user).options(
+                selectinload(User.system_identity).options(
+                    selectinload(SystemIdentity.legal_guardian)
+                ),
+            ),
+        ),
+        selectinload(Catalog.location)
+    )
 
     BATCH_SIZE = 25
     ASSETS_DIR = (
@@ -441,62 +433,14 @@ async def export_catalog_pdf(
 
     try:
         for offset in range(0, total_items, BATCH_SIZE):
-            # --- Query do Lote (Igual) ---
-            query = select(Catalog).where(Catalog.deleted_at.is_(None))
-            query = filter_service.apply_catalog_filters(query, filters)
+            batch_query = base_query.offset(offset).limit(BATCH_SIZE)
 
-            if asset_join_needed:
-                query = query.join(Catalog.asset)
-                query = filter_service.apply_asset_filters(query, filters)
-
-            query = query.options(
-                selectinload(Catalog.images),
-                selectinload(Catalog.files),
-                selectinload(Catalog.workflow_history).options(
-                    selectinload(CatalogWorkFlow.user).options(
-                        selectinload(User.system_identity).options(
-                            selectinload(SystemIdentity.legal_guardian)
-                        ),
-                        selectinload(User.user_role_associations).selectinload(
-                            UserRole.role
-                        ),
-                    ),
-                    selectinload(CatalogWorkFlow.transfer_requests),
-                ),
-                selectinload(Catalog.location)
-                .selectinload(Location.location_inventories)
-                .selectinload(LocationInventory.inventory),
-            )
-
-            if filters.user_id:
-                query = query.where(Catalog.user_id == filters.user_id)
-
-            if filters.role_id:
-                users_with_role = (
-                    select(UserRole.user_id)
-                    .join(Role, Role.id == UserRole.role_id)
-                    .where(
-                        Role.id == filters.role_id,
-                        UserRole.deleted_at.is_(None),
-                        Role.deleted_at.is_(None),
-                    )
-                    .distinct()
-                    .cte('users_with_role')
-                )
-                query = query.join(
-                    users_with_role,
-                    Catalog.user_id == users_with_role.c.user_id,
-                )
-
-            query = query.offset(offset).limit(BATCH_SIZE)
-
-            result = await session.scalars(query)
+            result = await session.scalars(batch_query)
             entries = result.unique().all()
 
             if not entries:
                 break
 
-            # Renderiza HTML
             items_html = ''.join(
                 render_item_html(entry, offset + idx, total_items)
                 for idx, entry in enumerate(entries)
@@ -508,54 +452,69 @@ async def export_catalog_pdf(
                 <head>
                     <meta charset="utf-8" />
                     <style>
+                        /* Liberamos um espaço de 60px no fundo da página A4 para o rodapé não encostar no texto */
                         @page {{
                             size: A4;
                             margin: 0;
+                            padding-bottom: 60px; 
                             counter-increment: page;
                         }}
                         body {{
                             counter-reset: page {offset};
                         }}
                         html, body {{
-                            margin: 0; padding: 0; background-color: #ffffff;
+                            margin: 0; padding: 0; background-color: #f9fafb;
                             font-family: "Lexend", sans-serif; font-size: 10px;
                         }}
                         @font-face {{ font-family: Lexend; src: url({lexend_regular}); }}
                         img {{ max-width: 100%; }}
+                        
+                        .rodape-fixo {{
+                            position: fixed;
+                            bottom: 0;
+                            left: 0;
+                            right: 0;
+                            padding: 0 24px 0 24px;
+                        }}
                     </style>
                 </head>
                 <body>
+                    <div class="rodape-fixo">
+                        <div style="border-top: 1px solid #e5e7eb; padding-top: 10px;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <p style="margin: 0; color: #6b7280; font-size: 11px; font-weight: 500;">
+                                            Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
                     {items_html}
                 </body>
                 </html>
             """
-
-            # GERA O DOCUMENTO NA MEMÓRIA (Rodando em thread separada para não travar)
+            
             batch_document = await run_in_threadpool(
                 render_document_batch, full_html
             )
 
-            # --- MÁGICA DO WEASYPRINT AQUI ---
             if main_document is None:
-                # O primeiro lote vira o documento mestre
                 main_document = batch_document
             else:
-                # Os lotes seguintes apenas injetam suas páginas no mestre
                 main_document.pages.extend(batch_document.pages)
 
-            # Limpeza agressiva
             del entries
             del items_html
             del full_html
-            del (
-                batch_document
-            )  # Já copiamos as páginas, podemos deletar o objeto
-            gc.collect()
+            del batch_document 
 
         # 3. Escrita final
         final_buffer = BytesIO()
 
-        # O método write_pdf agora grava o mestre (com todas as páginas acumuladas)
         if main_document:
             # write_pdf também pode ser pesado, rodamos em threadpool
             await run_in_threadpool(main_document.write_pdf, final_buffer)
