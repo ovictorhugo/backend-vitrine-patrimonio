@@ -443,6 +443,11 @@ class CatalogWorkFlowSchema(BaseModel):
     workflow_status: str
     detail: Optional[dict] = Field(default=None)
 
+class SimpleCatalogWorkFlowPublic(CatalogWorkFlowSchema):
+    id: UUID
+    catalog_id: UUID
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
 
 class CatalogWorkFlowPublic(CatalogWorkFlowSchema):
     id: UUID
@@ -481,6 +486,7 @@ class CatalogPublic(CatalogSchema):
     asset_id: UUID = Field(exclude=True)
     user_id: UUID = Field(exclude=True)
     location_id: UUID = Field(exclude=True)
+    current_workflow_status: Optional[str] = Field(default=None)
 
     asset: AssetPublic
     user: UserPublic
@@ -496,17 +502,13 @@ class CatalogPublic(CatalogSchema):
 class SimpleCatalogPublic(CatalogSchema):
     id: UUID
     asset_id: UUID = Field(exclude=True)
-    user_id: UUID = Field(exclude=True)
-    location_id: UUID = Field(exclude=True)
-
+    current_workflow_status: Optional[str] = None
+    images: List[CatalogImagePublic]
     asset: AssetPublic
-    user: UserPublic
-    location: Optional[LocationPublic] = None
-    images: List[CatalogImagePublic] | None
-    files: List[CatalogFilePublic] | None
-    workflow_history: List[CatalogWorkFlowPublic] | None
+    workflow_history: List['SimpleCatalogWorkFlowPublic'] | None
 
     created_at: datetime | None
+    
     model_config = ConfigDict(from_attributes=True)
 
 

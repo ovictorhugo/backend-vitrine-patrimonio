@@ -618,6 +618,7 @@ class Catalog(AuditMixin):
     situation: Mapped[str | None] = mapped_column(nullable=False, index=True)
     conservation_status: Mapped[str | None] = mapped_column(nullable=True)
     description: Mapped[str | None] = mapped_column(nullable=True)
+    current_workflow_status: Mapped[str | None] = mapped_column(index=True, nullable=True)
 
     asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'))
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))

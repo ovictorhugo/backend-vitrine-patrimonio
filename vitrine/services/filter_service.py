@@ -138,8 +138,11 @@ def build_catalog_filters(filters):
 
     return final_joins, final_filters, params
 
-
 def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
+    """
+    Aplica filtros na tabela Catalog.
+    Otimizado para usar a nova coluna desnormalizada 'workflow_status'.
+    """
     if filters.only_uncollected:
         query = query.outerjoin(
             CollectionItem,
@@ -148,90 +151,92 @@ def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
                 CollectionItem.collection.has(Collection.deleted_at.is_(None)),
             ),
         ).where(CollectionItem.id.is_(None))
-    needs_latest_workflow = filters.reviewer_id or filters.workflow_status
 
-    if needs_latest_workflow:
-        window_function = func.row_number().over(
-            partition_by=CatalogWorkFlow.catalog_id,
-            order_by=desc(CatalogWorkFlow.created_at),
-        )
-        latest_workflow_subquery = select(
-            CatalogWorkFlow.catalog_id,
-            CatalogWorkFlow.workflow_status,
-            CatalogWorkFlow.detail,
-            window_function.label('rn'),
-        ).subquery()
-        latest = aliased(latest_workflow_subquery)
-        query = query.join(latest, Catalog.id == latest.c.catalog_id).where(
-            latest.c.rn == 1
-        )
-
-    if filters.reviewer_id:
-        search_json = {'reviewers': [{'id': str(filters.reviewer_id)}]}
-        query = query.where(latest.c.detail.cast(JSONB).op('@>')(search_json))
-
+    # ==============================================================
+    # OTIMIZAÇÃO: Filtro direto na coluna desnormalizada (Alta Performance)
+    # ==============================================================
     if filters.workflow_status:
-        query = query.where(
-            latest.c.workflow_status == filters.workflow_status
+        query = query.where(Catalog.current_workflow_status == filters.workflow_status)
+
+    # O reviewer_id ainda reside no detalhe do workflow_history.
+    # Como é um filtro específico, usamos uma subquery lateral apenas se necessário.
+    if filters.reviewer_id:
+        latest_wf = (
+            select(CatalogWorkFlow.detail)
+            .where(CatalogWorkFlow.catalog_id == Catalog.id)
+            .order_by(desc(CatalogWorkFlow.created_at))
+            .limit(1)
+            .correlate(Catalog)
+            .scalar_subquery()
         )
+        search_json = {'reviewers': [{'id': str(filters.reviewer_id)}]}
+        query = query.where(latest_wf.cast(JSONB).op('@>')(search_json))
 
     return query
 
 
-def apply_asset_filters(query, filters):
+def apply_asset_filters(query: Select, filters: FilterCatalog) -> Select:
+    """
+    Aplica filtros na tabela Asset e suas relações geográficas.
+    Otimizado para evitar Joins redundantes e Full Table Scans.
+    """
     query = query.where(Asset.deleted_at.is_(None))
 
+    # Busca textual com GIN Index
     if filters.q:
         prefix_query = ' & '.join(word + ':*' for word in filters.q.split())
         ts_query = func.to_tsquery('portuguese', prefix_query)
         query = query.where(Asset.tsv.op('@@')(ts_query))
 
+    # ==============================================================
+    # OTIMIZAÇÃO: Busca por identificador sem func.concat (Usa índices)
+    # ==============================================================
     if filters.asset_identifier:
-        query = query.where(
-            func.concat(Asset.asset_code, Asset.asset_check_digit)
-            == filters.asset_identifier.replace('-', '')
-        )
+        clean_id = filters.asset_identifier.replace('-', '')
+        if len(clean_id) > 1:
+            code = clean_id[:-1]
+            digit = clean_id[-1]
+            query = query.where(Asset.asset_code == code, Asset.asset_check_digit == digit)
+        else:
+            query = query.where(Asset.asset_code == clean_id)
 
-    if filters.atm_number:
-        query = query.where(Asset.atm_number == filters.atm_number)
-
-    if filters.material_id:
-        query = query.where(Asset.material_id == filters.material_id)
-
-    if filters.unit_id:
-        query = (
-            query.join(Asset.location)
-            .join(Location.sector)
-            .join(Sector.agency)
-            .where(Agency.unit_id == filters.unit_id)
-        )
-
-    if filters.agency_id:
-        query = (
-            query.join(Asset.location)
-            .join(Location.sector)
-            .where(Sector.agency_id == filters.agency_id)
-        )
-
-    if filters.sector_id:
-        query = query.join(Asset.location).where(
-            Location.sector_id == filters.sector_id
-        )
-
+    # ==============================================================
+    # OTIMIZAÇÃO: Joins Geográficos Encadeados (Single Pass)
+    # ==============================================================
     if filters.location_id:
+        # location_id está na tabela Asset, não precisa de JOIN
         query = query.where(Asset.location_id == filters.location_id)
 
-    if filters.legal_guardian_id:
-        query = query.where(
-            Asset.legal_guardian_id == filters.legal_guardian_id
-        )
+    # Verifica profundidade necessária para evitar JOINs inúteis
+    needs_sector = any([filters.sector_id, filters.agency_id, filters.unit_id])
+    needs_agency = any([filters.agency_id, filters.unit_id])
+    needs_unit = filters.unit_id is not None
 
+    if needs_sector:
+        query = query.join(Asset.location)
+        if filters.sector_id:
+            query = query.where(Location.sector_id == filters.sector_id)
+            
+    if needs_agency:
+        query = query.join(Location.sector)
+        if filters.agency_id:
+            query = query.where(Sector.agency_id == filters.agency_id)
+            
+    if needs_unit:
+        query = query.join(Sector.agency)
+        query = query.where(Agency.unit_id == filters.unit_id)
+
+    # Demais filtros diretos
+    if filters.atm_number:
+        query = query.where(Asset.atm_number == filters.atm_number)
+    if filters.material_id:
+        query = query.where(Asset.material_id == filters.material_id)
+    if filters.legal_guardian_id:
+        query = query.where(Asset.legal_guardian_id == filters.legal_guardian_id)
     if filters.is_official is not None:
         query = query.where(Asset.is_official == filters.is_official)
-
     if filters.asset_status:
         query = query.where(Asset.asset_status == filters.asset_status)
-
     if filters.csv_code:
         query = query.where(Asset.csv_code == filters.csv_code)
 

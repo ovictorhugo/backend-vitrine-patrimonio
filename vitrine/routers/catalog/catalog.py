@@ -11,8 +11,8 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, func, desc , exists
+from sqlalchemy.orm import selectinload, joinedload
 from weasyprint import HTML
 from playwright.async_api import async_playwright
 
@@ -30,6 +30,7 @@ from vitrine.models import (
     WorkflowTransfer,
 )
 from vitrine.schemas import (
+    SimpleCatalogList,
     CatalogList,
     CatalogPublic,
     CatalogSchema,
@@ -113,24 +114,33 @@ async def create_catalog_entry(
     created_catalog = await session.scalar(query)
     return created_catalog
 
-
 @router.get('/', response_model=CatalogList)
 async def read_catalog_entries(
     session: Session, filters: Annotated[FilterCatalog, Depends()]
 ):
+    # Iniciamos a query base
     query = select(Catalog).where(Catalog.deleted_at.is_(None))
 
+    # Verifica se precisamos do join com Asset para os filtros
     asset_join_needed = any(
         getattr(filters, field_name) is not None
         for field_name in ASSET_JOIN_TRIGGER_FIELDS
     )
 
+    # 1. Aplica os filtros de Catálogo (que agora usa a nova coluna workflow_status)
     query = filter_service.apply_catalog_filters(query, filters)
 
+    # 2. Aplica os filtros de Asset (usando joinedload se não for filtrar, ou contains_eager se for)
     if asset_join_needed:
         query = query.join(Catalog.asset)
         query = filter_service.apply_asset_filters(query, filters)
+        # Se já fizemos o join para filtrar, usamos contains_eager para carregar os dados
+        query = query.options(contains_eager(Catalog.asset))
+    else:
+        # Se não filtramos por asset, apenas trazemos os dados de forma otimizada
+        query = query.options(joinedload(Catalog.asset))
 
+    # 3. Opções de carregamento para os campos aninhados (mantenha apenas o necessário para a resposta)
     query = query.options(
         selectinload(Catalog.workflow_history).options(
             selectinload(CatalogWorkFlow.transfer_requests).options(
@@ -147,31 +157,98 @@ async def read_catalog_entries(
         ),
         selectinload(Catalog.user).options(selectinload(User.system_identity)),
     )
+
+    # 4. Filtros de Usuário e Role
     if filters.user_id:
         query = query.where(Catalog.user_id == filters.user_id)
 
     if filters.role_id:
-        users_with_role = (
-            select(UserRole.user_id)
+        # Otimização: Substituindo CTE por EXISTS
+        role_subq = (
+            select(1)
+            .select_from(UserRole)
             .join(Role, Role.id == UserRole.role_id)
             .where(
+                UserRole.user_id == Catalog.user_id,
                 Role.id == filters.role_id,
                 UserRole.deleted_at.is_(None),
-                Role.deleted_at.is_(None),
+                Role.deleted_at.is_(None)
             )
-            .distinct()
-            .cte('users_with_role')
         )
-        query = query.join(
-            users_with_role, Catalog.user_id == users_with_role.c.user_id
-        )
+        query = query.where(exists(role_subq))
 
+    # 5. Ordenação e Paginação (CRÍTICO para performance com offset)
+    query = query.order_by(desc(Catalog.created_at))
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)
-    entries = result.all()
+    # Use .unique() se houver risco de duplicatas devido aos joins de coleções
+    entries = result.unique().all()
 
     return {'catalog_entries': entries}
+
+
+@router.get('/simple', response_model=SimpleCatalogList)
+async def read_catalog_entries(
+    session: Session, filters: Annotated[FilterCatalog, Depends()]
+):
+    # Iniciamos a query base
+    query = select(Catalog).where(Catalog.deleted_at.is_(None))
+
+    # Verifica se precisamos do join com Asset para os filtros
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
+    )
+
+    # 1. Aplica os filtros de Catálogo (que agora usa a nova coluna workflow_status)
+    query = filter_service.apply_catalog_filters(query, filters)
+
+    # 2. Aplica os filtros de Asset (usando joinedload se não for filtrar, ou contains_eager se for)
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
+        # Se já fizemos o join para filtrar, usamos contains_eager para carregar os dados
+        query = query.options(contains_eager(Catalog.asset))
+    else:
+        # Se não filtramos por asset, apenas trazemos os dados de forma otimizada
+        query = query.options(joinedload(Catalog.asset))
+
+    # 3. Opções de carregamento para os campos aninhados (mantenha apenas o necessário para a resposta)
+    query = query.options(
+        selectinload(Catalog.images),
+        selectinload(Catalog.user).options(selectinload(User.system_identity)),
+    )
+
+    # 4. Filtros de Usuário e Role
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
+
+    if filters.role_id:
+        # Otimização: Substituindo CTE por EXISTS
+        role_subq = (
+            select(1)
+            .select_from(UserRole)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                UserRole.user_id == Catalog.user_id,
+                Role.id == filters.role_id,
+                UserRole.deleted_at.is_(None),
+                Role.deleted_at.is_(None)
+            )
+        )
+        query = query.where(exists(role_subq))
+
+    # 5. Ordenação e Paginação (CRÍTICO para performance com offset)
+    query = query.order_by(desc(Catalog.created_at))
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    # Use .unique() se houver risco de duplicatas devido aos joins de coleções
+    entries = result.unique().all()
+
+    return {'catalog_entries': entries}
+
 
 
 @router.get('/{catalog_id}', response_model=CatalogPublic)

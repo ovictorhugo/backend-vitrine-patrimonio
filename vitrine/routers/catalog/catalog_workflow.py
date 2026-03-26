@@ -114,6 +114,9 @@ async def add_workflow_step(
         detail=workflow_data.detail,
     )
 
+    db_catalog.current_workflow_status = workflow_data.workflow_status
+    session.add(db_catalog)
+
     session.add(new_workflow_entry)
     await session.commit()
     await session.refresh(
