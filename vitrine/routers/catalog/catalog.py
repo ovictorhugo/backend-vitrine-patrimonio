@@ -11,8 +11,8 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, desc , exists
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy import select, func, desc, exists
+from sqlalchemy.orm import selectinload, joinedload, contains_eager, noload
 from weasyprint import HTML
 from playwright.async_api import async_playwright
 
@@ -188,36 +188,40 @@ async def read_catalog_entries(
     return {'catalog_entries': entries}
 
 
-@router.get('/simple', response_model=SimpleCatalogList)
+@router.get('/cards', response_model=SimpleCatalogList)
 async def read_catalog_entries(
     session: Session, filters: Annotated[FilterCatalog, Depends()]
 ):
-    # Iniciamos a query base
     query = select(Catalog).where(Catalog.deleted_at.is_(None))
 
-    # Verifica se precisamos do join com Asset para os filtros
     asset_join_needed = any(
         getattr(filters, field_name) is not None
         for field_name in ASSET_JOIN_TRIGGER_FIELDS
     )
 
-    # 1. Aplica os filtros de Catálogo (que agora usa a nova coluna workflow_status)
+    # 1. Aplica filtros de catálogo
     query = filter_service.apply_catalog_filters(query, filters)
 
-    # 2. Aplica os filtros de Asset (usando joinedload se não for filtrar, ou contains_eager se for)
+    # 2. Aplica filtros e carregamento do Asset
     if asset_join_needed:
         query = query.join(Catalog.asset)
         query = filter_service.apply_asset_filters(query, filters)
-        # Se já fizemos o join para filtrar, usamos contains_eager para carregar os dados
         query = query.options(contains_eager(Catalog.asset))
     else:
-        # Se não filtramos por asset, apenas trazemos os dados de forma otimizada
         query = query.options(joinedload(Catalog.asset))
 
-    # 3. Opções de carregamento para os campos aninhados (mantenha apenas o necessário para a resposta)
+    # 3. Opções de Carregamento (O SEGREDO ESTÁ AQUI)
     query = query.options(
+        # Garantir o que queremos (já é o padrão, mas fica explícito):
         selectinload(Catalog.images),
-        selectinload(Catalog.user).options(selectinload(User.system_identity)),
+        selectinload(Catalog.user),
+        
+        # DESLIGAR o que o SQLAlchemy tentaria carregar sozinho em background:
+        noload(Catalog.location),
+        noload(Catalog.files),
+        noload(Catalog.workflow_history),
+        noload(Catalog.favorited_by),
+        noload(Catalog.collection_items),
     )
 
     # 4. Filtros de Usuário e Role
@@ -225,7 +229,6 @@ async def read_catalog_entries(
         query = query.where(Catalog.user_id == filters.user_id)
 
     if filters.role_id:
-        # Otimização: Substituindo CTE por EXISTS
         role_subq = (
             select(1)
             .select_from(UserRole)
@@ -239,17 +242,14 @@ async def read_catalog_entries(
         )
         query = query.where(exists(role_subq))
 
-    # 5. Ordenação e Paginação (CRÍTICO para performance com offset)
+    # 5. Ordenação e Paginação
     query = query.order_by(desc(Catalog.created_at))
     query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.scalars(query)
-    # Use .unique() se houver risco de duplicatas devido aos joins de coleções
     entries = result.unique().all()
 
     return {'catalog_entries': entries}
-
-
 
 @router.get('/{catalog_id}', response_model=CatalogPublic)
 async def read_catalog_entry(catalog_id: UUID, session: Session):

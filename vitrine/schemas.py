@@ -348,7 +348,7 @@ class AssetPublic(AssetSchema):
     location: LocationPublic
     location_id: UUID = Field(exclude=True)
     material_id: UUID = Field(exclude=True)
-    legal_guardian_id: UUID = Field(exclude=True)
+    legal_guardian_id: UUID = Field(eSxclude=True)
     is_official: bool
     model_config = ConfigDict(from_attributes=True)
 
@@ -443,12 +443,6 @@ class CatalogWorkFlowSchema(BaseModel):
     workflow_status: str
     detail: Optional[dict] = Field(default=None)
 
-class SimpleCatalogWorkFlowPublic(CatalogWorkFlowSchema):
-    id: UUID
-    catalog_id: UUID
-    created_at: datetime
-    model_config = ConfigDict(from_attributes=True)
-
 class CatalogWorkFlowPublic(CatalogWorkFlowSchema):
     id: UUID
     user_id: UUID = Field(exclude=True)
@@ -498,22 +492,6 @@ class CatalogPublic(CatalogSchema):
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
-
-class SimpleCatalogPublic(CatalogSchema):
-    id: UUID
-    asset_id: UUID = Field(exclude=True)
-    current_workflow_status: Optional[str] = None
-    images: List[CatalogImagePublic]
-    asset: AssetPublic
-    workflow_history: List['SimpleCatalogWorkFlowPublic'] | None
-
-    created_at: datetime | None
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
-class SimpleCatalogList(BaseModel):
-    catalog_entries: List[SimpleCatalogPublic]
 
 class CatalogList(BaseModel):
     catalog_entries: List[CatalogPublic]
@@ -813,6 +791,53 @@ class CatalogSimple(BaseModel):
     id: UUID
     asset: AssetPublic
     model_config = ConfigDict(from_attributes=True)
+
+class SimpleUserPublic(BaseModel):
+    id: UUID
+    username: str
+    email: EmailStr
+    provider: Optional[str] = Field(default=None)
+    linkedin: Optional[str] = Field(default=None)
+    lattes_id: Optional[str] = Field(default=None)
+    orcid: Optional[str] = Field(default=None)
+    ramal: Optional[str] = Field(default=None)
+    photo_url: Optional[str] = Field(default=None)
+    background_url: Optional[str] = Field(default=None)
+    matricula: Optional[str] = Field(default=None)
+    verify: Optional[bool] = Field(default=None)
+    institution_id: Optional[UUID] = Field(default=None)
+
+    model_config = ConfigDict(from_attributes=True)
+
+class SimpleAssetPublic(AssetSchema):
+    id: UUID
+    is_official: bool
+    material: MaterialPublic
+    
+    location_id: Optional[UUID] = Field(default=None, exclude=True)
+    material_id: Optional[UUID] = Field(default=None, exclude=True)
+    legal_guardian_id: Optional[UUID] = Field(default=None, exclude=True)
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SimpleCatalogPublic(CatalogSchema):
+    id: UUID
+    asset_id: UUID = Field(exclude=True)
+    current_workflow_status: Optional[str] = Field(default=None)
+    images: List[CatalogImagePublic]
+    
+    asset: SimpleAssetPublic 
+    user: SimpleUserPublic
+    created_at: Optional[datetime] = Field(default=None)
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SimpleCatalogList(BaseModel):
+    catalog_entries: List[SimpleCatalogPublic]
+
+# TRANSFERS
 
 class TransferSignerPublic(BaseModel):
     id: UUID

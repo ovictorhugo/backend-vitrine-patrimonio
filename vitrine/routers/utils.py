@@ -2269,7 +2269,7 @@ def render_loan_terms(item, loan) -> str:
                     A UNIVERSIDADE FEDERAL DE MINAS GERAIS, por intermédio da Escola de Engenharia,
                     doravante designada UFMG, e, <strong>{cessionario_name_esc}</strong>, domiciliado(a) na
                     _____________________________________________________ no __________, bairro: ___________________, cidade:
-                    __________________________, portador(a) do CPF: ________________________, CI:
+                    __________________________, portador(a) do Matricula: ________________________, CI:
                     ________________________, celular: ____________________________ doravante
                     designado <strong>CESSIONÁRIO</strong>, firmam o presente termo de cessão de uso de bem(ns) móvel(is),
                     que se regerá pelas cláusulas e condições seguintes:
@@ -2356,7 +2356,7 @@ def render_loan_terms(item, loan) -> str:
                         <td style="width: 50%; padding: 10px;">
                             ______________________________________________________<br>
                             <strong>CESSIONÁRIO</strong><br>
-                            CPF:........................................
+                            Matricula:........................................
                         </td>
                     </tr>
                 </table>
@@ -2367,12 +2367,12 @@ def render_loan_terms(item, loan) -> str:
                         <td style="width: 50%; padding: 10px;">
                             ______________________________________________________<br>
                             Nome:...............................................................<br>
-                            CPF:.................................................................
+                            Matricula:.................................................................
                         </td>
                         <td style="width: 50%; padding: 10px;">
                             ______________________________________________________<br>
                             Nome:...............................................................<br>
-                            CPF:.................................................................
+                            Matricula:.................................................................
                         </td>
                     </tr>
                 </table>
