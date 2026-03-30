@@ -24,6 +24,16 @@ def upgrade() -> None:
     op.add_column('catalog', sa.Column('current_workflow_status', sa.String(), nullable=True))
     op.create_index(op.f('ix_catalog_current_workflow_status'), 'catalog', ['current_workflow_status'], unique=False)
     op.drop_index(op.f('idx_catalog_workflow_latest'), table_name='catalog_workflow')
+    op.execute("""
+        UPDATE catalog c
+        SET current_workflow_status = cw.workflow_status
+        FROM (
+            SELECT catalog_id, workflow_status,
+                   ROW_NUMBER() OVER(PARTITION BY catalog_id ORDER BY created_at DESC) as rn
+            FROM catalog_workflow
+        ) cw
+        WHERE c.id = cw.catalog_id AND cw.rn = 1;
+    """)
     # ### end Alembic commands ###
 
 
