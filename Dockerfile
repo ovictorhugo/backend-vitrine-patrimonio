@@ -34,9 +34,6 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-RUN playwright install chromium \
-    && playwright install-deps chromium
-
 COPY . .
 
 COPY entrypoint.sh .
