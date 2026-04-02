@@ -181,633 +181,149 @@ async def verify_pdf_signature(pdf_bytes: bytes) -> dict:
         traceback.print_exc()
         return {"valid": False, "message": "Erro ao processar arquivo PDF."}
 
-
-def render_item_html(item, index: int, total_items: int) -> str:
-    """
-    Gera um HTML estilizado para um item do catálogo, inspirado no template do front.
-    Cada item ocupa 1 página (page-break-after: always).
-    """
-
-    # ---------- CAMPOS BÁSICOS / ESCAPES ----------
-
-    # Nome do material
-    material_name = item.asset.material.material_name
-    material_name = html_lib.escape(material_name)
-
-    # Descrição do bem
-    asset_description = item.asset.asset_description
-    asset_description = html_lib.escape(asset_description)
-
-    # Código + dígito verificador
-    code_concat = ""
-    if item.asset:
-        asset_code = item.asset.asset_code or ""
-        asset_check_digit = item.asset.asset_check_digit or ""
-        code_concat = f"{asset_code}-{asset_check_digit}" if asset_code else ""
-    else:
-        code_concat = getattr(item, "asset_code_with_digit", "") or ""
-    asset_code_with_digit = html_lib.escape(code_concat or "Sem código")
-
-
-    images = getattr(item, "images", []) or []
-
-    # ATM
-    atm_number = None
-    try:
-        atm_number = item.asset.atm_number
-    except AttributeError:
-        atm_number = getattr(item, "atm_number", None)
-    atm_number_esc = html_lib.escape(atm_number) if atm_number else ""
-
-    # Responsável / curador
-    legal_guardian_name = item.asset.legal_guardian.legal_guardians_name
-    legal_guardian_name_esc = html_lib.escape(legal_guardian_name) if legal_guardian_name else ""
-
-    # Possui plaqueta?
-    is_official = item.asset.is_official
-    if is_official is None:
-        plaqueta_text = " -"
-        bar_color = "#d4d4d8"
-    elif is_official:
-        plaqueta_text = " Sim"
-        bar_color = "#16a34a"
-    else:
-        plaqueta_text = " Não"
-        bar_color = "#f97316"
-
-    # Situação / conservação
-    situation = getattr(item, "situation", None) or ""
-    conservation_status = getattr(item, "conservation_status", None) or ""
-
-    situation_esc = html_lib.escape(situation) if situation else ""
-    conservation_status_esc = html_lib.escape(conservation_status) if conservation_status else ""
-
-    # Justificativa de catálogo
-    catalog_description = getattr(item, "catalog_description", None)
-    if catalog_description is None:
-        catalog_description = getattr(item, "description", None)
-    catalog_description_esc = html_lib.escape(catalog_description) if catalog_description else ""
-
-    # Anunciante
-    announcer_username = getattr(item, "announcer_username", None)
-    announcer_username_esc = html_lib.escape(announcer_username) if announcer_username else ""
-
-    # Parecerista + justificativa do workflow
-    workflow_commission_username, workflow_description = get_workflow_info_from_history(item)
-
-    workflow_commission_username_esc = html_lib.escape(
-        workflow_commission_username or "Não informado"
-    )
-
-    workflow_description_esc = html_lib.escape(
-        workflow_description or "Não informado"
-    )
-
-    # ATM (Simples, mantido quase igual, apenas garantindo block model)
-    if atm_number_esc:
-        atm_html = f"""
-            <div style="margin-bottom: 5px;">
-                <p
-                  style="
-                    margin: 0;
-                    font-weight: 600;
-                    font-size: 11px;
-                  " > ATM: {atm_number_esc}
-                </p>
-            </div>
-        """
-    else:
-        atm_html = ""
-
-    # Responsável + plaqueta (Refatorado de Flex para Inline-Block)
-    if legal_guardian_name_esc:
-        legal_guardian_html = f"""
-            <div
-              style="
-                margin-bottom: 16px;
-                font-size: 0; /* Remove espaços brancos entre inline-blocks */
-              "
-            >
-              <div
-                style="
-                  display: inline-block;
-                  vertical-align: middle;
-                  background: #e5e7eb;
-                  border-radius: 3px;
-                  padding: 2px;
-                  margin-right: 8px;
-                "
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-                  <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M7 10a4 4 0 1 1 10 0 4 4 0 1 1-10 0" />
-                  <path d="M4 21v-2a4 4 0 0 1 3-3.87" />
-                </svg>
-              </div>
-              
-              <div style="display: inline-block; vertical-align: middle; font-size: 12px; color: #000;">
-                  <span>{legal_guardian_name_esc}</span>
-                  <span style="font-weight: 500; margin-left: 5px;">· Possui plaqueta?</span>
-                  <span style="margin-left: 2px;">{plaqueta_text}</span>
-              </div>
-            </div>
-        """
-    else:
-        legal_guardian_html = ""
-
-    # Justificativa (Refatorado para Table Layout)
-    if catalog_description_esc:
-        justificativa_html = f"""
-      <div
-        style="
-          display: table;
-          width: 100%;
-          border-collapse: separate;
-          border-spacing: 0;
-          margin-bottom: 16px;
-        "
-      >
-        <div
-          style="
-            display: table-cell;
-            width: 8px;
-            background-color: #559FB8;
-            border: 1px solid #e5e7eb;
-            border-right: 0;
-            border-radius: 6px 0 0 6px;
-            vertical-align: top;
-          "
-        ></div>
-
-        <div
-          style="
-            display: table-cell;
-            vertical-align: top;
-            background-color: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 0 6px 6px 0;
-            padding: 8px 10px 10px 10px;
-          "
-        >
-            <p
-              style="
-                margin: 0 0 2px 0;
-                font-weight: 600;
-                font-size: 12px;
-              "
-            >
-              Justificativa
-            </p>
-            <div
-              style="
-                font-size: 10px;
-                color: #6b7280;
-                line-height: 1.4;
-              "
-            >
-             <span style="word-wrap: break-word; overflow-wrap: break-word;">
-                {catalog_description_esc}
-             </span>
-            </div>
-        </div>
-      </div>
-        """
-    else:
-        justificativa_html = ""
-
-    # Conservação (Refatorado para Table Layout)
-    if situation_esc or conservation_status_esc:
-        conservacao_titulo = situation_esc or "Estado de conservação"
-        conservacao_titulo = CONSERVATION_MAP[conservacao_titulo]
+def build_panel(title: str, content: str, border_color: str = "#559FB8", icon_svg: str = "") -> str:
+    """Cria o componente visual padrão de painel com barra lateral colorida."""
+    if not content:
+        return ""
         
-        conservacao_html = f"""
-      <div
-        style="
-          display: table;
-          width: 100%;
-          border-collapse: separate;
-          border-spacing: 0;
-          margin-bottom: 16px;
-        "
-      >
-        <div
-          style="
-            display: table-cell;
-            width: 8px;
-            background-color: #559FB8;
-            border: 1px solid #e5e7eb;
-            border-right: 0;
-            border-radius: 6px 0 0 6px;
-            vertical-align: top;
-          "
-        ></div>
+    icon_html = f"""
+    <div style="display: inline-block; vertical-align: middle; width: 24px; height: 24px; background: #e5e7eb; border-radius: 3px; text-align: center; padding-top: 3px; box-sizing: border-box; margin-right: 8px;">
+        {icon_svg}
+    </div>
+    """ if icon_svg else ""
 
-        <div
-          style="
-            display: table-cell;
-            vertical-align: top;
-            background-color: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 0 6px 6px 0;
-            padding: 8px 10px 10px 10px;
-          "
-        >
-            <p
-              style="
-                margin: 0 0 2px 0;
-                font-weight: 600;
-                font-size: 12px;
-              "
-            >
-              Estado de conservação · {conservacao_titulo[0]}
-            </p>
-            <div
-              style="
-                font-size: 10px;
-                color: #6b7280;
-                line-height: 1.4;
-              "
-            >
-             <span style="word-wrap: break-word; overflow-wrap: break-word;">
-                {conservacao_titulo[1]}
-             </span>
-            </div>
-        </div>
-      </div>
-        """
-    else:
-        conservacao_html = ""
-
-    # Anunciante (Refatorado para Table Layout + Inline Block no avatar)
-    if announcer_username_esc:
-        anunciante_html = f"""
-      <div
-        style="
-          display: table; /* MUDANÇA 1: Usar table em vez de flex no container pai */
-          width: 100%;
-          border-collapse: separate; /* Permite border-radius */
-          border-spacing: 0;
-          margin-bottom: 16px;
-        "
-      >
-        <div
-          style="
-            display: table-cell; /* Comporta-se como celula */
-            width: 8px;
-            background-color: #559FB8;
-            border: 1px solid #e5e7eb;
-            border-right: 0;
-            border-radius: 6px 0 0 6px;
-            vertical-align: top;
-          "
-        ></div>
-
-        <div
-          style="
-            display: table-cell; /* Comporta-se como celula */
-            vertical-align: top;
-            background-color: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 0 6px 6px 0;
-            padding: 8px 10px 10px 10px;
-          "
-        >
-          <div style="margin-bottom: 5px;">
-            
-            <div
-                style="
-                  display: inline-block;
-                  vertical-align: middle;
-                  width: 24px;
-                  height: 24px;
-                  background: #e5e7eb;
-                  border-radius: 3px;
-                  text-align: center;
-                  padding-top: 3px; /* Ajuste fino para centralizar SVG verticalmente */
-                  box-sizing: border-box;
-                  margin-right: 8px;
-                "
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#6b7280"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M7 10a4 4 0 1 1 10 0 4 4 0 1 1-10 0" />
-                  <path d="M4 21v-2a4 4 0 0 1 3-3.87" />
-                </svg>
-            </div>
-
-            <div style="display: inline-block; vertical-align: middle;">
-                 <span
-                  style="
-                    display: block;
-                    font-size: 10px;
-                    color: #6b7280;
-                    line-height: 1;
-                    margin-bottom: 2px;
-                  "
-                >
-                  Anunciante
-                </span>
-                <span
-                  style="
-                    display: block;
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: #111827;
-                    line-height: 1.2;
-                  "
-                >
-                  {announcer_username}
-                </span>
-            </div>
-          </div>
-        </div>
-      </div>
-        """
-    else:
-        anunciante_html = ""
-
-    # Parecerista + justificativa workflow
-    if workflow_commission_username_esc or workflow_description_esc:
-        parecerista_html = f"""
-        <div
-            style="
-                display: table;
-                width: 100%;
-                border-collapse: separate;
-                border-spacing: 0;
-                margin-bottom: 16px;
-            "
-        >
-            <div
-                style="
-                    display: table-cell;
-                    width: 8px;
-                    background-color: #559FB8;
-                    border: 1px solid #e5e7eb;
-                    border-right: 0;
-                    border-radius: 6px 0 0 6px;
-                    vertical-align: top;
-                "
-            ></div>
-
-            <div
-                style="
-                    display: table-cell;
-                    vertical-align: top;
-                    background-color: #ffffff;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 0 6px 6px 0;
-                    padding: 8px 10px 10px 10px;
-                "
-            >
-                <div style="margin-bottom: 5px;">
-                    <div
-                        style="
-                            display: inline-block;
-                            vertical-align: middle;
-                            width: 24px;
-                            height: 24px;
-                            background: #e5e7eb;
-                            border-radius: 3px;
-                            text-align: center;
-                            padding-top: 3px;
-                            box-sizing: border-box;
-                            margin-right: 8px;
-                        "
-                    >
-                        <svg
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="#6b7280"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
-                            <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
-                            <path d="M7 10a4 4 0 1 1 10 0 4 4 0 1 1-10 0" />
-                            <path d="M4 21v-2a4 4 0 0 1 3-3.87" />
-                        </svg>
-                    </div>
-
-                    <div style="display: inline-block; vertical-align: middle;">
-                        <p
-                            style="
-                                margin: 0;
-                                font-size: 12px;
-                                color: #6b7280;
-                                line-height: 1;
-                                margin-bottom: 2px;
-                            "
-                        >
-                            Parecerista
-                        </p>
-                        <p
-                            style="
-                                margin: 0;
-                                font-size: 12px;
-                                font-weight: 500;
-                                color: #111827;
-                                line-height: 1.2;
-                            "
-                        >
-                            {workflow_commission_username_esc}
-                        </p>
-                    </div>
-                </div>
-
-                <div style="display: block; width: 100%;">
-                    <p
-                        style="
-                            margin: 0 0 2px 0;
-                            font-weight: 600;
-                            font-size: 12px;
-                        "
-                    >
-                        Justificativa
-                    </p>
-                    <div
-                        style="
-                            font-size: 10px;
-                            color: #6b7280;
-                            line-height: 1.4;
-                            width: 100%;
-                        "
-                    >
-                        <span
-                            style="
-                                display: block;
-                                word-wrap: break-word;
-                                overflow-wrap: break-word;
-                                word-break: break-all;
-                            "
-                        >
-                            {workflow_description_esc}
-                        </span>
-                    </div>
+    return f"""
+    <div style="display: table; width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 16px;">
+        <div style="display: table-cell; width: 8px; background-color: {border_color}; border: 1px solid #e5e7eb; border-right: 0; border-radius: 6px 0 0 6px; vertical-align: top;"></div>
+        <div style="display: table-cell; vertical-align: top; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 0 6px 6px 0; padding: 8px 10px 10px 10px;">
+            <div style="margin-bottom: 5px;">
+                {icon_html}
+                <div style="display: inline-block; vertical-align: middle;">
+                    <p style="margin: 0 0 2px 0; font-weight: 600; font-size: 12px; color: #111827;">{title}</p>
                 </div>
             </div>
+            <div style="font-size: 10px; color: #6b7280; line-height: 1.4; width: 100%;">
+                <span style="display: block; word-wrap: break-word; overflow-wrap: break-word; word-break: break-all;">
+                    {content}
+                </span>
+            </div>
         </div>
-        """
-    else:
-      parecerista_html = ""
+    </div>
+    """
 
-    # ---------- IMAGENS (Refatorado para Inline-Block ao invés de Grid/Flex) ----------
+def _build_image_grid(images: list) -> str:
+    """Gera a grade de imagens (até 4)."""
+    if not images:
+        return '<div style="padding: 10px; text-align: center; background: #f9fafb; border-radius: 6px;"><span style="font-size: 10px; color: #9ca3af;">sem imagens</span></div>'
 
-    images = getattr(item, "images", []) or []
     image_cells = []
-    
-    # Processamento das células de imagem
     for img in images[:4]:
         file_path = getattr(img, "file_path", None)
-        if file_path:
-            # Seu nome de arquivo fixo ou dinâmico
-            #filename = "e28ae247-cfbe-4e3b-9a4c-7450c80a52dd.png" 
-            filename = os.path.basename(file_path)
-            
-            full_path = (IMAGES_DIR / filename).resolve()
-            
-            if full_path.is_file():
-                src = full_path.as_uri()
-                src_esc = html_lib.escape(src)
-                
-                cell = f"""
-                <div
-                  style="
-                    display: inline-block;
-                    vertical-align: top;
-                    width: 49%;
-                    margin-bottom: 5px;
-                    margin-right: 1%;
-                    box-sizing: border-box;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 6px;
-                    background-color: #f3f4f6;
-                    height: 180px;
-                    
-                    /* Essencial para o corte funcionar e não vazar do container */
-                    overflow: hidden; 
-                    position: relative;
-                  "
-                >
-                  <img
-                    src="{src_esc}"
-                    style="
-                      display: block;          /* Remove espaço extra em baixo da imagem */
-                      width: 100%;             /* Força largura total */
-                      height: 100%;            /* Força altura total */
-                      object-fit: cover;       /* Preenche o container cortando o excesso (zoom) */
-                      object-position: center; /* Centraliza a imagem antes de cortar */
-                    "
-                  />
-                </div>
-                """
-            else:
-                # Caminho não existe (Mantido layout centralizado simples)
-                cell = """
-                <div
-                  style="
-                    display: inline-block;
-                    vertical-align: top;
-                    width: 49%;
-                    margin-bottom: 5px;
-                    margin-right: 1%;
-                    box-sizing: border-box;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 6px;
-                    background-color: #f3f4f6;
-                    height: 180px;
-                    text-align: center;
-                    line-height: 160px;
-                    overflow: hidden;
-                  "
-                >
-                  <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
-                    sem imagem (arquivo não encontrado)
-                  </span>
-                </div>
-                """
-        else:
-            # Não tem file_path
-            cell = """
-            <div
-              style="
-                display: inline-block;
-                vertical-align: top;
-                width: 49%;
-                margin-bottom: 5px;
-                margin-right: 1%;
-                box-sizing: border-box;
-                border: 1px solid #e5e7eb;
-                border-radius: 6px;
-                background-color: #f3f4f6;
-                height: 180px;
-                text-align: center;
-                line-height: 160px;
-                overflow: hidden;
-              "
-            >
-              <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
-                sem imagem
-              </span>
-            </div>
-            """
-
-        image_cells.append(cell)
-
-    # Container das imagens (remove whitespace para inline-blocks funcionarem bem)
-    images_html = f"""
-        <div style="width: 100%; font-size: 0; text-align: left;">
-            {"".join(image_cells)}
-        </div>
-    """ if image_cells else """
-        <div style="padding: 10px; text-align: center; background: #f9fafb; border-radius: 6px;">
-          <span style="font-size: 10px; color: #9ca3af;">sem imagens</span>
-        </div>
-    """
-
-
-    # ---------- RODAPÉ ----------
-
-    page_number = index + 1
-    total_items = total_items or 1
-
-    # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
-
-    html = f"""
-    <div
-        style=" 
-            width: 100%;   
-            box-sizing: border-box;
-            background-color: #f9fafb;
-            page-break-after: always; 
-            overflow: hidden;         
-        "
-    >
+        full_path = (IMAGES_DIR / os.path.basename(file_path)).resolve() if file_path else None
         
-        <table
-            style="
-                width: 100%;
-                border-collapse: collapse;
-                margin: 0;
-                padding: 40px;
-            "
-        >
+        if full_path and full_path.is_file():
+            src_esc = html_lib.escape(full_path.as_uri())
+            content = f'<img src="{src_esc}" style="display: block; width: 100%; height: 100%; object-fit: cover; object-position: center;" />'
+        else:
+            content = '<span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">sem imagem</span>'
+            
+        cell = f"""
+        <div style="display: inline-block; vertical-align: top; width: 49%; margin-bottom: 5px; margin-right: 1%; box-sizing: border-box; border: 1px solid #e5e7eb; border-radius: 6px; background-color: #f3f4f6; height: 180px; text-align: center; line-height: 160px; overflow: hidden; position: relative;">
+            {content}
+        </div>
+        """
+        image_cells.append(cell)
+        
+    return f'<div style="width: 100%; font-size: 0; text-align: left;">{"".join(image_cells)}</div>'
+
+
+def _extract_item_data(item) -> dict:
+    """Isola a lógica confusa de onde vêm os dados e aplica escape HTML."""
+    asset = getattr(item, "asset", None)
+    
+    # Busca segura usando o fallback (asset -> item)
+    def _get_val(attr):
+        val = getattr(asset, attr, None) if asset else None
+        return val if val is not None else getattr(item, attr, None)
+
+    # Identificação
+    mat_name = asset.material.material_name if asset and getattr(asset, "material", None) else ""
+    code = asset.asset_code if asset else getattr(item, "asset_code_with_digit", "")
+    digit = asset.asset_check_digit if asset else ""
+    full_code = f"{code}-{digit}" if code and digit else code or "Sem código"
+    
+    # Conservação
+    situation = _get_val("situation") or "Estado de conservação"
+    cons_status = _get_val("conservation_status") or ""
+    cons_map = CONSERVATION_MAP.get(situation, (situation, cons_status))
+
+    # Workflow
+    wf_user, wf_desc = get_workflow_info_from_history(item)
+
+    # Plaqueta
+    is_official = getattr(asset, "is_official", None) if asset else None
+    plaqueta_map = {None: ("-", "#d4d4d8"), True: ("Sim", "#16a34a"), False: ("Não", "#f97316")}
+    plaq_text, bar_color = plaqueta_map[is_official]
+
+    # Dicionário pré-escapado e pronto para o HTML
+    return {
+        "material_name": html_lib.escape(mat_name),
+        "description": html_lib.escape(_get_val("asset_description") or ""),
+        "code": html_lib.escape(full_code),
+        "atm": html_lib.escape(_get_val("atm_number") or ""),
+        "guardian": html_lib.escape(asset.legal_guardian.legal_guardians_name if asset and getattr(asset, "legal_guardian", None) else ""),
+        "plaqueta_text": plaq_text,
+        "bar_color": bar_color,
+        "catalog_desc": html_lib.escape(getattr(item, "catalog_description", None) or getattr(item, "description", None) or ""),
+        "cons_title": html_lib.escape(f"Estado de conservação · {cons_map[0]}"),
+        "cons_desc": html_lib.escape(cons_map[1]),
+        "announcer": html_lib.escape(_get_val("announcer_username") or ""),
+        "wf_user": html_lib.escape(wf_user or "Não informado"),
+        "wf_desc": html_lib.escape(wf_desc or "Não informado"),
+        "images": getattr(item, "images", []) or []
+    }
+
+
+def render_item_html(item, index: int, total_items: int) -> str:
+    """Gera um HTML estilizado para um item do catálogo (1 item por página)."""
+    
+    data = _extract_item_data(item)
+    
+    # Ícones SVG (podem ser movidos para constantes globais para limpar mais o código)
+    icon_user = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-3-3.87" /><path d="M7 10a4 4 0 1 1 10 0 4 4 0 1 1-10 0" /><path d="M4 21v-2a4 4 0 0 1 3-3.87" /></svg>'
+    icon_check = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-3-3.87" /><path d="M7 10a4 4 0 1 1 10 0 4 4 0 1 1-10 0" /><path d="M4 21v-2a4 4 0 0 1 3-3.87" /></svg>'
+
+    # Montagem dos blocos condicionais
+    atm_html = f'<div style="margin-bottom: 5px;"><p style="margin: 0; font-weight: 600; font-size: 11px;">ATM: {data["atm"]}</p></div>' if data["atm"] else ""
+    
+    guardian_html = f"""
+    <div style="margin-bottom: 16px; font-size: 0;">
+        <div style="display: inline-block; vertical-align: middle; background: #e5e7eb; border-radius: 3px; padding: 2px; margin-right: 8px;">{icon_check}</div>
+        <div style="display: inline-block; vertical-align: middle; font-size: 12px; color: #000;">
+            <span>{data["guardian"]}</span><span style="font-weight: 500; margin-left: 5px;">· Possui plaqueta?</span><span style="margin-left: 2px;">{data["plaqueta_text"]}</span>
+        </div>
+    </div>
+    """ if data["guardian"] else ""
+
+    justificativa_html = build_panel("Justificativa", data["catalog_desc"])
+    conservacao_html = build_panel(data["cons_title"], data["cons_desc"])
+    anunciante_html = build_panel("Anunciante", data["announcer"], icon_svg=icon_user)
+    
+    parecerista_content = f"""
+        <p style="margin: 0; font-size: 12px; color: #111827;">{data['wf_user']}</p>
+        <p style="margin: 8px 0 2px 0; font-weight: 600; font-size: 12px; color: #111827;">Justificativa</p>
+        <p style="margin: 0;">{data['wf_desc']}</p>
+    """ if data["wf_user"] != "Não informado" or data["wf_desc"] != "Não informado" else ""
+    parecerista_html = build_panel("Parecerista", parecerista_content, icon_svg=icon_user)
+
+    # HTML Final
+    return f"""
+    <div style="width: 100%; box-sizing: border-box; background-color: #f9fafb; page-break-after: always; overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; margin: 0; padding: 40px;">
             <tr>
                 <td style="width: 150px; padding: 32px 48px 12px 48px; vertical-align: middle;">
                     <img src="{SP_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
                 </td>
-               
                 <td style="width: 150px; padding: 32px 48px 12px 48px; text-align: right; vertical-align: middle;">
                     <img src="{EE_LOGO_URI}" style="height: 48px; max-width: 120px; object-fit: contain;" />
                 </td>
@@ -816,69 +332,22 @@ def render_item_html(item, index: int, total_items: int) -> str:
 
         <div style="padding: 0 52px 36px 52px; padding-bottom: 60px;">
             <section style="display: block; width: 100%; margin-bottom: 20px;">
-                <h2
-                  style="
-                    font-size: 24px;
-                    font-weight: 600;
-                    margin: 0 0 5px 0;
-                  "
-                >
-                  {material_name}
-                </h2>
-                <p
-                  style="
-                    margin: 0 0 15px 0;
-                    color: #6b7280;
-                    font-size: 10px;
-                  "
-                >
-                  {asset_description}
-                </p>
+                <h2 style="font-size: 24px; font-weight: 600; margin: 0 0 5px 0;">{data["material_name"]}</h2>
+                <p style="margin: 0 0 15px 0; color: #6b7280; font-size: 10px;">{data["description"]}</p>
 
-                <div
-                    style="
-                      display: table;
-                      width: 100%;
-                      border-collapse: separate;
-                      border-spacing: 0;
-                      margin-bottom: 10px;
-                    "
-                  >
-                    <div
-                      style="
-                        display: table-cell;
-                        width: 8px;
-                        background-color: {bar_color};
-                        border: 1px solid #e5e7eb;
-                        border-right: 0;
-                        border-radius: 6px 0 0 6px;
-                        vertical-align: top;
-                      "
-                    ></div>
-
-                    <div
-                      style="
-                        display: table-cell;
-                        vertical-align: top;
-                        background-color: #ffffff;
-                        border: 1px solid #e5e7eb;
-                        border-radius: 0 6px 6px 0;
-                        padding: 10px 10px 0 10px;
-                      "
-                    >
+                <div style="display: table; width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 10px;">
+                    <div style="display: table-cell; width: 8px; background-color: {data['bar_color']}; border: 1px solid #e5e7eb; border-right: 0; border-radius: 6px 0 0 6px; vertical-align: top;"></div>
+                    <div style="display: table-cell; vertical-align: top; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 0 6px 6px 0; padding: 10px 10px 0 10px;">
                         <div style="margin-bottom: 8px;">
                             <div style="display: inline-block; width: 60%; vertical-align: middle;">
-                                 <p style="margin: 0; font-weight: 600; font-size: 10px;">
-                                    {asset_code_with_digit}
-                                  </p>
+                                 <p style="margin: 0; font-weight: 600; font-size: 10px;">{data["code"]}</p>
                             </div>
                             <div style="display: inline-block; width: 39%; text-align: right; vertical-align: middle;">
                                  {atm_html}
                             </div>
                         </div>
-
                         <div style="font-size: 10px; color: #4b5563;">
-                            {legal_guardian_html}
+                            {guardian_html}
                         </div>
                     </div>
                 </div>
@@ -888,14 +357,12 @@ def render_item_html(item, index: int, total_items: int) -> str:
                 {anunciante_html}
                 {parecerista_html}
             </section>
-
             <section style="display: block; width: 100%; margin-top: 10px;">
-                {images_html}
+                {_build_image_grid(data["images"])}
             </section>
         </div>
     </div>
     """
-    return html
 
 def render_transfer_item(item,signers,location) -> str:
     """
@@ -2356,7 +1823,7 @@ def render_loan_terms(item, loan) -> str:
                         <td style="width: 50%; padding: 10px;">
                             ______________________________________________________<br>
                             <strong>CESSIONÁRIO</strong><br>
-                            Matricula:........................................
+                            CPF:........................................
                         </td>
                     </tr>
                 </table>
@@ -2367,12 +1834,12 @@ def render_loan_terms(item, loan) -> str:
                         <td style="width: 50%; padding: 10px;">
                             ______________________________________________________<br>
                             Nome:...............................................................<br>
-                            Matricula:.................................................................
+                            CPF:.................................................................
                         </td>
                         <td style="width: 50%; padding: 10px;">
                             ______________________________________________________<br>
                             Nome:...............................................................<br>
-                            Matricula:.................................................................
+                            CPF:.................................................................
                         </td>
                     </tr>
                 </table>
@@ -2425,3 +1892,429 @@ def render_loan_terms(item, loan) -> str:
     </div>
 """
     return html
+
+def render_multiple_items(item) -> str:
+
+    CONSERVATION_MAP = {
+      "UNUSED": [
+        "Ocioso",
+        "Bem permanente em condições de uso, porém sem aproveitamento funcional no setor em que se encontra, carecendo de realocação ou destinação."
+      ],
+      "RECOVERABLE": [
+        "Recuperável",
+        "É um bem que não pode ser usado no momento, mas que pode ser consertado com um custo viável."
+      ],
+      "UNECONOMICAL": [
+        "Anti-econômico",
+        "É um bem que funciona, mas cujo uso não compensa economicamente porque a manutenção é cara, a eficiência é baixa ou o equipamento ficou obsoleto."
+      ],
+      "BROKEN": [
+        "Quebrado",
+        "É um bem que não tem mais condições de uso, porque perdeu suas características essenciais ou porque o reparo custaria mais de 50% do valor de mercado."
+      ],
+}
+
+    # Nome do material
+    material_name = item.asset.material.material_name
+    material_name = html_lib.escape(material_name)
+
+    # Descrição do bem
+    asset_description = item.asset.asset_description
+    asset_description = html_lib.escape(asset_description)
+
+    # Código + dígito verificador
+    code_concat = ""
+    try:
+        asset_code = item.asset.asset_code or ""
+        asset_check_digit = item.asset.asset_check_digit or ""
+        code_concat = asset_code + "-" + asset_check_digit
+    except AttributeError:
+        code_concat = getattr(item, "asset_code_with_digit", "") or ""
+    asset_code_with_digit = html_lib.escape(code_concat or "Sem código")
+
+    # ATM
+    atm_number = None
+    try:
+        atm_number = item.asset.atm_number
+    except AttributeError:
+        atm_number = getattr(item, "atm_number", None)
+    atm_number_esc = html_lib.escape(atm_number) if atm_number else ""
+
+    # Responsável / curador
+    legal_guardian_name = item.asset.legal_guardian.legal_guardians_name
+    legal_guardian_name_esc = html_lib.escape(legal_guardian_name) if legal_guardian_name else ""
+
+    # Possui plaqueta?
+    is_official = item.asset.is_official
+    if is_official is None:
+        plaqueta_text = " -"
+        bar_color = "#d4d4d8"
+    elif is_official:
+        plaqueta_text = " Sim"
+        bar_color = "#16a34a"
+    else:
+        plaqueta_text = " Não"
+        bar_color = "#f97316"
+
+    # Situação / conservação
+    situation = getattr(item, "situation", None) or ""
+    conservation_status = getattr(item, "conservation_status", None) or ""
+
+    situation_esc = html_lib.escape(situation) if situation else ""
+    conservation_status_esc = html_lib.escape(conservation_status) if conservation_status else ""
+
+    # Justificativa de catálogo
+    catalog_description = getattr(item, "catalog_description", None)
+    if catalog_description is None:
+        catalog_description = getattr(item, "description", None)
+    catalog_description_esc = html_lib.escape(catalog_description) if catalog_description else ""
+
+    # Parecerista + justificativa do workflow
+    workflow_commission_username, workflow_description = get_workflow_info_from_history(item)
+
+    workflow_commission_username_esc = html_lib.escape(
+        workflow_commission_username or "Não informado"
+    )
+
+    workflow_description_esc = html_lib.escape(
+        workflow_description or "Não informado"
+    )
+
+    # ATM (Simples, mantido quase igual, apenas garantindo block model)
+    if atm_number_esc:
+        atm_html = f"""
+        <p
+            style="
+            margin: 0;
+            font-weight: 600;
+            font-size: 10px;
+            " > ATM: {atm_number_esc}
+        </p>
+        """
+    else:
+        atm_html = ""
+
+    # Responsável + plaqueta (Refatorado de Flex para Inline-Block)
+    if legal_guardian_name_esc:
+        conservacao_titulo = situation_esc or "Estado de conservação"
+        conservacao_titulo = CONSERVATION_MAP[conservacao_titulo]
+        legal_guardian_html = f"""
+            <div
+              style="
+                font-size: 0;
+                margin:4px 0;
+              "
+            >
+              <div
+                style="
+                  display: inline-block;
+                  vertical-align: middle;
+                  background: #e5e7eb;
+                  border-radius: 3px;
+                  padding: 2px;
+                  margin-right: 5px;
+                "
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                  <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M7 10a4 4 0 1 1 10 0 4 4 0 1 1-10 0" />
+                  <path d="M4 21v-2a4 4 0 0 1 3-3.87" />
+                </svg>
+              </div>
+              
+              <div style="display: inline-block; vertical-align: middle; font-size: 12px; color: #000;">
+                  <span>{legal_guardian_name_esc}</span>
+                  <span style="font-weight: 500; margin-left: 5px;">· Possui plaqueta?</span>
+                  <span style="margin-left: 2px;">{plaqueta_text}</span>
+                  <span style="font-weight: 500; margin-left: 5px;">· Estado de conservação: </span>
+                   {conservacao_titulo[0]}
+              </div>
+            </div>
+        """
+    else:
+        legal_guardian_html = ""
+
+    conservacao_titulo = situation_esc or "Estado de conservação"
+    conservacao_titulo = CONSERVATION_MAP[conservacao_titulo]
+
+
+    # ---------- IMAGENS (Refatorado para Inline-Block ao invés de Grid/Flex) ----------
+
+    IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
+    images = getattr(item, "images", []) or []
+    image_cells = []
+    
+    # Processamento das células de imagem
+    for img in images[:4]:
+        file_path = getattr(img, "file_path", None)
+        if file_path:
+            filename = os.path.basename(file_path)
+            full_path = (IMAGES_DIR / filename).resolve()
+            
+            if full_path.is_file():
+                src = full_path.as_uri()
+                src_esc = html_lib.escape(src)
+                
+                cell = f"""
+                <div
+                  style="
+                    display: inline-block;
+                    vertical-align: top;
+                    width: 24%;
+                    box-sizing: border-box;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    background-color: #f3f4f6;
+                    height: 140px;
+                    overflow: hidden; 
+                    position: relative;
+                  "
+                >
+                  <img
+                    src="{src_esc}"
+                    style="
+                      display: block;          /* Remove espaço extra em baixo da imagem */
+                      width: 100%;             /* Força largura total */
+                      height: 100%;            /* Força altura total */
+                      object-fit: cover;       /* Preenche o container cortando o excesso (zoom) */
+                      object-position: center; /* Centraliza a imagem antes de cortar */
+                    "
+                  />
+                </div>
+                """
+            else:
+                # Caminho não existe (Mantido layout centralizado simples)
+                cell = """
+                <div
+                  style="
+                    display: inline-block;
+                    vertical-align: top;
+                    width: 24%;
+                    box-sizing: border-box;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    background-color: #f3f4f6;
+                    height: 140px;
+                    text-align: center;
+                    line-height: 140px;
+                    overflow: hidden;
+                  "
+                >
+                  <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
+                    Sem imagem
+                  </span>
+                </div>
+                """
+        else:
+            # Não tem file_path
+            cell = """
+            <div
+              style="
+                display: inline-block;
+                vertical-align: top;
+                width: 24%;
+                box-sizing: border-box;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                background-color: #f3f4f6;
+                height: 140px;
+                text-align: center;
+                line-height: 140px;
+                overflow: hidden;
+              "
+            >
+              <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
+                sem imagem
+              </span>
+            </div>
+            """
+
+        image_cells.append(cell)
+
+    # Container das imagens (remove whitespace para inline-blocks funcionarem bem)
+    images_html = f"""
+        <div style="width: 100%; text-align: center;">
+            {"".join(image_cells)}
+        </div>
+    """ if len(image_cells) else """
+        <div style="padding: 10px; text-align: center; background: #f9fafb; border-radius: 6px;">
+          <span style="font-size: 10px; color: #9ca3af;">sem imagens</span>
+        </div>
+    """
+
+    # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
+
+    html = f"""
+    <div
+        style="
+            position: relative;       
+            width: 100%;
+            box-sizing: border-box;
+            background-color: #f9fafb;
+            overflow: hidden;
+            padding: 0 24px 12px 24px;         
+        "
+    >
+        <div style="
+            display: table;
+            width: 100%;
+            margin-bottom: 10px;
+        ">
+                <div
+                    style="
+                    display: table-cell;
+                    width: 8px;
+                    background-color: {bar_color};
+                    border: 1px solid #e5e7eb;
+                    border-right: 0;
+                    border-radius: 6px 0 0 6px;
+                    vertical-align: top;
+                    "></div>
+
+                <div
+                    style="
+                    display: table-cell;
+                    vertical-align: top;
+                    width:fit;
+                    background-color: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 0 6px 6px 0;
+                    padding: 10px;
+                    "
+                >
+
+                <p
+                style="
+                font-size: 18px;
+                font-weight: 600;
+                margin:0;
+                "> {asset_code_with_digit}  {material_name}</p>
+                
+                {atm_html}
+
+                <p
+                    style="
+                    margin:0;
+                    font-size: 11px;
+                    margin-bottom: 12px;
+                    color: #6b7280;
+                    "
+                > {asset_description} </p>
+
+                <div style="font-size: 10px; color: #4b5563; margin-bottom:8px;">
+                    {legal_guardian_html}
+                </div>
+
+            <p
+              style="
+                margin: 8px 0 2px 0;
+                font-weight: 600;
+                font-size: 12px;
+              "
+            >
+              Justificativa
+            </p>
+            <div
+              style="
+                font-size: 10px;
+                color: #6b7280;
+                line-height: 1.4;
+              "
+            >
+             <span style="word-wrap: break-word; overflow-wrap: break-word;">
+                {catalog_description_esc}
+             </span>
+            </div>
+
+            <div
+                style="
+                    display: inline-block;
+                    vertical-align: middle;
+                    width: 24px;
+                    height: 24px;
+                    background: #e5e7eb;
+                    border-radius: 3px;
+                    text-align: center;
+                    padding-top: 3px;
+                    box-sizing: border-box;
+                    margin-right: 8px;
+                "
+            >
+                <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#6b7280"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M7 10a4 4 0 1 1 10 0 4 4 0 1 1-10 0" />
+                    <path d="M4 21v-2a4 4 0 0 1 3-3.87" />
+                </svg>
+            </div>
+
+            <div style="display: inline-block; vertical-align: middle; margin-top:8px;">
+                <p
+                    style="
+                        margin: 0;
+                        font-size: 12px;
+                        color: #6b7280;
+                        line-height: 1;
+                        margin-bottom: 2px;
+                    "
+                >
+                    Parecerista
+                </p>
+                <p
+                    style="
+                        margin: 0;
+                        font-size: 12px;
+                        font-weight: 500;
+                        color: #111827;
+                        line-height: 1.2;
+                    "
+                >
+                    {workflow_commission_username_esc}
+                </p>
+            </div>
+
+            <div style="display: block; width: 100%; margin-top:4px;">
+                <p
+                    style="
+                        margin: 0 0 2px 0;
+                        font-weight: 600;
+                        font-size: 12px;
+                    "
+                >
+                    Justificativa
+                </p>
+                <div
+                    style="
+                        font-size: 10px;
+                        color: #6b7280;
+                        line-height: 1.4;
+                        width: 100%;
+                    "
+                >
+                    <span
+                        style="
+                            display: block;
+                            word-wrap: break-word;
+                            overflow-wrap: break-word;
+                            word-break: break-all;
+                        "
+                    >
+                        {workflow_description_esc}
+                    </span>
+                </div>
+            </div>
+
+            </div>
+        </div>
+        {images_html}
+    </div>
+    """
+    return html    

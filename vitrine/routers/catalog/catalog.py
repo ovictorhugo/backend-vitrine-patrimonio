@@ -7,6 +7,8 @@ from typing import Annotated
 from uuid import UUID
 import tempfile
 import os
+import pikepdf
+import math
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -14,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, desc, exists
 from sqlalchemy.orm import selectinload, joinedload, contains_eager, noload
 from weasyprint import HTML
-#from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright
 
 from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import (
@@ -40,7 +42,7 @@ from vitrine.schemas import (
 )
 from vitrine.services import filter_service
 
-from ..utils import render_item_html
+from ..utils import render_item_html, render_multiple_items
 
 _ASSET_FIELDS = set(FilterAsset.model_fields.keys())
 _NON_JOIN_FIELDS = {'limit', 'offset'}
@@ -48,6 +50,9 @@ ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
 
 
 router = APIRouter(prefix='/catalog', tags=['Vitrine - Anúncios'])
+
+def render_document_batch(html_content: str):
+    return HTML(string=html_content, encoding='utf-8').render()
 
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=CatalogPublic)
@@ -251,199 +256,13 @@ async def read_catalog_entries(
 
     return {'catalog_entries': entries}
 
-@router.get('/{catalog_id}', response_model=CatalogPublic)
-async def read_catalog_entry(catalog_id: UUID, session: Session):
-    options = [
-        selectinload(Catalog.images),
-        selectinload(Catalog.files),
-        selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user).options(
-                selectinload(User.system_identity).options(
-                    selectinload(SystemIdentity.legal_guardian)
-                ),
-                selectinload(User.user_role_associations).selectinload(
-                    UserRole.role
-                ),
-            ),
-            selectinload(CatalogWorkFlow.transfer_requests).options(
-                selectinload(WorkflowTransfer.location)
-            ),
-        ),
-        selectinload(Catalog.location)
-        .selectinload(Location.location_inventories)
-        .selectinload(LocationInventory.inventory),
-    ]
-    db_catalog = await session.get(Catalog, catalog_id, options=options)
-
-    if not db_catalog or db_catalog.deleted_at:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
-        )
-    return db_catalog
-
-
-@router.put('/{catalog_id}', response_model=CatalogPublic)
-async def update_catalog_entry(
-    catalog_id: UUID,
-    catalog_data: CatalogSchema,
-    session: Session,
-    current_user: CurrentUser,
-):
-    options = [
-        selectinload(Catalog.images),
-        selectinload(Catalog.files),
-        selectinload(Catalog.user).options(
-            selectinload(User.system_identity).options(
-                selectinload(SystemIdentity.legal_guardian)
-            )
-        ),
-        selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user).options(
-                selectinload(User.system_identity).options(
-                    selectinload(SystemIdentity.legal_guardian)
-                )
-            ),
-            selectinload(CatalogWorkFlow.transfer_requests).options(
-                selectinload(WorkflowTransfer.user).options(
-                    selectinload(User.system_identity).options(
-                        selectinload(SystemIdentity.legal_guardian)
-                    )
-                ),
-                selectinload(WorkflowTransfer.location),
-            ),
-        ),
-        selectinload(Catalog.location)
-        .selectinload(Location.location_inventories)
-        .selectinload(LocationInventory.inventory),
-    ]
-
-    db_catalog = await session.get(Catalog, catalog_id, options=options)
-
-    if not db_catalog:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
-        )
-
-    db_catalog.asset_id = catalog_data.asset_id
-    db_catalog.situation = catalog_data.situation
-    db_catalog.conservation_status = catalog_data.conservation_status
-    db_catalog.description = catalog_data.description
-
-    session.expire_on_commit = False
-    await session.commit()
-
-    return db_catalog
-
-
-@router.delete('/{catalog_id}', response_model=Message)
-async def delete_catalog_entry(
-    catalog_id: UUID,
-    session: Session,
-    current_user: CurrentUser,
-):
-    db_catalog = await session.get(Catalog, catalog_id)
-    if not db_catalog:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
-        )
-
-    db_catalog.deleted_at = datetime.now()
-    await session.commit()
-
-    return {'message': 'Catalog entry deactivated'}
-
-
-@router.get('/pdf/{catalog_id}')
-async def export_catalog_pdf(
-    session: Session,
-    catalog_id: UUID,
-    filters: Annotated[FilterCatalog, Depends()],
-):
-    options = [
-        selectinload(Catalog.images),
-        selectinload(Catalog.files),
-        selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user).options(
-                selectinload(User.system_identity).options(
-                    selectinload(SystemIdentity.legal_guardian)
-                ),
-                selectinload(User.user_role_associations).selectinload(
-                    UserRole.role
-                ),
-            ),
-            selectinload(CatalogWorkFlow.transfer_requests),
-        ),
-        selectinload(Catalog.location)
-        .selectinload(Location.location_inventories)
-        .selectinload(LocationInventory.inventory),
-    ]
-
-    db_catalog = await session.get(Catalog, catalog_id, options=options)
-
-    if not db_catalog or db_catalog.deleted_at:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
-        )
-
-    print('Existe 1 resultado')
-    print(filters)
-
-    items_html = ''.join(render_item_html(db_catalog, 0, 1))
-
-    ASSETS_DIR = (
-        Path(__file__).resolve().parent.parent.parent / 'assets'
-    ).resolve()
-    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
-
-    full_html = f"""
-              <!DOCTYPE html>
-              <html lang="pt-br">
-              <head>
-                  <meta charset="utf-8" />
-                  <title>Relatório</title>
-                  <style>
-                      @page {{
-                        size: A4;
-                        margin: 0;
-                      }}
-                      
-                      html, body {{
-                          margin: 0;
-                          padding: 0;
-                          height: 100%;
-                          background-color: #ffffff;
-                          font-family: "Lexend", sans-serif;
-                          font-size: 10px;
-                      }}
-                      @font-face {{
-                                font-family: Lexend;
-                                src: url({lexend_regular})
-                            }}                      
-                      img {{ max-width: 100%; }}
-                  </style>
-              </head>
-              <body>
-                  {items_html}
-              </body>
-              </html>
-        """
-    pdf_bytes: bytes = HTML(string=full_html, encoding='utf-8').write_pdf()
-
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
-        media_type='application/pdf',
-        headers={
-            'Content-Disposition': 'inline; filename="catalogo.pdf"',
-        },
-    )
 
 @router.get('/pdf_play')
 async def export_catalog_pdf(
     session: Session,
     filters: Annotated[FilterCatalog, Depends()],
 ):
-
-    # --- QUERY E CONTAGEM (Mantidos iguais, estão perfeitos) ---
+    # --- 1. QUERY E CONTAGEM (Mantido intacto) ---
     base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
     base_query = filter_service.apply_catalog_filters(base_query, filters)
 
@@ -489,133 +308,193 @@ async def export_catalog_pdf(
                 selectinload(User.system_identity).options(
                     selectinload(SystemIdentity.legal_guardian)
                 ),
-            ),
+            )
         ),
         selectinload(Catalog.location)
     )
 
-    BATCH_SIZE = 25
-    ASSETS_DIR = (
-        Path(__file__).resolve().parent.parent.parent / 'assets'
-    ).resolve()
-    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
+    # --- 2. CÁLCULOS DE PAGINAÇÃO ---
+    BATCH_SIZE = 30 # Tem que ser número PAR para fechar folhas completas
+    TOTAL_PAGES = math.ceil(total_items / 2) # Como são 2 itens por pág, dividimos por 2
 
-    # 2. LISTA PARA ACUMULAR O HTML (Em vez de PDFs)
-    all_items_html = []
+    ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
+    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
+    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+
+    temp_files_to_cleanup = []
+    temp_pdf_paths = []
 
     try:
-        # Loop apenas para não travar o banco de dados
-        for offset in range(0, total_items, BATCH_SIZE):
-            batch_query = base_query.offset(offset).limit(BATCH_SIZE)
-
-            result = await session.scalars(batch_query)
-            entries = result.unique().all()
-
-            if not entries:
-                break
-
-            # Renderiza os itens e adiciona à nossa lista gigante
-            items_html = ''.join(
-                render_item_html(entry, offset + idx, total_items)
-                for idx, entry in enumerate(entries)
+        # --- 3. GERAÇÃO COM PLAYWRIGHT ---
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox', 
+                    '--disable-setuid-sandbox', 
+                    '--disable-dev-shm-usage',
+                    '--allow-file-access-from-files'
+                ]
             )
-            
-            all_items_html.append(items_html)
 
-            del entries
-            del items_html
+            for offset in range(0, total_items, BATCH_SIZE):
+                batch_query = base_query.offset(offset).limit(BATCH_SIZE)
+                result = await session.scalars(batch_query)
+                entries = result.unique().all()
 
-        # 3. MONTA O HTML FINAL FORA DO LOOP
-        # Junta todas as páginas de todos os lotes em uma única string
-        final_items_html = "".join(all_items_html)
+                if not entries:
+                    break
 
-        full_html = f"""
-            <!DOCTYPE html>
-            <html lang="pt-br">
-            <head>
-                <meta charset="utf-8" />
-                <style>
-                    @page {{
-                        size: A4;
-                        margin: 0;
-                        padding-bottom: 60px; 
-                    }}
-                    html, body {{
-                        margin: 0; padding: 0; background-color: #f9fafb;
-                        font-family: "Lexend", sans-serif; font-size: 10px;
-                    }}
-                    /* A fonte local vai carregar sem problemas agora! */
-                    @font-face {{ font-family: Lexend; src: url({lexend_regular}); }}
-                    img {{ max-width: 100%; }}
+                batch_pages_html = []
+                
+                # Agrupa os itens do lote de 2 em 2
+                for i in range(0, len(entries), 2):
+                    item1 = entries[i]
+                    item2 = entries[i+1] if i+1 < len(entries) else None
                     
-                    .rodape-fixo {{
-                        position: fixed;
-                        bottom: 0;
-                        left: 0;
-                        right: 0;
-                        padding: 0 24px 0 24px;
-                        z-index: 1000; 
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="rodape-fixo">
-                    <div style="border-top: 1px solid #e5e7eb; padding-top: 10px;">
-                        <table style="width: 100%; border-collapse: collapse;">
+                    # Calcula qual é a página global atual
+                    absolute_idx = offset + i
+                    current_page_number = (absolute_idx // 2) + 1
+
+                    # Chama a função que renderiza APENAS O BLOCO DO ITEM
+                    item1_html = render_multiple_items(item1)
+                    item2_html = render_multiple_items(item2) if item2 else ""
+
+                    # ESTRUTURA DE UMA FOLHA A4 INDIVIDUAL
+                    page_html = f"""
+                    <div class="folha-a4">
+                        <table style="width: 100%; margin-bottom: 15px;padding: 0 12px">
                             <tr>
-                                <td style="text-align: center;">
-                                    <p style="margin: 0; color: #6b7280; font-size: 11px; font-weight: 500;">
-                                        Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
-                                    </p>
+                                <td style="width: 49%; vertical-align: middle;">
+                                    <img src="{SP_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" />
+                                </td>
+                                <td style="width: 49%; vertical-align: middle; text-align: right;">
+                                    <img src="{EE_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" />
                                 </td>
                             </tr>
                         </table>
+
+                        <div class="conteudo-itens">
+                            {item1_html}
+                            {item2_html}
+                        </div>
+
+                        <div class="rodape">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="text-align: center; padding-bottom: 6px;">
+                                         <p style="margin: 0; color: #6b7280; font-size: 11px; font-weight: 500;">
+                                            Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
+                                          </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align: right; color: #6b7280; font-size: 10px;">
+                                        Página {current_page_number} de {TOTAL_PAGES}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
                     </div>
-                </div>
-                
-                {final_items_html}
-            </body>
-            </html>
-        """
+                    """
+                    batch_pages_html.append(page_html)
 
-        # Salva o HTML gigante em um arquivo temporário
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8') as f:
-            f.write(full_html)
-            temp_html_path = f.name
+                # Junta todas as páginas deste lote em um único documento HTML
+                final_batch_html_content = "".join(batch_pages_html)
 
-        # 4. GERAÇÃO DO PDF COM PLAYWRIGHT (Lendo o arquivo)
-        try:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=[
-                        '--no-sandbox', 
-                        '--disable-setuid-sandbox', 
-                        '--disable-dev-shm-usage',
-                        '--allow-file-access-from-files' # <-- A FLAG MÁGICA AQUI
-                    ]
-                )
-                page = await browser.new_page()
+                batch_full_html = f"""
+                    <!DOCTYPE html>
+                    <html lang="pt-br">
+                    <head>
+                        <meta charset="utf-8" />
+                        <style>
+                            @page {{
+                                size: A4;
+                                margin: 0; /* Remove a margem nativa do Chrome */
+                            }}
+                            html, body {{
+                                margin: 0; padding: 0; background-color: #f9fafb;
+                                font-family: "Lexend", sans-serif; font-size: 10px;
+                            }}
+                            @font-face {{ font-family: Lexend; src: url({lexend_regular}); }}
+                            
+                            .folha-a4 {{
+                                position: relative;
+                                width: 210mm;
+                                height: 296.5mm;
+                                box-sizing: border-box;
+                                padding: 20px 0 80px 0;
+                                page-break-after: always; /* Força quebra de página */
+                                overflow: hidden; /* Corta o que sobrar */
+                            }}
+
+                            .conteudo-itens {{
+                                width: 100%;
+                            }}
+
+                            .rodape {{
+                                position: absolute;
+                                bottom: 15px;
+                                left: 30px;
+                                right: 30px;
+                                border-top: 1px solid #e5e7eb;
+                                padding-top: 10px;
+                            }}
+                        </style>
+                    </head>
+                    <body>
+                        {final_batch_html_content}
+                    </body>
+                    </html>
+                """
+
+                # Salva o HTML temporário do lote
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8') as f:
+                    f.write(batch_full_html)
+                    temp_html_path = f.name
                 
-                # ACESSA O ARQUIVO LOCAL EM VEZ DE INJETAR O HTML NO AR
+                temp_pdf_path = temp_html_path.replace('.html', '.pdf')
+                temp_files_to_cleanup.extend([temp_html_path, temp_pdf_path])
+
+                context = await browser.new_context()
+                page = await context.new_page()
+                
                 await page.goto(f"file://{temp_html_path}", wait_until="networkidle")
-                
-                pdf_bytes = await page.pdf(
+                await page.pdf(
+                    path=temp_pdf_path,
                     format="A4",
                     print_background=True,
-                    margin={"top": "0", "right": "0", "bottom": "0", "left": "0"}
+                    margin={"top": "0", "right": "0", "bottom": "0", "left": "0"} # Margem nativa zerada
                 )
                 
-                await browser.close()
-                
-        finally:
-            # Garante que o arquivo temporário será apagado, mesmo se der erro!
-            if os.path.exists(temp_html_path):
-                os.remove(temp_html_path)
+                await page.close()
+                await context.close()
 
-        # 5. RETORNO DO ARQUIVO
+                temp_pdf_paths.append(temp_pdf_path)
+                print(f"Lote processado (offset: {offset})")
+
+            await browser.close()
+
+
+        # --- 4. UNIÃO DOS PDFs COM PIKEPDF ---
+        final_pdf = pikepdf.Pdf.new()
+        opened_pdfs = [] 
+
+        for pdf_path in temp_pdf_paths:
+            src_pdf = pikepdf.Pdf.open(pdf_path)
+            opened_pdfs.append(src_pdf)
+            final_pdf.pages.extend(src_pdf.pages)
+
+        pdf_bytes_io = BytesIO()
+        final_pdf.save(pdf_bytes_io)
+        pdf_bytes_io.seek(0)
+
+        for src_pdf in opened_pdfs:
+            src_pdf.close()
+
         return StreamingResponse(
-            BytesIO(pdf_bytes),
+            pdf_bytes_io,
             media_type='application/pdf',
             headers={
                 'Content-Disposition': 'inline; filename="catalogo_completo.pdf"',
@@ -627,14 +506,14 @@ async def export_catalog_pdf(
         raise HTTPException(
             status_code=500, detail='Erro interno ao gerar PDF'
         )
-
-def render_document_batch(html_content: str):
-    """
-    Renderiza o HTML e retorna o OBJETO Document do WeasyPrint (na memória),
-    em vez de escrever um arquivo em disco.
-    """
-    return HTML(string=html_content, encoding='utf-8').render()
-
+        
+    finally:
+        for filepath in temp_files_to_cleanup:
+            if os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                except Exception as e:
+                    pass
 
 @router.get('/pdf')
 async def export_catalog_pdf(
@@ -699,7 +578,7 @@ async def export_catalog_pdf(
     total_items = len(entries)
     print(f'Existe um total de: {total_items} resultados')
 
-    BATCH_SIZE = 30
+    BATCH_SIZE = 10
     ASSETS_DIR = (
         Path(__file__).resolve().parent.parent.parent / 'assets'
     ).resolve()
@@ -845,3 +724,186 @@ async def export_catalog_pdf(
         raise HTTPException(
             status_code=500, detail='Erro interno ao gerar PDF'
         )
+
+@router.get('/{catalog_id}', response_model=CatalogPublic)
+async def read_catalog_entry(catalog_id: UUID, session: Session):
+    options = [
+        selectinload(Catalog.images),
+        selectinload(Catalog.files),
+        selectinload(Catalog.workflow_history).options(
+            selectinload(CatalogWorkFlow.user).options(
+                selectinload(User.system_identity).options(
+                    selectinload(SystemIdentity.legal_guardian)
+                ),
+                selectinload(User.user_role_associations).selectinload(
+                    UserRole.role
+                ),
+            ),
+            selectinload(CatalogWorkFlow.transfer_requests).options(
+                selectinload(WorkflowTransfer.location)
+            ),
+        ),
+        selectinload(Catalog.location)
+        .selectinload(Location.location_inventories)
+        .selectinload(LocationInventory.inventory),
+    ]
+    db_catalog = await session.get(Catalog, catalog_id, options=options)
+
+    if not db_catalog or db_catalog.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
+        )
+    return db_catalog
+
+@router.put('/{catalog_id}', response_model=CatalogPublic)
+async def update_catalog_entry(
+    catalog_id: UUID,
+    catalog_data: CatalogSchema,
+    session: Session,
+    current_user: CurrentUser,
+):
+    options = [
+        selectinload(Catalog.images),
+        selectinload(Catalog.files),
+        selectinload(Catalog.user).options(
+            selectinload(User.system_identity).options(
+                selectinload(SystemIdentity.legal_guardian)
+            )
+        ),
+        selectinload(Catalog.workflow_history).options(
+            selectinload(CatalogWorkFlow.user).options(
+                selectinload(User.system_identity).options(
+                    selectinload(SystemIdentity.legal_guardian)
+                )
+            ),
+            selectinload(CatalogWorkFlow.transfer_requests).options(
+                selectinload(WorkflowTransfer.user).options(
+                    selectinload(User.system_identity).options(
+                        selectinload(SystemIdentity.legal_guardian)
+                    )
+                ),
+                selectinload(WorkflowTransfer.location),
+            ),
+        ),
+        selectinload(Catalog.location)
+        .selectinload(Location.location_inventories)
+        .selectinload(LocationInventory.inventory),
+    ]
+
+    db_catalog = await session.get(Catalog, catalog_id, options=options)
+
+    if not db_catalog:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
+        )
+
+    db_catalog.asset_id = catalog_data.asset_id
+    db_catalog.situation = catalog_data.situation
+    db_catalog.conservation_status = catalog_data.conservation_status
+    db_catalog.description = catalog_data.description
+
+    session.expire_on_commit = False
+    await session.commit()
+
+    return db_catalog
+
+@router.delete('/{catalog_id}', response_model=Message)
+async def delete_catalog_entry(
+    catalog_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+):
+    db_catalog = await session.get(Catalog, catalog_id)
+    if not db_catalog:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
+        )
+
+    db_catalog.deleted_at = datetime.now()
+    await session.commit()
+
+    return {'message': 'Catalog entry deactivated'}
+
+@router.get('/pdf/{catalog_id}')
+async def export_catalog_pdf(
+    session: Session,
+    catalog_id: UUID,
+    filters: Annotated[FilterCatalog, Depends()],
+):
+    options = [
+        selectinload(Catalog.images),
+        selectinload(Catalog.files),
+        selectinload(Catalog.workflow_history).options(
+            selectinload(CatalogWorkFlow.user).options(
+                selectinload(User.system_identity).options(
+                    selectinload(SystemIdentity.legal_guardian)
+                ),
+                selectinload(User.user_role_associations).selectinload(
+                    UserRole.role
+                ),
+            ),
+            selectinload(CatalogWorkFlow.transfer_requests),
+        ),
+        selectinload(Catalog.location)
+        .selectinload(Location.location_inventories)
+        .selectinload(LocationInventory.inventory),
+    ]
+
+    db_catalog = await session.get(Catalog, catalog_id, options=options)
+
+    if not db_catalog or db_catalog.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Catalog entry not found'
+        )
+
+    print('Existe 1 resultado')
+    print(filters)
+
+    items_html = ''.join(render_item_html(db_catalog, 0, 1))
+
+    ASSETS_DIR = (
+        Path(__file__).resolve().parent.parent.parent / 'assets'
+    ).resolve()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
+
+    full_html = f"""
+              <!DOCTYPE html>
+              <html lang="pt-br">
+              <head>
+                  <meta charset="utf-8" />
+                  <title>Relatório</title>
+                  <style>
+                      @page {{
+                        size: A4;
+                        margin: 0;
+                      }}
+                      
+                      html, body {{
+                          margin: 0;
+                          padding: 0;
+                          height: 100%;
+                          background-color: #ffffff;
+                          font-family: "Lexend", sans-serif;
+                          font-size: 10px;
+                      }}
+                      @font-face {{
+                                font-family: Lexend;
+                                src: url({lexend_regular})
+                            }}                      
+                      img {{ max-width: 100%; }}
+                  </style>
+              </head>
+              <body>
+                  {items_html}
+              </body>
+              </html>
+        """
+    pdf_bytes: bytes = HTML(string=full_html, encoding='utf-8').write_pdf()
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type='application/pdf',
+        headers={
+            'Content-Disposition': 'inline; filename="catalogo.pdf"',
+        },
+    )
