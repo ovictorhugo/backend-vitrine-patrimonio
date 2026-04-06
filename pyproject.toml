@@ -93,7 +93,6 @@ testcontainers = {extras = ["mailpit"], version = "^4.13.1"}
 apscheduler = "^3.11.0"
 weasyprint = "^66.0"
 pyhanko = {extras = ["crypto"], version = "^0.32.0"}
-playwright = "^1.58.0"
 pikepdf = "^10.5.1"
 
 [tool.poetry.group.dev.dependencies]
