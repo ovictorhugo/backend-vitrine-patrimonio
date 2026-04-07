@@ -1423,13 +1423,18 @@ class LoanableItem(AuditMixin):
     owner_notes: Mapped[str | None] = mapped_column(nullable=True)
     last_check: Mapped[datetime] = mapped_column(nullable=True)
     in_maintenance: Mapped[bool] = mapped_column(default=False, nullable=True)
+    is_visible: Mapped[bool] = mapped_column(
+    default=True, 
+    server_default='true', 
+    nullable=False
+)
 
     # Relacionamentos
     catalog: Mapped['Catalog'] = relationship(init=False, lazy='selectin')
     legal_guardian: Mapped['User'] = relationship(
         init=False, 
         lazy='selectin',
-        foreign_keys=[legal_guardian_id] # Especificando a FK correta
+        foreign_keys=[legal_guardian_id] 
     )
     loans: Mapped[list['Loan']] = relationship(
         back_populates='loanable_item',
@@ -1451,6 +1456,7 @@ class Loan(AuditMixin):
     
     requester_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))  
     temporary_guardian_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+
     
     start_at: Mapped[datetime] = mapped_column(nullable=False)
     end_at: Mapped[datetime | None] = mapped_column(nullable=True)
@@ -1466,6 +1472,9 @@ class Loan(AuditMixin):
     is_returned: Mapped[bool] = mapped_column(default=False)
     is_maintenance: Mapped[bool] = mapped_column(default=False)
     
+    confirmed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'), default=None)
+    executed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'), default=None)
+    returned_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'), default=None)
     
     loanable_item: Mapped['LoanableItem'] = relationship(
         back_populates='loans', 
@@ -1477,5 +1486,20 @@ class Loan(AuditMixin):
     )
     temporary_guardian: Mapped['User'] = relationship(
         init=False, 
-        foreign_keys=[temporary_guardian_id] # Especificando quem é o guardian
+        foreign_keys=[temporary_guardian_id]
+    )
+
+    confirmed_by: Mapped['User'] = relationship(
+        init=False,
+        foreign_keys=[confirmed_by_id]
+    )
+    
+    executed_by: Mapped['User'] = relationship(
+        init=False,
+        foreign_keys=[executed_by_id]
+    )
+    
+    returned_by: Mapped['User'] = relationship(
+        init=False,
+        foreign_keys=[returned_by_id]
     )

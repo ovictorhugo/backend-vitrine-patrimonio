@@ -874,6 +874,10 @@ class LoanSchema(BaseModel):
     start_at: datetime
     end_at: Optional[datetime] = None
     returned_at: Optional[datetime] = None
+
+    confirmed_by_id: Optional[UUID] = None
+    executed_by_id: Optional[UUID] = None
+    returned_by_id: Optional[UUID] = None
     
     is_confirmed: bool = False
     is_executed: bool = False
@@ -886,6 +890,9 @@ class LoanSchema(BaseModel):
     
     requester: Optional["UserPublic"] = None
     temporary_guardian: Optional["UserPublic"] = None
+    confirmed_by: Optional["UserPublic"] = None
+    executed_by: Optional["UserPublic"] = None
+    returned_by: Optional["UserPublic"] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -899,6 +906,7 @@ class LoanableItemPublic(BaseModel):
     legal_guardian_id: UUID
     owner_notes: Optional[str] = None
     in_maintenance: Optional[bool] = None
+    is_visible: Optional[bool] = True
     last_check: Optional[datetime] = None
     
     # Informações completas para o retorno

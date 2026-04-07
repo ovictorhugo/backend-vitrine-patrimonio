@@ -2,10 +2,11 @@ from http import HTTPStatus
 from typing import Optional, List
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select,or_
+from fastapi import APIRouter, HTTPException, Query, Depends
+from sqlalchemy import select, or_, exists, desc
 from sqlalchemy.orm import selectinload
 from datetime import datetime
+from typing import Annotated
 from pathlib import Path
 from weasyprint import HTML
 from io import BytesIO
@@ -13,6 +14,7 @@ from fastapi.responses import StreamingResponse
 
 from .utils import render_loanable_item, render_all_loanable_items, render_loan_terms
 from ..services import mail_service
+from vitrine.services import filter_service
 
 from vitrine.core.dependencies import CurrentUser, Session, Mail
 from vitrine.models import (Catalog, 
@@ -23,6 +25,7 @@ from vitrine.models import (Catalog,
     LocationInventory,
     SystemIdentity,
     User,
+    Role,
     UserRole,
     Asset,
     Sector,
@@ -32,9 +35,17 @@ from vitrine.schemas import (
     LoanableItemList,
     LoanSchema,
     CatalogSchema,
+    FilterCatalog,
+    FilterAsset,
 )
 
 router = APIRouter(prefix='/loans', tags=['empréstimos'])
+
+
+_ASSET_FIELDS = set(FilterAsset.model_fields.keys())
+_NON_JOIN_FIELDS = {'limit', 'offset'}
+ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
+
 
 @router.post(
     '/items', 
@@ -171,9 +182,13 @@ async def list_loanable_items(
         .options(
             # 1. Responsável pelo Item
             selectinload(LoanableItem.legal_guardian),
-            
-            # 2. Histórico de Empréstimos (Necessário para a tela)
-            selectinload(LoanableItem.loans),
+            selectinload(LoanableItem.loans).options(
+                selectinload(Loan.requester),
+                selectinload(Loan.temporary_guardian),
+                selectinload(Loan.confirmed_by),
+                selectinload(Loan.executed_by),
+                selectinload(Loan.returned_by)
+            ),
 
             # 3. Catálogo e toda a sua árvore de dependências
             selectinload(LoanableItem.catalog).options(
@@ -234,6 +249,107 @@ async def list_loanable_items(
 
     return {'loanable_items': items}
 
+@router.get('/cards', response_model=LoanableItemList)
+async def list_loanable_items(
+    session: Session, 
+    filters: Annotated[FilterCatalog, Depends()],
+    is_visible: Optional[bool] = Query(None, description="Filtrar itens visíveis (true/false)")
+):
+    query = select(LoanableItem).where(LoanableItem.deleted_at.is_(None))
+    
+    if is_visible is not None:
+        query = query.where(LoanableItem.is_visible == is_visible)
+
+    query = query.join(LoanableItem.catalog)
+    query = filter_service.apply_catalog_filters(query, filters)
+
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
+    )
+
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
+
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
+
+    if filters.role_id:
+        role_subq = (
+            select(1)
+            .select_from(UserRole)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                UserRole.user_id == Catalog.user_id,
+                Role.id == filters.role_id,
+                UserRole.deleted_at.is_(None),
+                Role.deleted_at.is_(None)
+            )
+        )
+        query = query.where(exists(role_subq))
+
+    query = query.options(
+        selectinload(LoanableItem.legal_guardian),
+        selectinload(LoanableItem.loans).options(
+            selectinload(Loan.requester),
+            selectinload(Loan.temporary_guardian),
+            selectinload(Loan.confirmed_by),
+            selectinload(Loan.executed_by),
+            selectinload(Loan.returned_by)
+        ),
+
+        selectinload(LoanableItem.catalog).options(
+            selectinload(Catalog.images),
+            selectinload(Catalog.files),
+            selectinload(Catalog.user), 
+            
+            selectinload(Catalog.asset).options(
+                selectinload(Asset.material),
+                selectinload(Asset.legal_guardian)
+            ),
+            
+            selectinload(Catalog.location).options(
+                selectinload(Location.sector).options(
+                    selectinload(Sector.agency).options(
+                        selectinload(Agency.unit)
+                    )
+                ),
+                selectinload(Location.location_inventories).selectinload(
+                    LocationInventory.inventory
+                )
+            ),
+            
+            selectinload(Catalog.workflow_history).options(
+                selectinload(CatalogWorkFlow.user).options(
+                    selectinload(User.system_identity).options(
+                        selectinload(SystemIdentity.legal_guardian)
+                    ),
+                    selectinload(User.user_role_associations).selectinload(
+                        UserRole.role
+                    ),
+                ),
+                selectinload(CatalogWorkFlow.transfer_requests),
+            ),
+        )
+    )
+
+    query = query.order_by(desc(LoanableItem.created_at))
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.execute(query)
+    items = result.unique().scalars().all()
+
+    try:
+        # Força a validação manualmente antes de retornar
+        LoanableItemList.model_validate({'loanable_items': items})
+    except Exception as e:
+        print("====== ERRO DE VALIDAÇÃO DO SCHEMA ======")
+        print(e)
+        raise e
+
+    return {'loanable_items': items}
+
 @router.get('/my', response_model=LoanableItemList)
 async def list_my_loanable_items(
     session: Session, # ou AsyncSession
@@ -257,7 +373,13 @@ async def list_my_loanable_items(
             selectinload(LoanableItem.legal_guardian),
             
             # 2. Histórico de Empréstimos
-            selectinload(LoanableItem.loans),
+            selectinload(LoanableItem.loans).options(
+                selectinload(Loan.requester),
+                selectinload(Loan.temporary_guardian),
+                selectinload(Loan.confirmed_by),
+                selectinload(Loan.executed_by),
+                selectinload(Loan.returned_by)
+            ),
 
             # 3. Catálogo e toda a sua árvore de dependências (Cópia exata do original)
             selectinload(LoanableItem.catalog).options(
@@ -419,7 +541,13 @@ async def get_loanable_item_by_catalog(
         )
         .options(
             selectinload(LoanableItem.legal_guardian),
-            selectinload(LoanableItem.loans),
+            selectinload(LoanableItem.loans).options(
+                selectinload(Loan.requester),
+                selectinload(Loan.temporary_guardian),
+                selectinload(Loan.confirmed_by),
+                selectinload(Loan.executed_by),
+                selectinload(Loan.returned_by)
+            ),
             selectinload(LoanableItem.catalog).options(
                 selectinload(Catalog.images),
                 selectinload(Catalog.user),
@@ -463,8 +591,9 @@ async def get_loanable_item_by_catalog(
 async def confirm_loan(
     loan_id: UUID,
     confirm: bool,
-    session: Session, # ou AsyncSession
+    session: Session,
     mail: Mail,
+    current_user: CurrentUser,
     rejection_reason: Optional[str] = None,
 ):
     query = (
@@ -481,6 +610,9 @@ async def confirm_loan(
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail='Loan not found.')
 
     try:
+        
+        db_loan.confirmed_by_id = current_user.id
+        
         if confirm:
             db_loan.is_confirmed = True
             db_loan.rejection_reason = None
@@ -491,6 +623,9 @@ async def confirm_loan(
                 .options(
                     selectinload(Loan.requester),
                     selectinload(Loan.temporary_guardian),
+                    selectinload(Loan.confirmed_by),
+                    selectinload(Loan.executed_by),
+                    selectinload(Loan.returned_by),
                     selectinload(Loan.loanable_item).options(
                         selectinload(LoanableItem.legal_guardian),
                         selectinload(LoanableItem.loans),
@@ -527,7 +662,6 @@ async def confirm_loan(
                     detail="O item associado a este empréstimo não foi encontrado ou foi excluído."
                 )
 
-            # Ajustada a ordem dos parâmetros para bater com a função que criamos (loan, item)
             items_html = ''.join(render_loan_terms(item,loan)) 
 
             ASSETS_DIR = (
@@ -569,7 +703,6 @@ async def confirm_loan(
                 """
             pdf_bytes: bytes = HTML(string=full_html, encoding='utf-8').write_pdf()
             
-            # CORREÇÃO: Usando 'await', passando o objeto 'requester' inteiro e chamando a função base
             await mail_service.send_custom_email(
                 mail=mail,
                 user=db_loan.requester, 
@@ -584,7 +717,6 @@ async def confirm_loan(
                 attachment_filename="Termo_de_compromisso.pdf",
                 attachment_bytes=pdf_bytes
             )
-
         else:
             # Fluxo de Recusa
             db_loan.is_confirmed = False
@@ -592,7 +724,6 @@ async def confirm_loan(
             db_loan.is_returned = True
             db_loan.rejection_reason = rejection_reason
             
-            # CORREÇÃO: Usando 'await' e passando o objeto 'requester' inteiro
             await mail_service.send_custom_email(
                 mail=mail,
                 user=db_loan.requester,
@@ -606,26 +737,25 @@ async def confirm_loan(
                 )
             )
 
-        # Se tudo deu certo, salva no banco
         await session.commit()
         await session.refresh(db_loan)
 
         return {"msg": "Updated"}
 
     except Exception as e:
-        # Se QUALQUER coisa der errado (PDF falhar, email não enviar, etc), 
-        # nós desfazemos a operação no banco de dados e avisamos o frontend.
         await session.rollback()
-        print(f"Erro ao confirmar empréstimo: {e}") # Ajuda a debugar no terminal
+        print(f"Erro ao confirmar empréstimo: {e}") 
         
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail=f"Não foi possível concluir a ação. Erro interno: {str(e)}"
         )
+    
 @router.patch('/execute/{loan_id}')
 async def execute_loan(
     loan_id: UUID,
     session: Session,
+    current_user: CurrentUser,
 ):
     """Marca que o item foi fisicamente entregue/retirado"""
     db_loan = await session.get(Loan, loan_id)
@@ -640,6 +770,8 @@ async def execute_loan(
         )
 
     db_loan.is_executed = True
+    db_loan.executed_by_id = current_user.id 
+    
     await session.commit()
     await session.refresh(db_loan)
     return {"msg": "Updated"}
@@ -648,6 +780,7 @@ async def execute_loan(
 async def return_loan(
     loan_id: UUID,
     session: Session,
+    current_user: CurrentUser,
     rejection_reason: Optional[str] = None,
 ):
     """Finaliza o empréstimo ou a manutenção"""
@@ -666,6 +799,7 @@ async def return_loan(
     db_loan.is_returned = True
     db_loan.rejection_reason = rejection_reason
     db_loan.returned_at = now
+    db_loan.returned_by_id = current_user.id 
     
     await session.commit()
     await session.refresh(db_loan)
@@ -679,23 +813,18 @@ async def send_maintenance(
 ):
     """Coloca o item em manutenção e cria o registro de empréstimo sem data final"""
     
-    # 1. Busca o item
     db_item = await session.get(LoanableItem, item_id)
     if not db_item:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail='Loanable item not found.')
     
-    # 2. Verifica se já está em manutenção para evitar duplicidade
     if db_item.in_maintenance:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST, 
             detail='Este item já está em manutenção.'
         )
 
-    # 3. Atualiza o status do item
     db_item.in_maintenance = True
     
-    # 4. Cria o empréstimo de manutenção (is_maintenance=True)
-    # Como é manutenção, ele já nasce confirmado e executado, mas sem data final (None)
     maintenance_loan = Loan(
         loanable_item_id=db_item.id,
         requester_id=current_user.id,
@@ -709,7 +838,9 @@ async def send_maintenance(
         lend_detail="Manutenção",
         returned_detail=None,
         returned_at=None,
-        rejection_reason=None,  
+        rejection_reason=None,
+        confirmed_by_id=current_user.id, 
+        executed_by_id=current_user.id
     )
     
     session.add(maintenance_loan)
@@ -721,30 +852,27 @@ async def send_maintenance(
 async def end_maintenance(
     item_id: UUID,
     session: Session,
+    current_user: CurrentUser,
     is_vistoria: bool = False, 
 ):
     """Retira o item da manutenção e finaliza o empréstimo em aberto"""
     
-    # 1. Busca o item
     db_item = await session.get(LoanableItem, item_id)
     if not db_item:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail='Loanable item not found.')
     
-    # 2. Verifica se o item realmente estava em manutenção
     if not db_item.in_maintenance:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST, 
             detail='The item is not currently in maintenance.'
         )
 
-    # 3. Atualiza o status do item
     now = datetime.now()
-    
     db_item.in_maintenance = False
+    
     if is_vistoria:
         db_item.last_check = now
 
-    # 4. Busca o empréstimo ativo de manutenção mais recente
     query = select(Loan).where(
         Loan.loanable_item_id == item_id,
         Loan.is_maintenance == True,
@@ -754,15 +882,40 @@ async def end_maintenance(
     result = await session.execute(query)
     active_maintenance_loan = result.scalars().first()
     
-    # 5. Finaliza o empréstimo (adiciona end_at e returned_at)
     if active_maintenance_loan:
         active_maintenance_loan.end_at = now
         active_maintenance_loan.returned_at = now
         active_maintenance_loan.is_returned = True
+        active_maintenance_loan.returned_by_id = current_user.id 
     
     await session.commit()
     
     return {"msg": "Item successfully returned from maintenance."}
+
+@router.patch('/changeVisibility/{catalog_id}')
+async def change_visibility(
+    catalog_id: UUID,
+    session: Session, 
+    current_user: CurrentUser,
+):
+    query = select(LoanableItem).where(LoanableItem.catalog_id == catalog_id)
+    result = await session.execute(query)
+    db_item = result.scalar_one_or_none()
+
+    if not db_item:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, 
+            detail='Item de empréstimo não encontrado para este catálogo.'
+        )
+
+    db_item.is_visible = not db_item.is_visible
+    
+    await session.commit()
+    
+    return {
+        "msg": "Visibility updated successfully.",
+        "is_visible": db_item.is_visible
+    }
 
 @router.get('/pdf/{loan_id}')
 async def export_catalog_pdf(

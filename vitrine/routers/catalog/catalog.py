@@ -13,7 +13,7 @@ import math
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, desc, exists
+from sqlalchemy import select, desc, exists
 from sqlalchemy.orm import selectinload, joinedload, contains_eager, noload
 from weasyprint import HTML
 #from playwright.async_api import async_playwright
