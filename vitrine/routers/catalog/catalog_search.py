@@ -1,21 +1,24 @@
 from typing import Annotated
-
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import select, func, exists, desc
 
 from vitrine.core.dependencies import Session
+from vitrine.services import filter_service
 from vitrine.models import (
     Asset,
     Catalog,
     CatalogWorkFlow,
     LegalGuardian,
     Material,
+    Role,
+    UserRole,
 )
 from vitrine.schemas import (
     CatalogAssetIdentifierList,
     FilterSearchCatalog,
     LegalGuardianList,
     MaterialList,
+    FilterCatalog,
 )
 
 router = APIRouter(prefix='/catalog', tags=['Vitrine - Busca em Anúncios'])
@@ -136,7 +139,11 @@ async def list_catalog_legal_guardians(
     '/search/asset-identifier',
     response_model=CatalogAssetIdentifierList,
 )
-async def search_catalog_by_asset_identifier(session: Session, q: str = str()):
+async def search_catalog_by_asset_identifier(
+    session: Session, 
+    filters: Annotated[FilterCatalog, Depends()],
+    q: str = str()
+):
     q = q.replace('-', '')
     query = (
         select(
@@ -149,10 +156,37 @@ async def search_catalog_by_asset_identifier(session: Session, q: str = str()):
         .where(
             Catalog.deleted_at.is_(None),
             Asset.deleted_at.is_(None),
-            func.concat(Asset.asset_code, Asset.asset_check_digit).ilike(
-                f'{q}%'
-            ),
         )
     )
+
+    if q:
+        query = query.where(
+            func.concat(Asset.asset_code, Asset.asset_check_digit).ilike(f'{q}%')
+        )
+
+    query = filter_service.apply_catalog_filters(query, filters)
+    query = filter_service.apply_asset_filters(query, filters)
+
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
+
+    if filters.role_id:
+        role_subq = (
+            select(1)
+            .select_from(UserRole)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                UserRole.user_id == Catalog.user_id,
+                Role.id == filters.role_id,
+                UserRole.deleted_at.is_(None),
+                Role.deleted_at.is_(None)
+            )
+        )
+        query = query.where(exists(role_subq))
+        
+    query = query.order_by(desc(Catalog.created_at))
+    query = query.offset(filters.offset).limit(filters.limit)
+
     result = await session.execute(query)
+    
     return {'catalogs': result.mappings().all()}
