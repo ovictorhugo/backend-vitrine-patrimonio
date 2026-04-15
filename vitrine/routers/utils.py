@@ -2152,7 +2152,7 @@ def render_multiple_items(item) -> str:
             box-sizing: border-box;
             background-color: #f9fafb;
             overflow: hidden;
-            padding: 0 24px 12px 24px;         
+            padding: 0 24px 12px 24px;
         "
     >
         <div style="
