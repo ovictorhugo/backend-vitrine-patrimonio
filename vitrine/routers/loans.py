@@ -76,6 +76,8 @@ async def create_loanable_item(
     session.add(db_catalog)
     await session.flush()
 
+    print("OK")
+
     workflow = CatalogWorkFlow(
         catalog_id=db_catalog.id,
         user_id=current_user.id,
