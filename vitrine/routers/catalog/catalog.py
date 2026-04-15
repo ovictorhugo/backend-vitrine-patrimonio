@@ -69,6 +69,13 @@ async def create_catalog_entry(
             detail='Catalog entry for this asset already exists',
         )
 
+    if catalog_data.situation in {'UNECONOMICAL', 'BROKEN'}:
+        status = WorkFlowStatus.REVIEW_REQUESTED_DESFAZIMENTO
+    elif catalog_data.situation in {'UNUSED', 'RECOVERABLE'}:
+        status = WorkFlowStatus.REVIEW_REQUESTED_VITRINE
+    else:
+        status = WorkFlowStatus.REVIEW_REQUESTED_VITRINE
+
     db_catalog = Catalog(
         asset_id=catalog_data.asset_id,
         situation=catalog_data.situation,
@@ -76,14 +83,10 @@ async def create_catalog_entry(
         description=catalog_data.description,
         location_id=catalog_data.location_id,
         user_id=current_user.id,
+        current_workflow_status=status
     )
     session.add(db_catalog)
     await session.flush()
-
-    if catalog_data.situation in {'UNECONOMICAL', 'BROKEN'}:
-        status = WorkFlowStatus.REVIEW_REQUESTED_DESFAZIMENTO
-    if catalog_data.situation in {'UNUSED', 'RECOVERABLE'}:
-        status = WorkFlowStatus.REVIEW_REQUESTED_VITRINE
 
     workflow = CatalogWorkFlow(
         catalog_id=db_catalog.id,
