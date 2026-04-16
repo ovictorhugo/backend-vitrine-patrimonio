@@ -339,7 +339,11 @@ async def export_catalog_pdf_play(
                     '--no-sandbox', 
                     '--disable-setuid-sandbox', 
                     '--disable-dev-shm-usage',
-                    '--allow-file-access-from-files'
+                    '--allow-file-access-from-files',
+                    '--disable-gpu',
+                    '--single-process',
+                    '--no-zygote',
+                    '--disable-software-rasterizer'
                 ]
             )
             
