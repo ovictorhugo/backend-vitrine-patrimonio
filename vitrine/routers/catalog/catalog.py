@@ -306,7 +306,7 @@ async def export_catalog_pdf_play(
         raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
 
     base_query = base_query.options(
-        # selectinload(Catalog.images), # Removido temporariamente para testes
+        selectinload(Catalog.images), # Removido temporariamente para testes
         selectinload(Catalog.workflow_history).options(
             selectinload(CatalogWorkFlow.user).options(
                 selectinload(User.system_identity).options(
