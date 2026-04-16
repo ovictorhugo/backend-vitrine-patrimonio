@@ -466,7 +466,7 @@ async def export_catalog_pdf_play(
                 temp_files_to_cleanup.extend([temp_html_path, temp_pdf_path])
                 
                 # Aproveita a mesma página, navegando para o novo arquivo local
-                await page.goto(f"file://{temp_html_path}", wait_until="networkidle")
+                await page.goto(f"file://{temp_html_path}", wait_until="load")
                 await page.pdf(
                     path=temp_pdf_path,
                     format="A4",
@@ -483,20 +483,25 @@ async def export_catalog_pdf_play(
             await browser.close()
 
         # --- 4. UNIÃO DOS PDFs COM PIKEPDF ---
-        final_pdf = pikepdf.Pdf.new()
-        opened_pdfs = [] 
+        def merge_pdfs_sync(paths):
+            final_pdf = pikepdf.Pdf.new()
+            opened_pdfs = [] 
 
-        for pdf_path in temp_pdf_paths:
-            src_pdf = pikepdf.Pdf.open(pdf_path)
-            opened_pdfs.append(src_pdf)
-            final_pdf.pages.extend(src_pdf.pages)
+            for pdf_path in paths:
+                src_pdf = pikepdf.Pdf.open(pdf_path)
+                opened_pdfs.append(src_pdf)
+                final_pdf.pages.extend(src_pdf.pages)
 
-        pdf_bytes_io = BytesIO()
-        final_pdf.save(pdf_bytes_io)
-        pdf_bytes_io.seek(0)
+            pdf_buffer = BytesIO()
+            final_pdf.save(pdf_buffer)
+            pdf_buffer.seek(0)
 
-        for src_pdf in opened_pdfs:
-            src_pdf.close()
+            for src_pdf in opened_pdfs:
+                src_pdf.close()
+            
+            return pdf_buffer
+
+        pdf_bytes_io = await run_in_threadpool(merge_pdfs_sync, temp_pdf_paths)
 
         return StreamingResponse(
             pdf_bytes_io,
