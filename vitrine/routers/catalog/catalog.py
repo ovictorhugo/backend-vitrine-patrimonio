@@ -318,7 +318,7 @@ async def export_catalog_pdf_play(
     )
 
     # --- 2. CÁLCULOS DE PAGINAÇÃO ---
-    BATCH_SIZE = 50 # Otimizado para lotes maiores
+    BATCH_SIZE = 5 # Otimizado para lotes maiores
     TOTAL_PAGES = math.ceil(total_items / 2)
 
     ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
