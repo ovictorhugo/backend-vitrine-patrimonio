@@ -321,10 +321,10 @@ async def export_catalog_pdf_play(
     # --- 2. CÁLCULOS DE PAGINAÇÃO ---
     TOTAL_PAGES = math.ceil(total_items / 2)
 
-    # ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
-    # lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
-    # EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
-    # SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+    ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
+    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
+    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
+    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
     try:
         temp_files_to_cleanup = []
