@@ -343,7 +343,8 @@ async def export_catalog_pdf_play(
                     '--disable-gpu',
                     '--single-process',
                     '--no-zygote',
-                    '--disable-software-rasterizer'
+                    '--disable-software-rasterizer',
+                    '--allow-file-access-from-files'
                 ]
             )
             
