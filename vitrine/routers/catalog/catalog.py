@@ -47,6 +47,7 @@ from ..utils import render_item_html, render_multiple_items
 _ASSET_FIELDS = set(FilterAsset.model_fields.keys())
 _NON_JOIN_FIELDS = {'limit', 'offset'}
 ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
+BATCH_SIZE = 5 # Otimizado para lotes maiores
 
 
 router = APIRouter(prefix='/catalog', tags=['Vitrine - Anúncios'])
@@ -300,7 +301,7 @@ async def export_catalog_pdf_play(
 
     count_query = select(func.count()).select_from(base_query.subquery())
     total_items = await session.scalar(count_query) or 0
-    print(f'Existe um total de: {total_items} resultados')
+    print(f'Existe um total de: {total_items} resultados', flush=True)
 
     if total_items == 0:
         raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
@@ -318,7 +319,6 @@ async def export_catalog_pdf_play(
     )
 
     # --- 2. CÁLCULOS DE PAGINAÇÃO ---
-    BATCH_SIZE = 5 # Otimizado para lotes maiores
     TOTAL_PAGES = math.ceil(total_items / 2)
 
     # ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
@@ -326,14 +326,13 @@ async def export_catalog_pdf_play(
     # EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
     # SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
-    temp_files_to_cleanup = []
-    temp_pdf_paths = []
-
     try:
-        print("1. Vai abrir o Playwright...")
+        temp_files_to_cleanup = []
+        temp_pdf_paths = []
+        print("1. Iniciando try/catch do Playwright...", flush=True)
         # --- 3. GERAÇÃO COM PLAYWRIGHT ---
         async with async_playwright() as p:
-            print("2. Playwright rodando, lançando Chromium...")
+            print("2. Playwright Manager aberto, lançando Chromium...", flush=True)
             # Abre o Chromium apenas UMA vez por request
             browser = await p.chromium.launch(
                 headless=True,
@@ -348,12 +347,12 @@ async def export_catalog_pdf_play(
                 ]
             )
             
-            print("3. Chromium lançado, criando Contexto...")
+            print("3. Chromium lançado, criando Contexto...", flush=True)
             # Abre apenas UMA PÁGINA que será reaproveitada nos lotes
             context = await browser.new_context()
-            print("4. Contexto criado, criando Página...")
+            print("4. Contexto criado, criando Página...", flush=True)
             page = await context.new_page()
-            print("5. Página criada com sucesso, iniciando lotes...")
+            print("5. Página criada com sucesso, iniciando lotes...", flush=True)
 
             for offset in range(0, total_items, BATCH_SIZE):
                 batch_query = base_query.offset(offset).limit(BATCH_SIZE)
@@ -466,16 +465,16 @@ async def export_catalog_pdf_play(
                     </html>
                 """
 
-                print(f"Lote {offset}: HTML gerado na memória.")
+                print(f"Lote {offset}: HTML gerado na memória.", flush=True)
 
                 import uuid
                 temp_pdf_path = f"/tmp/pdf_batch_{uuid.uuid4().hex}.pdf"
                 temp_files_to_cleanup.append(temp_pdf_path)
                 
-                print(f"Lote {offset}: set_content() iniciando...")
+                print(f"Lote {offset}: set_content() iniciando...", flush=True)
                 await page.set_content(batch_full_html, wait_until="load")
                 
-                print(f"Lote {offset}: page.pdf() iniciando...")
+                print(f"Lote {offset}: page.pdf() iniciando...", flush=True)
                 await page.pdf(
                     path=temp_pdf_path,
                     format="A4",
@@ -484,13 +483,13 @@ async def export_catalog_pdf_play(
                 )
                 
                 temp_pdf_paths.append(temp_pdf_path)
-                print(f"--> Lote Playwright concluído (offset: {offset})")
+                print(f"--> Lote Playwright concluído (offset: {offset})", flush=True)
 
-            print("Finalizando browser...")
+            print("Finalizando browser...", flush=True)
             await page.close()
             await context.close()
             await browser.close()
-            print("Browser finalizado.")
+            print("Browser finalizado.", flush=True)
 
         # --- 4. UNIÃO DOS PDFs COM PIKEPDF ---
         def merge_pdfs_sync(paths):
