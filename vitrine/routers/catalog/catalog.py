@@ -321,8 +321,8 @@ async def export_catalog_pdf_play(
     BATCH_SIZE = 5 # Otimizado para lotes maiores
     TOTAL_PAGES = math.ceil(total_items / 2)
 
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
-    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
+    # ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
+    # lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
     # EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
     # SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
@@ -330,8 +330,10 @@ async def export_catalog_pdf_play(
     temp_pdf_paths = []
 
     try:
+        print("1. Vai abrir o Playwright...")
         # --- 3. GERAÇÃO COM PLAYWRIGHT ---
         async with async_playwright() as p:
+            print("2. Playwright rodando, lançando Chromium...")
             # Abre o Chromium apenas UMA vez por request
             browser = await p.chromium.launch(
                 headless=True,
@@ -339,7 +341,6 @@ async def export_catalog_pdf_play(
                     '--no-sandbox', 
                     '--disable-setuid-sandbox', 
                     '--disable-dev-shm-usage',
-                    '--allow-file-access-from-files',
                     '--disable-gpu',
                     '--single-process',
                     '--no-zygote',
@@ -347,9 +348,12 @@ async def export_catalog_pdf_play(
                 ]
             )
             
+            print("3. Chromium lançado, criando Contexto...")
             # Abre apenas UMA PÁGINA que será reaproveitada nos lotes
             context = await browser.new_context()
+            print("4. Contexto criado, criando Página...")
             page = await context.new_page()
+            print("5. Página criada com sucesso, iniciando lotes...")
 
             for offset in range(0, total_items, BATCH_SIZE):
                 batch_query = base_query.offset(offset).limit(BATCH_SIZE)
@@ -423,9 +427,9 @@ async def export_catalog_pdf_play(
                             }}
                             html, body {{
                                 margin: 0; padding: 0; background-color: #f9fafb;
-                                font-family: "Lexend", sans-serif; font-size: 10px;
+                                font-family: sans-serif; font-size: 10px;
                             }}
-                            @font-face {{ font-family: Lexend; src: url({lexend_regular}); }}
+                            /* @font-face {{ font-family: Lexend; src: url({lexend_regular}); }} */
                             
                             .folha-a4 {{
                                 position: relative;
@@ -462,15 +466,16 @@ async def export_catalog_pdf_play(
                     </html>
                 """
 
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8') as f:
-                    f.write(batch_full_html)
-                    temp_html_path = f.name
+                print(f"Lote {offset}: HTML gerado na memória.")
+
+                import uuid
+                temp_pdf_path = f"/tmp/pdf_batch_{uuid.uuid4().hex}.pdf"
+                temp_files_to_cleanup.append(temp_pdf_path)
                 
-                temp_pdf_path = temp_html_path.replace('.html', '.pdf')
-                temp_files_to_cleanup.extend([temp_html_path, temp_pdf_path])
+                print(f"Lote {offset}: set_content() iniciando...")
+                await page.set_content(batch_full_html, wait_until="load")
                 
-                # Aproveita a mesma página, navegando para o novo arquivo local
-                await page.goto(f"file://{temp_html_path}", wait_until="load")
+                print(f"Lote {offset}: page.pdf() iniciando...")
                 await page.pdf(
                     path=temp_pdf_path,
                     format="A4",
@@ -479,12 +484,13 @@ async def export_catalog_pdf_play(
                 )
                 
                 temp_pdf_paths.append(temp_pdf_path)
-                print(f"Lote Playwright concluído (offset: {offset})")
+                print(f"--> Lote Playwright concluído (offset: {offset})")
 
-            # Finaliza apenas no fim de todos os lotes
+            print("Finalizando browser...")
             await page.close()
             await context.close()
             await browser.close()
+            print("Browser finalizado.")
 
         # --- 4. UNIÃO DOS PDFs COM PIKEPDF ---
         def merge_pdfs_sync(paths):
