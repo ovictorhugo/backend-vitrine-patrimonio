@@ -319,7 +319,7 @@ async def export_catalog_pdf_play(
 
     # --- 2. CÁLCULOS DE PAGINAÇÃO ---
     TOTAL_PAGES = math.ceil(total_items / 3)
-    BATCH_SIZE = 70
+    BATCH_SIZE = 90
 
     ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
     lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
