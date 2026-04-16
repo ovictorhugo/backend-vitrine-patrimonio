@@ -306,7 +306,7 @@ async def export_catalog_pdf_play(
         raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
 
     base_query = base_query.options(
-        selectinload(Catalog.images),
+        # selectinload(Catalog.images), # Removido temporariamente para testes
         selectinload(Catalog.workflow_history).options(
             selectinload(CatalogWorkFlow.user).options(
                 selectinload(User.system_identity).options(
@@ -323,8 +323,8 @@ async def export_catalog_pdf_play(
 
     ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
     lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
-    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
-    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+    # EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
+    # SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
     temp_files_to_cleanup = []
     temp_pdf_paths = []
@@ -372,10 +372,10 @@ async def export_catalog_pdf_play(
                         <table style="width: 100%; margin-bottom: 15px;padding: 0 12px">
                             <tr>
                                 <td style="width: 49%; vertical-align: middle;">
-                                    <img src="{SP_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" />
+                                    <!-- <img src="{SP_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" /> -->
                                 </td>
                                 <td style="width: 49%; vertical-align: middle; text-align: right;">
-                                    <img src="{EE_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" />
+                                    <!-- <img src="{EE_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" /> -->
                                 </td>
                             </tr>
                         </table>
