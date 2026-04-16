@@ -306,7 +306,7 @@ async def export_catalog_pdf_play(
         raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
 
     base_query = base_query.options(
-        #selectinload(Catalog.images),
+        selectinload(Catalog.images),
         selectinload(Catalog.workflow_history).options(
             selectinload(CatalogWorkFlow.user).options(
                 selectinload(User.system_identity).options(
@@ -318,8 +318,8 @@ async def export_catalog_pdf_play(
     )
 
     # --- 2. CÁLCULOS DE PAGINAÇÃO ---
-    TOTAL_PAGES = math.ceil(total_items / 3)
-    BATCH_SIZE = 90
+    TOTAL_PAGES = math.ceil(total_items / 2)
+    BATCH_SIZE = 10
 
     ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
     lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
@@ -343,8 +343,7 @@ async def export_catalog_pdf_play(
                     '--disable-gpu',
                     '--single-process',
                     '--no-zygote',
-                    '--disable-software-rasterizer',
-                    '--allow-file-access-from-files'
+                    '--disable-software-rasterizer'
                 ]
             )
             
@@ -364,17 +363,15 @@ async def export_catalog_pdf_play(
                     break
 
                 batch_pages_html = []
-                for i in range(0, len(entries), 3):
+                for i in range(0, len(entries), 2):
                     item1 = entries[i]
                     item2 = entries[i+1] if i+1 < len(entries) else None
-                    item3 = entries[i+2] if i+2 < len(entries) else None
                     
                     absolute_idx = offset + i
-                    current_page_number = (absolute_idx // 3) + 1
+                    current_page_number = (absolute_idx // 2) + 1
 
                     item1_html = render_multiple_items(item1)                    
                     item2_html = render_multiple_items(item2) if item2 else ""
-                    item3_html = render_multiple_items(item3) if item3 else ""
                     
                     
                     page_html = f"""
@@ -393,7 +390,6 @@ async def export_catalog_pdf_play(
                         <div class="conteudo-itens">
                             {item1_html}
                             {item2_html}
-                            {item3_html}
                         </div>
 
                         <div class="rodape">
