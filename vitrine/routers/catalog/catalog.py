@@ -18,7 +18,8 @@ from sqlalchemy.orm import selectinload, joinedload, contains_eager, noload
 from weasyprint import HTML
 from playwright.async_api import async_playwright
 
-from vitrine.core.dependencies import CurrentUser, Session
+from vitrine.core.dependencies import CurrentUser, Session, Mail
+from vitrine.services import mail_service
 from vitrine.models import (
     Catalog,
     CatalogWorkFlow,
@@ -264,6 +265,8 @@ async def read_catalog_entries(
 @router.get('/pdf_play')
 async def export_catalog_pdf_play(
     session: Session,
+    mail: Mail,
+    current_user: CurrentUser,
     filters: Annotated[FilterCatalog, Depends()],
 ):
     # --- 1. QUERY E CONTAGEM (Mantido intacto) ---
@@ -529,7 +532,7 @@ async def export_catalog_pdf_play(
                     "Equipe Vitrine Patrimônio"
                 ),
                 attachment_filename="catalogo_itens.pdf",
-                attachment_bytes=pdf_bytes_io
+                attachment_bytes=pdf_bytes_io.getvalue()
             )
 
         return {'message': 'Catalog sent'}
