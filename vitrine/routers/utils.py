@@ -2040,107 +2040,107 @@ def render_multiple_items(item) -> str:
 
     # ---------- IMAGENS (Refatorado para Inline-Block ao invés de Grid/Flex) ----------
 
-    # IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
-    # images = getattr(item, "images", []) or []
-    # image_cells = []
+    IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
+    images = getattr(item, "images", []) or []
+    image_cells = []
     
-    # # Processamento das células de imagem
-    # for img in images[:4]:
-    #     file_path = getattr(img, "file_path", None)
-    #     if file_path:
-    #         filename = os.path.basename(file_path)
-    #         full_path = (IMAGES_DIR / filename).resolve()
+    # Processamento das células de imagem
+    for img in images[:4]:
+        file_path = getattr(img, "file_path", None)
+        if file_path:
+            filename = os.path.basename(file_path)
+            full_path = (IMAGES_DIR / filename).resolve()
             
-    #         if full_path.is_file():
-    #             src = full_path.as_uri()
-    #             src_esc = html_lib.escape(src)
+            if full_path.is_file():
+                src = full_path.as_uri()
+                src_esc = html_lib.escape(src)
                 
-    #             cell = f"""
-    #             <div
-    #               style="
-    #                 display: inline-block;
-    #                 vertical-align: top;
-    #                 width: 24%;
-    #                 box-sizing: border-box;
-    #                 border: 1px solid #e5e7eb;
-    #                 border-radius: 6px;
-    #                 background-color: #f3f4f6;
-    #                 height: 140px;
-    #                 overflow: hidden; 
-    #                 position: relative;
-    #               "
-    #             >
-    #               <img
-    #                 src="{src_esc}"
-    #                 style="
-    #                   display: block;          /* Remove espaço extra em baixo da imagem */
-    #                   width: 100%;             /* Força largura total */
-    #                   height: 100%;            /* Força altura total */
-    #                   object-fit: cover;       /* Preenche o container cortando o excesso (zoom) */
-    #                   object-position: center; /* Centraliza a imagem antes de cortar */
-    #                 "
-    #               />
-    #             </div>
-    #             """
-    #         else:
-    #             # Caminho não existe (Mantido layout centralizado simples)
-    #             cell = """
-    #             <div
-    #               style="
-    #                 display: inline-block;
-    #                 vertical-align: top;
-    #                 width: 24%;
-    #                 box-sizing: border-box;
-    #                 border: 1px solid #e5e7eb;
-    #                 border-radius: 6px;
-    #                 background-color: #f3f4f6;
-    #                 height: 140px;
-    #                 text-align: center;
-    #                 line-height: 140px;
-    #                 overflow: hidden;
-    #               "
-    #             >
-    #               <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
-    #                 Sem imagem
-    #               </span>
-    #             </div>
-    #             """
-    #     else:
-    #         # Não tem file_path
-    #         cell = """
-    #         <div
-    #           style="
-    #             display: inline-block;
-    #             vertical-align: top;
-    #             width: 24%;
-    #             box-sizing: border-box;
-    #             border: 1px solid #e5e7eb;
-    #             border-radius: 6px;
-    #             background-color: #f3f4f6;
-    #             height: 140px;
-    #             text-align: center;
-    #             line-height: 140px;
-    #             overflow: hidden;
-    #           "
-    #         >
-    #           <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
-    #             sem imagem
-    #           </span>
-    #         </div>
-    #         """
+                cell = f"""
+                <div
+                  style="
+                    display: inline-block;
+                    vertical-align: top;
+                    width: 24%;
+                    box-sizing: border-box;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    background-color: #f3f4f6;
+                    height: 140px;
+                    overflow: hidden; 
+                    position: relative;
+                  "
+                >
+                  <img
+                    src="{src_esc}"
+                    style="
+                      display: block;          /* Remove espaço extra em baixo da imagem */
+                      width: 100%;             /* Força largura total */
+                      height: 100%;            /* Força altura total */
+                      object-fit: cover;       /* Preenche o container cortando o excesso (zoom) */
+                      object-position: center; /* Centraliza a imagem antes de cortar */
+                    "
+                  />
+                </div>
+                """
+            else:
+                # Caminho não existe (Mantido layout centralizado simples)
+                cell = """
+                <div
+                  style="
+                    display: inline-block;
+                    vertical-align: top;
+                    width: 24%;
+                    box-sizing: border-box;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    background-color: #f3f4f6;
+                    height: 140px;
+                    text-align: center;
+                    line-height: 140px;
+                    overflow: hidden;
+                  "
+                >
+                  <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
+                    Sem imagem
+                  </span>
+                </div>
+                """
+        else:
+            # Não tem file_path
+            cell = """
+            <div
+              style="
+                display: inline-block;
+                vertical-align: top;
+                width: 24%;
+                box-sizing: border-box;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                background-color: #f3f4f6;
+                height: 140px;
+                text-align: center;
+                line-height: 140px;
+                overflow: hidden;
+              "
+            >
+              <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
+                sem imagem
+              </span>
+            </div>
+            """
 
-    #     image_cells.append(cell)
+        image_cells.append(cell)
 
-    # # Container das imagens (remove whitespace para inline-blocks funcionarem bem)
-    # images_html = f"""
-    #     <div style="width: 100%; text-align: center;">
-    #         {"".join(image_cells)}
-    #     </div>
-    # """ if len(image_cells) else """
-    #     <div style="padding: 10px; text-align: center; background: #f9fafb; border-radius: 6px;">
-    #       <span style="font-size: 10px; color: #9ca3af;">sem imagens</span>
-    #     </div>
-    # """
+    # Container das imagens (remove whitespace para inline-blocks funcionarem bem)
+    images_html = f"""
+        <div style="width: 100%; text-align: center;">
+            {"".join(image_cells)}
+        </div>
+    """ if len(image_cells) else """
+        <div style="padding: 10px; text-align: center; background: #f9fafb; border-radius: 6px;">
+          <span style="font-size: 10px; color: #9ca3af;">sem imagens</span>
+        </div>
+    """
 
     # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
 
@@ -2314,6 +2314,7 @@ def render_multiple_items(item) -> str:
 
             </div>
         </div>
+        {images_html}
     </div>
     """
     return html    

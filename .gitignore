@@ -10,6 +10,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.png
+!vitrine/assets/*.png
 *.jpg
 # C extensions
 *.so
