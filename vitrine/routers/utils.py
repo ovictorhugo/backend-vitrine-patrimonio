@@ -2044,6 +2044,25 @@ def render_multiple_items(item) -> str:
     images = getattr(item, "images", []) or []
     image_cells = []
     
+    # Processamento das células de imagem com Thumbnails dinâmicos nativos
+    def get_thumbnail_base64(filepath):
+        try:
+            from PIL import Image
+            import io
+            import base64
+            with Image.open(filepath) as img:
+                # O processamento com thumbnail() da Pillow é instantâneo e não sobrecarrega loop
+                img.thumbnail((320, 320)) 
+                # Lida com canais Alpha do png convertendo pra RGB
+                if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+                
+                buffer = io.BytesIO()
+                img.save(buffer, format="JPEG", quality=75)
+                img_str = base64.b64encode(buffer.getvalue()).decode()
+                return f"data:image/jpeg;base64,{img_str}"
+        except Exception:
+            return None
+
     # Processamento das células de imagem
     for img in images[:4]:
         file_path = getattr(img, "file_path", None)
@@ -2052,36 +2071,59 @@ def render_multiple_items(item) -> str:
             full_path = (IMAGES_DIR / filename).resolve()
             
             if full_path.is_file():
-                src = full_path.as_uri()
-                src_esc = html_lib.escape(src)
+                # Troca arquivo imenso local por Thumb miniaturizada para o HTML
+                thumb_uri = get_thumbnail_base64(full_path)
                 
-                cell = f"""
-                <div
-                  style="
-                    display: inline-block;
-                    vertical-align: top;
-                    width: 24%;
-                    box-sizing: border-box;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 6px;
-                    background-color: #f3f4f6;
-                    height: 140px;
-                    overflow: hidden; 
-                    position: relative;
-                  "
-                >
-                  <img
-                    src="{src_esc}"
-                    style="
-                      display: block;          /* Remove espaço extra em baixo da imagem */
-                      width: 100%;             /* Força largura total */
-                      height: 100%;            /* Força altura total */
-                      object-fit: cover;       /* Preenche o container cortando o excesso (zoom) */
-                      object-position: center; /* Centraliza a imagem antes de cortar */
-                    "
-                  />
-                </div>
-                """
+                if thumb_uri:
+                    src_esc = thumb_uri
+                    
+                    cell = f"""
+                    <div
+                      style="
+                        display: inline-block;
+                        vertical-align: top;
+                        width: 24%;
+                        box-sizing: border-box;
+                        border: 1px solid #e5e7eb;
+                        border-radius: 6px;
+                        background-color: #f3f4f6;
+                        height: 140px;
+                        overflow: hidden; 
+                        position: relative;
+                      "
+                    >
+                      <img
+                        src="{src_esc}"
+                        style="
+                          display: block;
+                          width: 100%;
+                          height: 100%;
+                          object-fit: cover;
+                          object-position: center;
+                        "
+                      />
+                    </div>
+                    """
+                else:
+                    # Imagem existe, mas corrompida / não abre
+                    cell = """
+                    <div
+                      style="
+                        display: inline-block;
+                        width: 24%;
+                        border: 1px solid #e5e7eb;
+                        border-radius: 6px;
+                        background-color: #f3f4f6;
+                        height: 140px;
+                        text-align: center;
+                        line-height: 140px;
+                      "
+                    >
+                      <span style="font-size: 10px; color: #9ca3af; display: inline-block; vertical-align: middle;">
+                        [Erro Imagem]
+                      </span>
+                    </div>
+                    """
             else:
                 # Caminho não existe (Mantido layout centralizado simples)
                 cell = """
