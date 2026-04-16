@@ -47,7 +47,6 @@ from ..utils import render_item_html, render_multiple_items
 _ASSET_FIELDS = set(FilterAsset.model_fields.keys())
 _NON_JOIN_FIELDS = {'limit', 'offset'}
 ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
-BATCH_SIZE = 5 # Otimizado para lotes maiores
 
 
 router = APIRouter(prefix='/catalog', tags=['Vitrine - Anúncios'])
@@ -320,6 +319,7 @@ async def export_catalog_pdf_play(
 
     # --- 2. CÁLCULOS DE PAGINAÇÃO ---
     TOTAL_PAGES = math.ceil(total_items / 2)
+    BATCH_SIZE = 50 # Otimizado para lotes maiores
 
     ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
     lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
