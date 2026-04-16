@@ -518,13 +518,21 @@ async def export_catalog_pdf_play(
 
         pdf_bytes_io = await run_in_threadpool(merge_pdfs_sync, temp_pdf_paths)
 
-        return StreamingResponse(
-            pdf_bytes_io,
-            media_type='application/pdf',
-            headers={
-                'Content-Disposition': 'inline; filename="catalogo_completo.pdf"',
-            },
-        )
+        await mail_service.send_custom_email(
+                mail=mail,
+                user=current_user, 
+                subject='Catálogo de Itens - Vitrine Patrimônio',
+                content=(
+                    "Prezado(a),\n\n"
+                    "Aqui está o seu relatório de itens do Sistema patrimônio.\n\n"
+                    "Atenciosamente,\n"
+                    "Equipe Vitrine Patrimônio"
+                ),
+                attachment_filename="catalogo_itens.pdf",
+                attachment_bytes=pdf_bytes_io
+            )
+
+        return {'message': 'Catalog sent'}
 
     except Exception as e:
         print(f'Erro PDF Playwright: {e}')
