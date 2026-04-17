@@ -10,7 +10,7 @@ import os
 import pikepdf
 import math
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, desc, exists, func
@@ -19,6 +19,8 @@ from weasyprint import HTML
 from playwright.async_api import async_playwright
 
 from vitrine.core.dependencies import CurrentUser, Session, Mail
+from vitrine.core.database import async_session
+from vitrine.core.mail import get_smtp
 from vitrine.services import mail_service
 from vitrine.models import (
     Catalog,
@@ -262,10 +264,298 @@ async def read_catalog_entries(
 
 
 
+async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog):
+    async with async_session() as session:
+        base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
+        base_query = filter_service.apply_catalog_filters(base_query, filters)
+
+        asset_join_needed = any(
+            getattr(filters, field_name) is not None
+            for field_name in ASSET_JOIN_TRIGGER_FIELDS
+        )
+
+        if asset_join_needed:
+            base_query = base_query.join(Catalog.asset)
+            base_query = filter_service.apply_asset_filters(base_query, filters)
+
+        if filters.user_id:
+            base_query = base_query.where(Catalog.user_id == filters.user_id)
+
+        if filters.role_id:
+            users_with_role = (
+                select(UserRole.user_id)
+                .join(Role, Role.id == UserRole.role_id)
+                .where(
+                    Role.id == filters.role_id,
+                    UserRole.deleted_at.is_(None),
+                    Role.deleted_at.is_(None),
+                )
+                .distinct()
+                .cte('users_with_role')
+            )
+            base_query = base_query.join(
+                users_with_role, Catalog.user_id == users_with_role.c.user_id
+            )
+
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_items = await session.scalar(count_query) or 0
+        print(f'Background: Existe um total de: {total_items} resultados', flush=True)
+
+        if total_items == 0:
+            return
+
+        base_query = base_query.options(
+            selectinload(Catalog.images),
+            selectinload(Catalog.workflow_history).options(
+                selectinload(CatalogWorkFlow.user).options(
+                    selectinload(User.system_identity).options(
+                        selectinload(SystemIdentity.legal_guardian)
+                    ),
+                )
+            ),
+            selectinload(Catalog.location)
+        )
+
+        # --- 2. CÁLCULOS DE PAGINAÇÃO ---
+        TOTAL_PAGES = math.ceil(total_items / 2)
+        BATCH_SIZE = 70
+
+        ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
+        lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
+        EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
+        SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+
+        try:
+            temp_files_to_cleanup = []
+            temp_pdf_paths = []
+            print("1. Iniciando try/catch do Playwright...", flush=True)
+            # --- 3. GERAÇÃO COM PLAYWRIGHT ---
+            async with async_playwright() as p:
+                print("2. Playwright Manager aberto, lançando Chromium...", flush=True)
+                # Abre o Chromium apenas UMA vez por request
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox', 
+                        '--disable-setuid-sandbox', 
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--single-process',
+                        '--no-zygote',
+                        '--disable-software-rasterizer'
+                    ]
+                )
+                
+                print("3. Chromium lançado, criando Contexto...", flush=True)
+                # Abre apenas UMA PÁGINA que será reaproveitada nos lotes
+                context = await browser.new_context()
+                print("4. Contexto criado, criando Página...", flush=True)
+                page = await context.new_page()
+                print("5. Página criada com sucesso, iniciando lotes...", flush=True)
+
+                for offset in range(0, total_items, BATCH_SIZE):
+                    batch_query = base_query.offset(offset).limit(BATCH_SIZE)
+                    result = await session.scalars(batch_query)
+                    entries = result.unique().all()
+
+                    if not entries:
+                        break
+
+                    batch_pages_html = []
+                    for i in range(0, len(entries), 2):
+                        item1 = entries[i]
+                        item2 = entries[i+1] if i+1 < len(entries) else None
+                        
+                        absolute_idx = offset + i
+                        current_page_number = (absolute_idx // 2) + 1
+
+                        item1_html = render_multiple_items(item1)                    
+                        item2_html = render_multiple_items(item2) if item2 else ""
+                        
+                        
+                        page_html = f"""
+                        <div class="folha-a4">
+                            <table style="width: 100%; margin-bottom: 15px;padding: 0 12px">
+                                <tr>
+                                    <td style="width: 49%; vertical-align: middle;">
+                                        <img src="{SP_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" />
+                                    </td>
+                                    <td style="width: 49%; vertical-align: middle; text-align: right;">
+                                        <img src="{EE_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" />
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <div class="conteudo-itens">
+                                {item1_html}
+                                {item2_html}
+                            </div>
+
+                            <div class="rodape">
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <tr>
+                                        <td style="text-align: center; padding-bottom: 6px;">
+                                             <p style="margin: 0; color: #6b7280; font-size: 11px; font-weight: 500;">
+                                                Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
+                                              </p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="text-align: right; color: #6b7280; font-size: 10px;">
+                                            Página {current_page_number} de {TOTAL_PAGES}
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        """
+                        batch_pages_html.append(page_html)
+
+                    final_batch_html_content = "".join(batch_pages_html)
+
+                    batch_full_html = f"""
+                        <!DOCTYPE html>
+                        <html lang="pt-br">
+                        <head>
+                            <meta charset="utf-8" />
+                            <style>
+                                @page {{
+                                    size: A4;
+                                    margin: 0; /* Remove a margem nativa do Chrome */
+                                }}
+                                html, body {{
+                                    margin: 0; padding: 0; background-color: #f9fafb;
+                                    font-family: "Lexend", sans-serif; font-size: 10px;
+                                }}
+                                @font-face {{ font-family: Lexend; src: url({lexend_regular}); }}
+                                
+                                .folha-a4 {{
+                                    position: relative;
+                                    width: 210mm;
+                                    height: 296.5mm;
+                                    box-sizing: border-box;
+                                    padding: 20px 0 80px 0;
+                                    page-break-after: always;
+                                    overflow: hidden;
+                                    display: flex;
+                                    flex-direction: column;
+                                }}
+
+                                .conteudo-itens {{
+                                    flex: 1;
+                                    display: flex;
+                                    flex-direction: column;
+                                    width: 100%;
+                                }}
+
+                                .rodape {{
+                                    position: absolute;
+                                    bottom: 15px;
+                                    left: 30px;
+                                    right: 30px;
+                                    border-top: 1px solid #e5e7eb;
+                                    padding-top: 10px;
+                                }}
+                            </style>
+                        </head>
+                        <body>
+                            {final_batch_html_content}
+                        </body>
+                        </html>
+                    """
+
+                    print(f"Lote {offset}: HTML gerado na memória.", flush=True)
+
+                    import uuid
+                    import tempfile
+                    temp_pdf_path = f"/tmp/pdf_batch_{uuid.uuid4().hex}.pdf"
+                    
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8') as f:
+                        f.write(batch_full_html)
+                        temp_html_path = f.name
+                        
+                    temp_files_to_cleanup.extend([temp_html_path, temp_pdf_path])
+                    
+                    print(f"Lote {offset}: page.goto() iniciando...", flush=True)
+                    await page.goto(f"file://{temp_html_path}", wait_until="load")
+                    
+                    print(f"Lote {offset}: page.pdf() iniciando...", flush=True)
+                    await page.pdf(
+                        path=temp_pdf_path,
+                        format="A4",
+                        print_background=True,
+                        margin={"top": "0", "right": "0", "bottom": "0", "left": "0"}
+                    )
+                    
+                    temp_pdf_paths.append(temp_pdf_path)
+                    print(f"--> Lote Playwright concluído (offset: {offset})", flush=True)
+
+                print("Finalizando browser...", flush=True)
+                await page.close()
+                await context.close()
+                await browser.close()
+                print("Browser finalizado.", flush=True)
+
+            # --- 4. UNIÃO DOS PDFs COM PIKEPDF ---
+            def merge_pdfs_sync(paths):
+                final_pdf = pikepdf.Pdf.new()
+                opened_pdfs = [] 
+
+                for pdf_path in paths:
+                    src_pdf = pikepdf.Pdf.open(pdf_path)
+                    opened_pdfs.append(src_pdf)
+                    final_pdf.pages.extend(src_pdf.pages)
+
+                pdf_buffer = BytesIO()
+                final_pdf.save(pdf_buffer)
+                pdf_buffer.seek(0)
+
+                for src_pdf in opened_pdfs:
+                    src_pdf.close()
+                
+                return pdf_buffer
+
+            pdf_bytes_io = await run_in_threadpool(merge_pdfs_sync, temp_pdf_paths)
+
+            smtp_gen = get_smtp()
+            try:
+                mail = next(smtp_gen)
+                await mail_service.send_custom_email(
+                    mail=mail,
+                    user=current_user, 
+                    subject='Catálogo de Itens - Vitrine Patrimônio',
+                    content=(
+                        "Prezado(a),\n\n"
+                        "Aqui está o seu relatório de itens do Sistema patrimônio.\n\n"
+                        "Atenciosamente,\n"
+                        "Equipe Vitrine Patrimônio"
+                    ),
+                    attachment_filename="catalogo_itens.pdf",
+                    attachment_bytes=pdf_bytes_io.getvalue()
+                )
+            except Exception as e:
+                print(f"Erro ao enviar email PDF Playwright: {e}")
+            finally:
+                try:
+                    next(smtp_gen)
+                except StopIteration:
+                    pass
+
+        except Exception as e:
+            print(f'Erro PDF Playwright: {e}')
+            
+        finally:
+            for filepath in temp_files_to_cleanup:
+                if os.path.exists(filepath):
+                    try:
+                        os.remove(filepath)
+                    except Exception as e:
+                        pass
+
 @router.get('/pdf_play')
 async def export_catalog_pdf_play(
     session: Session,
-    mail: Mail,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser,
     filters: Annotated[FilterCatalog, Depends()],
 ):
@@ -308,248 +598,8 @@ async def export_catalog_pdf_play(
     if total_items == 0:
         raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
 
-    base_query = base_query.options(
-        selectinload(Catalog.images),
-        selectinload(Catalog.workflow_history).options(
-            selectinload(CatalogWorkFlow.user).options(
-                selectinload(User.system_identity).options(
-                    selectinload(SystemIdentity.legal_guardian)
-                ),
-            )
-        ),
-        selectinload(Catalog.location)
-    )
-
-    # --- 2. CÁLCULOS DE PAGINAÇÃO ---
-    TOTAL_PAGES = math.ceil(total_items / 2)
-    BATCH_SIZE = 70
-
-    ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
-    lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
-    EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
-    SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
-
-    try:
-        temp_files_to_cleanup = []
-        temp_pdf_paths = []
-        print("1. Iniciando try/catch do Playwright...", flush=True)
-        # --- 3. GERAÇÃO COM PLAYWRIGHT ---
-        async with async_playwright() as p:
-            print("2. Playwright Manager aberto, lançando Chromium...", flush=True)
-            # Abre o Chromium apenas UMA vez por request
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox', 
-                    '--disable-setuid-sandbox', 
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--single-process',
-                    '--no-zygote',
-                    '--disable-software-rasterizer'
-                ]
-            )
-            
-            print("3. Chromium lançado, criando Contexto...", flush=True)
-            # Abre apenas UMA PÁGINA que será reaproveitada nos lotes
-            context = await browser.new_context()
-            print("4. Contexto criado, criando Página...", flush=True)
-            page = await context.new_page()
-            print("5. Página criada com sucesso, iniciando lotes...", flush=True)
-
-            for offset in range(0, total_items, BATCH_SIZE):
-                batch_query = base_query.offset(offset).limit(BATCH_SIZE)
-                result = await session.scalars(batch_query)
-                entries = result.unique().all()
-
-                if not entries:
-                    break
-
-                batch_pages_html = []
-                for i in range(0, len(entries), 2):
-                    item1 = entries[i]
-                    item2 = entries[i+1] if i+1 < len(entries) else None
-                    
-                    absolute_idx = offset + i
-                    current_page_number = (absolute_idx // 2) + 1
-
-                    item1_html = render_multiple_items(item1)                    
-                    item2_html = render_multiple_items(item2) if item2 else ""
-                    
-                    
-                    page_html = f"""
-                    <div class="folha-a4">
-                        <table style="width: 100%; margin-bottom: 15px;padding: 0 12px">
-                            <tr>
-                                <td style="width: 49%; vertical-align: middle;">
-                                    <img src="{SP_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" />
-                                </td>
-                                <td style="width: 49%; vertical-align: middle; text-align: right;">
-                                    <img src="{EE_LOGO_URI}" style="height: 36px; max-width: 120px; object-fit: contain;" />
-                                </td>
-                            </tr>
-                        </table>
-
-                        <div class="conteudo-itens">
-                            {item1_html}
-                            {item2_html}
-                        </div>
-
-                        <div class="rodape">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <tr>
-                                    <td style="text-align: center; padding-bottom: 6px;">
-                                         <p style="margin: 0; color: #6b7280; font-size: 11px; font-weight: 500;">
-                                            Av. Presidente Antônio Carlos, nº 6.627, Belo Horizonte/MG - CEP: 31.270-901
-                                          </p>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="text-align: right; color: #6b7280; font-size: 10px;">
-                                        Página {current_page_number} de {TOTAL_PAGES}
-                                    </td>
-                                </tr>
-                            </table>
-                        </div>
-                    </div>
-                    """
-                    batch_pages_html.append(page_html)
-
-                final_batch_html_content = "".join(batch_pages_html)
-
-                batch_full_html = f"""
-                    <!DOCTYPE html>
-                    <html lang="pt-br">
-                    <head>
-                        <meta charset="utf-8" />
-                        <style>
-                            @page {{
-                                size: A4;
-                                margin: 0; /* Remove a margem nativa do Chrome */
-                            }}
-                            html, body {{
-                                margin: 0; padding: 0; background-color: #f9fafb;
-                                font-family: "Lexend", sans-serif; font-size: 10px;
-                            }}
-                            @font-face {{ font-family: Lexend; src: url({lexend_regular}); }}
-                            
-                            .folha-a4 {{
-                                position: relative;
-                                width: 210mm;
-                                height: 296.5mm;
-                                box-sizing: border-box;
-                                padding: 20px 0 80px 0;
-                                page-break-after: always;
-                                overflow: hidden;
-                                display: flex;
-                                flex-direction: column;
-                            }}
-
-                            .conteudo-itens {{
-                                flex: 1;
-                                display: flex;
-                                flex-direction: column;
-                                width: 100%;
-                            }}
-
-                            .rodape {{
-                                position: absolute;
-                                bottom: 15px;
-                                left: 30px;
-                                right: 30px;
-                                border-top: 1px solid #e5e7eb;
-                                padding-top: 10px;
-                            }}
-                        </style>
-                    </head>
-                    <body>
-                        {final_batch_html_content}
-                    </body>
-                    </html>
-                """
-
-                print(f"Lote {offset}: HTML gerado na memória.", flush=True)
-
-                import uuid
-                import tempfile
-                temp_pdf_path = f"/tmp/pdf_batch_{uuid.uuid4().hex}.pdf"
-                
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='w', encoding='utf-8') as f:
-                    f.write(batch_full_html)
-                    temp_html_path = f.name
-                    
-                temp_files_to_cleanup.extend([temp_html_path, temp_pdf_path])
-                
-                print(f"Lote {offset}: page.goto() iniciando...", flush=True)
-                await page.goto(f"file://{temp_html_path}", wait_until="load")
-                
-                print(f"Lote {offset}: page.pdf() iniciando...", flush=True)
-                await page.pdf(
-                    path=temp_pdf_path,
-                    format="A4",
-                    print_background=True,
-                    margin={"top": "0", "right": "0", "bottom": "0", "left": "0"}
-                )
-                
-                temp_pdf_paths.append(temp_pdf_path)
-                print(f"--> Lote Playwright concluído (offset: {offset})", flush=True)
-
-            print("Finalizando browser...", flush=True)
-            await page.close()
-            await context.close()
-            await browser.close()
-            print("Browser finalizado.", flush=True)
-
-        # --- 4. UNIÃO DOS PDFs COM PIKEPDF ---
-        def merge_pdfs_sync(paths):
-            final_pdf = pikepdf.Pdf.new()
-            opened_pdfs = [] 
-
-            for pdf_path in paths:
-                src_pdf = pikepdf.Pdf.open(pdf_path)
-                opened_pdfs.append(src_pdf)
-                final_pdf.pages.extend(src_pdf.pages)
-
-            pdf_buffer = BytesIO()
-            final_pdf.save(pdf_buffer)
-            pdf_buffer.seek(0)
-
-            for src_pdf in opened_pdfs:
-                src_pdf.close()
-            
-            return pdf_buffer
-
-        pdf_bytes_io = await run_in_threadpool(merge_pdfs_sync, temp_pdf_paths)
-
-        await mail_service.send_custom_email(
-                mail=mail,
-                user=current_user, 
-                subject='Catálogo de Itens - Vitrine Patrimônio',
-                content=(
-                    "Prezado(a),\n\n"
-                    "Aqui está o seu relatório de itens do Sistema patrimônio.\n\n"
-                    "Atenciosamente,\n"
-                    "Equipe Vitrine Patrimônio"
-                ),
-                attachment_filename="catalogo_itens.pdf",
-                attachment_bytes=pdf_bytes_io.getvalue()
-            )
-
-        return {'message': 'Catalog sent'}
-
-    except Exception as e:
-        print(f'Erro PDF Playwright: {e}')
-        raise HTTPException(
-            status_code=500, detail=f'Erro interno ao gerar PDF: {e}'
-        )
-        
-    finally:
-        for filepath in temp_files_to_cleanup:
-            if os.path.exists(filepath):
-                try:
-                    os.remove(filepath)
-                except Exception as e:
-                    pass
+    background_tasks.add_task(generate_and_send_pdf_play, current_user, filters)
+    return {'message': 'Processamento do PDF iniciado. Você receberá um e-mail em breve com o arquivo.'}
 
 @router.get('/pdf')
 async def export_catalog_pdf(

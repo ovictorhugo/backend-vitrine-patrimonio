@@ -386,6 +386,15 @@ class CatalogAssetIdentifierList(BaseModel):
     catalogs: List[CatalogAssetIdentifier]
 
 
+class CatalogAtmNumber(BaseModel):
+    catalog_id: UUID
+    atm_number: Optional[str] = Field(default=None)
+
+
+class CatalogAtmNumberList(BaseModel):
+    catalogs: List[CatalogAtmNumber]
+
+
 class LegalGuardianNameResponseList(BaseModel):
     legal_guardians_name: List[str] = Field(default=None)
 

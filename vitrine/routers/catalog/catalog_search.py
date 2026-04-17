@@ -15,6 +15,7 @@ from vitrine.models import (
 )
 from vitrine.schemas import (
     CatalogAssetIdentifierList,
+    CatalogAtmNumberList,
     FilterSearchCatalog,
     LegalGuardianList,
     MaterialList,
@@ -190,3 +191,57 @@ async def search_catalog_by_asset_identifier(
     result = await session.execute(query)
     
     return {'catalogs': result.mappings().all()}
+
+
+@router.get(
+    '/search/atm-number',
+    response_model=CatalogAtmNumberList,
+)
+async def search_catalog_by_atm_number(
+    session: Session, 
+    filters: Annotated[FilterCatalog, Depends()],
+    q: str = str()
+):
+    query = (
+        select(
+            Catalog.id.label('catalog_id'),
+            Asset.atm_number.label('atm_number'),
+        )
+        .join(Asset, Catalog.asset_id == Asset.id)
+        .where(
+            Catalog.deleted_at.is_(None),
+            Asset.deleted_at.is_(None),
+        )
+    )
+
+    if q:
+        query = query.where(
+            Asset.atm_number.ilike(f'{q}%')
+        )
+
+    query = filter_service.apply_catalog_filters(query, filters)
+    query = filter_service.apply_asset_filters(query, filters)
+
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
+
+    if filters.role_id:
+        role_subq = (
+            select(1)
+            .select_from(UserRole)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                UserRole.user_id == Catalog.user_id,
+                Role.id == filters.role_id,
+                UserRole.deleted_at.is_(None),
+                Role.deleted_at.is_(None)
+            )
+        )
+        query = query.where(exists(role_subq))
+        
+    query = query.order_by(desc(Catalog.created_at))
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.execute(query)
+    
+    return {'catalogs': result.mappings().all()}
