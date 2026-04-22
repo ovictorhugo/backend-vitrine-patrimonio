@@ -264,7 +264,7 @@ async def read_catalog_entries(
 
 
 
-async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog):
+async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog, mail: Mail):
     async with async_session() as session:
         base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
         base_query = filter_service.apply_catalog_filters(base_query, filters)
@@ -517,9 +517,7 @@ async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog)
 
             pdf_bytes_io = await run_in_threadpool(merge_pdfs_sync, temp_pdf_paths)
 
-            smtp_gen = get_smtp()
             try:
-                mail = next(smtp_gen)
                 await mail_service.send_custom_email(
                     mail=mail,
                     user=current_user, 
@@ -535,11 +533,6 @@ async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog)
                 )
             except Exception as e:
                 print(f"Erro ao enviar email PDF Playwright: {e}")
-            finally:
-                try:
-                    next(smtp_gen)
-                except StopIteration:
-                    pass
 
         except Exception as e:
             print(f'Erro PDF Playwright: {e}')
@@ -558,6 +551,7 @@ async def export_catalog_pdf_play(
     background_tasks: BackgroundTasks,
     current_user: CurrentUser,
     filters: Annotated[FilterCatalog, Depends()],
+    mail:Mail,
 ):
     # --- 1. QUERY E CONTAGEM (Mantido intacto) ---
     base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
@@ -598,7 +592,7 @@ async def export_catalog_pdf_play(
     if total_items == 0:
         raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
 
-    background_tasks.add_task(generate_and_send_pdf_play, current_user, filters)
+    background_tasks.add_task(generate_and_send_pdf_play, current_user, filters, mail)
     return {'message': 'Processamento do PDF iniciado. Você receberá um e-mail em breve com o arquivo.'}
 
 @router.get('/pdf')
