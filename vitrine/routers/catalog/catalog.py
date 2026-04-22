@@ -264,7 +264,7 @@ async def read_catalog_entries(
 
 
 
-async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog):
+async def generate_and_send_pdf_play(current_user: CurrentUser, filters: FilterCatalog, mail: Mail):
     async with async_session() as session:
         base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
         base_query = filter_service.apply_catalog_filters(base_query, filters)
@@ -518,42 +518,37 @@ async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog)
             pdf_bytes_io = await run_in_threadpool(merge_pdfs_sync, temp_pdf_paths)
 
             try:
-                def send_email_sync(pdf_bytes):
-                    smtp_gen = get_smtp()
-                    mail_conn = next(smtp_gen)
+                smtp_gen = get_smtp()
+                mail_conn = next(smtp_gen)
+                try:
+                    from email.message import EmailMessage
+                    from vitrine.core.settings import Settings
+                    
+                    msg = EmailMessage()
+                    msg['Subject'] = 'Catálogo de Itens - Vitrine Patrimônio'
+                    msg['From'] = Settings().SMTP_USER
+                    msg['To'] = current_user.email
+                    msg.set_content(
+                        "Prezado(a),\n\n"
+                        "Aqui está o seu relatório de itens do Sistema patrimônio.\n\n"
+                        "Atenciosamente,\n"
+                        "Equipe Vitrine Patrimônio"
+                    )
+                    msg.add_attachment(
+                        pdf_bytes_io.getvalue(),
+                        maintype='application',
+                        subtype='pdf',
+                        filename="catalogo_itens.pdf"
+                    )
+                    mail_conn.send_message(msg)
+                finally:
                     try:
-                        from email.message import EmailMessage
-                        from vitrine.core.settings import Settings
-                        
-                        msg = EmailMessage()
-                        msg['Subject'] = 'Catálogo de Itens - Vitrine Patrimônio'
-                        msg['From'] = Settings().SMTP_USER
-                        msg['To'] = current_user.email
-                        msg.set_content(
-                            "Prezado(a),\n\n"
-                            "Aqui está o seu relatório de itens do Sistema patrimônio.\n\n"
-                            "Atenciosamente,\n"
-                            "Equipe Vitrine Patrimônio"
-                        )
-                        msg.add_attachment(
-                            pdf_bytes,
-                            maintype='application',
-                            subtype='pdf',
-                            filename="catalogo_itens.pdf"
-                        )
-                        mail_conn.send_message(msg)
-                    finally:
-                        try:    
-                            next(smtp_gen)
-                        except StopIteration:
-                            pass
-                
-                await run_in_threadpool(send_email_sync, pdf_bytes_io.getvalue())
-            except Exception as e:
-                print(f"Erro ao enviar email PDF Playwright: {e}")
+                        next(smtp_gen)
+                    except StopIteration:
+                        pass
 
-        except Exception as e:
-            print(f'Erro PDF Playwright: {e}')
+            except Exception as e:
+                print(f'Erro PDF Playwright: {e}')
             
         finally:
             for filepath in temp_files_to_cleanup:
@@ -569,6 +564,7 @@ async def export_catalog_pdf_play(
     background_tasks: BackgroundTasks,
     current_user: CurrentUser,
     filters: Annotated[FilterCatalog, Depends()],
+    mail:Mail,
 ):
     # --- 1. QUERY E CONTAGEM (Mantido intacto) ---
     base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
@@ -609,7 +605,7 @@ async def export_catalog_pdf_play(
     if total_items == 0:
         raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
 
-    background_tasks.add_task(generate_and_send_pdf_play, current_user, filters)
+    background_tasks.add_task(generate_and_send_pdf_play, current_user, filters, mail)
     return {'message': 'Processamento do PDF iniciado. Você receberá um e-mail em breve com o arquivo.'}
 
 @router.get('/pdf')
