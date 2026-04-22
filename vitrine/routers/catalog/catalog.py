@@ -18,6 +18,9 @@ from sqlalchemy.orm import selectinload, joinedload, contains_eager, noload
 from weasyprint import HTML
 from playwright.async_api import async_playwright
 
+
+from email.message import EmailMessage
+from vitrine.core.settings import Settings
 from vitrine.core.dependencies import CurrentUser, Session, Mail
 from vitrine.core.database import async_session
 from vitrine.core.mail import get_smtp
@@ -264,7 +267,7 @@ async def read_catalog_entries(
 
 
 
-async def generate_and_send_pdf_play(current_user: CurrentUser, filters: FilterCatalog, mail: Mail):
+async def generate_and_send_pdf_play(current_user: CurrentUser, filters: FilterCatalog):
     async with async_session() as session:
         base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
         base_query = filter_service.apply_catalog_filters(base_query, filters)
@@ -520,10 +523,7 @@ async def generate_and_send_pdf_play(current_user: CurrentUser, filters: FilterC
             try:
                 smtp_gen = get_smtp()
                 mail_conn = next(smtp_gen)
-                try:
-                    from email.message import EmailMessage
-                    from vitrine.core.settings import Settings
-                    
+                try:                    
                     msg = EmailMessage()
                     msg['Subject'] = 'Catálogo de Itens - Vitrine Patrimônio'
                     msg['From'] = Settings().SMTP_USER
@@ -563,8 +563,7 @@ async def export_catalog_pdf_play(
     session: Session,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser,
-    filters: Annotated[FilterCatalog, Depends()],
-    mail:Mail,
+    filters: Annotated[FilterCatalog, Depends()]
 ):
     # --- 1. QUERY E CONTAGEM (Mantido intacto) ---
     base_query = select(Catalog).where(Catalog.deleted_at.is_(None))
@@ -605,7 +604,7 @@ async def export_catalog_pdf_play(
     if total_items == 0:
         raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
 
-    background_tasks.add_task(generate_and_send_pdf_play, current_user, filters, mail)
+    background_tasks.add_task(generate_and_send_pdf_play, current_user, filters)
     return {'message': 'Processamento do PDF iniciado. Você receberá um e-mail em breve com o arquivo.'}
 
 @router.get('/pdf')
