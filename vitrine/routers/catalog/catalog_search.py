@@ -12,6 +12,8 @@ from vitrine.models import (
     Material,
     Role,
     UserRole,
+    CollectionItem,
+    Collection
 )
 from vitrine.schemas import (
     CatalogAssetIdentifierList,
@@ -135,7 +137,6 @@ async def list_catalog_legal_guardians(
     legal_guardians = result.unique().all()
     return {'legal_guardians': legal_guardians}
 
-
 @router.get(
     '/search/asset-identifier',
     response_model=CatalogAssetIdentifierList,
@@ -146,12 +147,28 @@ async def search_catalog_by_asset_identifier(
     q: str = str()
 ):
     q = q.replace('-', '')
+
+    # 1. Cria a subquery para verificar se o item já foi coletado
+    collected_subq = (
+        select(1)
+        .where(
+            CollectionItem.catalog_id == Catalog.id,
+            CollectionItem.collection.has(Collection.deleted_at.is_(None))
+        )
+        # Correlacionamos explicitamente com a tabela de fora:
+        .correlate(Catalog) 
+        .exists()
+        .label('collected')
+    )
+
+    # 2. Adiciona a subquery nas colunas do SELECT principal
     query = (
         select(
             Catalog.id.label('catalog_id'),
             func.concat(Asset.asset_code, '-', Asset.asset_check_digit).label(
                 'asset_identifier'
             ),
+            collected_subq  # <--- Nova coluna aqui
         )
         .join(Asset, Catalog.asset_id == Asset.id)
         .where(
@@ -192,7 +209,6 @@ async def search_catalog_by_asset_identifier(
     
     return {'catalogs': result.mappings().all()}
 
-
 @router.get(
     '/search/atm-number',
     response_model=CatalogAtmNumberList,
@@ -202,10 +218,24 @@ async def search_catalog_by_atm_number(
     filters: Annotated[FilterCatalog, Depends()],
     q: str = str()
 ):
+    # 1. Criamos a subquery que retorna um Booleano (True/False)
+    collected_subq = (
+        select(1)
+        .select_from(CollectionItem)
+        .where(
+            CollectionItem.catalog_id == Catalog.id,
+            CollectionItem.collection.has(Collection.deleted_at.is_(None))
+        )
+        .exists()
+        .label('collected')
+    )
+
+    # 2. Injetamos a subquery no select principal
     query = (
         select(
             Catalog.id.label('catalog_id'),
             Asset.atm_number.label('atm_number'),
+            collected_subq 
         )
         .join(Asset, Catalog.asset_id == Asset.id)
         .where(
@@ -244,4 +274,4 @@ async def search_catalog_by_atm_number(
 
     result = await session.execute(query)
     
-    return {'catalogs': result.mappings().all()}
+    return {'catalogs': result.mappings().all()}

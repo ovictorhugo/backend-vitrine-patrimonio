@@ -380,6 +380,7 @@ class MaterialNameResponseList(BaseModel):
 class CatalogAssetIdentifier(BaseModel):
     catalog_id: UUID
     asset_identifier: str
+    collected: bool
 
 
 class CatalogAssetIdentifierList(BaseModel):
@@ -389,7 +390,8 @@ class CatalogAssetIdentifierList(BaseModel):
 class CatalogAtmNumber(BaseModel):
     catalog_id: UUID
     atm_number: Optional[str] = Field(default=None)
-
+    collected: bool
+    
 
 class CatalogAtmNumberList(BaseModel):
     catalogs: List[CatalogAtmNumber]
