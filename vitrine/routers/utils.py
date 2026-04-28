@@ -25,8 +25,8 @@ ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
 EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
 SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
-#KEY_PATH = "local_key.pem"
-#CERT_PATH = "local_cert.pem"
+#KEY_PATH = "certs/local_key.pem"
+#CERT_PATH = "certs/local_cert.pem"
 
 CONSERVATION_MAP = {
       "UNUSED": [

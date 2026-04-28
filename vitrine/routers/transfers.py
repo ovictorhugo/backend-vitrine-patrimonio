@@ -8,7 +8,7 @@ from uuid import UUID
 from typing import Annotated
 
 
-from vitrine.core.dependencies import Session
+from vitrine.core.dependencies import Session, CurrentUser
 from vitrine.models import (
     TransferSigner,
     Catalog,
@@ -55,6 +55,7 @@ async def verify_uploaded_pdf(
 async def sign_pdf_with_token(
     token: UUID,
     session: Session,
+    current_user: CurrentUser
 ):
     query = (
         select(TransferSigner)
@@ -81,6 +82,9 @@ async def sign_pdf_with_token(
     db_signer.isSigned = True
     db_signer.signedAt = datetime.now()
 
+    if(not db_signer.user_id):
+        db_signer.user_id = current_user.id
+        
     # 3. Lógica de Finalização
     document = db_signer.transfer_document
     all_signed = all(s.isSigned for s in document.signers)
@@ -174,7 +178,6 @@ async def generate_transfer_pdf(document:TransferDocument) -> str:
 async def create_transfer_process(
     transfer_data: TransferCreate,
     session: Session,
-
 ):
     owner_id = transfer_data.owner
     new_guardian_id = transfer_data.new_guardian

@@ -158,12 +158,8 @@ async def read_catalog_entries(
                 selectinload(WorkflowTransfer.location)
             ),
             selectinload(CatalogWorkFlow.user).options(
-                selectinload(User.system_identity).options(
-                    selectinload(SystemIdentity.legal_guardian)
-                ),
-                selectinload(User.user_role_associations).selectinload(
-                    UserRole.role
-                ),
+                noload(User.system_identity),
+                noload(User.user_role_associations)
             ),
         ),
         selectinload(Catalog.user).options(selectinload(User.system_identity)),

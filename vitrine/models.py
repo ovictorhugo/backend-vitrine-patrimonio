@@ -621,7 +621,7 @@ class Catalog(AuditMixin):
     current_workflow_status: Mapped[str | None] = mapped_column(index=True, nullable=True)
 
     asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'))
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
 
     asset: Mapped[Asset] = relationship(init=False, lazy='selectin')
     user: Mapped[User] = relationship(
@@ -675,7 +675,7 @@ class CatalogImage:
         init=False, primary_key=True, default=uuid.uuid4
     )
 
-    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
+    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), index=True)
     file_path: Mapped[str] = mapped_column(nullable=False)
     catalog: Mapped['Catalog'] = relationship(
         back_populates='images', init=False
@@ -694,7 +694,7 @@ class CatalogFile:
         init=False, primary_key=True, default=uuid.uuid4
     )
 
-    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
+    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), index=True)
     file_path: Mapped[str] = mapped_column(nullable=False)
     file_name: Mapped[str] = mapped_column(nullable=False)
     content_type: Mapped[str | None] = mapped_column(nullable=True)
@@ -716,7 +716,7 @@ class CatalogWorkFlow:
         init=False, primary_key=True, default=uuid.uuid4
     )
 
-    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'))
+    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
     user: Mapped[User] = relationship(
         init=False,
@@ -1241,10 +1241,10 @@ class UserRole(AuditMixin):
         init=False, primary_key=True, default=uuid4
     )
     user_id: Mapped[UUID] = mapped_column(
-        ForeignKey('users.id'), nullable=False
+        ForeignKey('users.id'), nullable=False, index=True
     )
     role_id: Mapped[UUID] = mapped_column(
-        ForeignKey('roles.id'), nullable=False
+        ForeignKey('roles.id'), nullable=False, index=True
     )
 
     user: Mapped['User'] = relationship(
