@@ -314,7 +314,7 @@ async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog)
 
         # --- 2. CÁLCULOS DE PAGINAÇÃO ---
         TOTAL_PAGES = math.ceil(total_items / 2)
-        BATCH_SIZE = 70
+        BATCH_SIZE = 60
 
         ASSETS_DIR = (Path(__file__).resolve().parent.parent.parent / 'assets').resolve()
         lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
@@ -503,7 +503,11 @@ async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog)
                     final_pdf.pages.extend(src_pdf.pages)
 
                 pdf_buffer = BytesIO()
-                final_pdf.save(pdf_buffer)
+                final_pdf.save(
+                    pdf_buffer,
+                    compress_streams=True,  # Comprime fluxos de dados internos
+                    linearize=True,         # Otimiza para web e reorganiza objetos
+                )
                 pdf_buffer.seek(0)
 
                 for src_pdf in opened_pdfs:

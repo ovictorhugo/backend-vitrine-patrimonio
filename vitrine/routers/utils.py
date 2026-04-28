@@ -117,7 +117,7 @@ async def verify_pdf_signature(pdf_bytes: bytes) -> dict:
     """
     Verifica se o PDF possui uma assinatura válida feita com o certificado do servidor.
     """
-    base_folder = (Path(__file__).resolve().parent.parent.parent / "certs").resolve()
+    base_folder = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent).resolve()
     full_cert_path = base_folder / CERT_PATH
 
     if not full_cert_path.exists():
@@ -181,6 +181,7 @@ async def verify_pdf_signature(pdf_bytes: bytes) -> dict:
         traceback.print_exc()
         return {"valid": False, "message": "Erro ao processar arquivo PDF."}
 
+
 def build_panel(title: str, content: str, border_color: str = "#559FB8", icon_svg: str = "") -> str:
     """Cria o componente visual padrão de painel com barra lateral colorida."""
     if not content:
@@ -210,6 +211,7 @@ def build_panel(title: str, content: str, border_color: str = "#559FB8", icon_sv
         </div>
     </div>
     """
+
 
 def _build_image_grid(images: list) -> str:
     """Gera a grade de imagens (até 4)."""
@@ -2052,12 +2054,12 @@ def render_multiple_items(item) -> str:
             import base64
             with Image.open(filepath) as img:
                 # O processamento com thumbnail() da Pillow é instantâneo e não sobrecarrega loop
-                img.thumbnail((320, 320)) 
+                img.thumbnail((300, 300)) 
                 # Lida com canais Alpha do png convertendo pra RGB
                 if img.mode in ("RGBA", "P"): img = img.convert("RGB")
                 
                 buffer = io.BytesIO()
-                img.save(buffer, format="JPEG", quality=75)
+                img.save(buffer, format="JPEG", quality=60)
                 img_str = base64.b64encode(buffer.getvalue()).decode()
                 return f"data:image/jpeg;base64,{img_str}"
         except Exception:
