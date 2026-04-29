@@ -26,6 +26,7 @@ from vitrine.routers import (
     users_visuals,
     transfers,
     loans,
+    temporary_files,
 )
 from vitrine.routers.organizational_structure import (
     agencies,
@@ -111,6 +112,7 @@ app.include_router(feedback.router)
 app.include_router(system.router)
 app.include_router(transfers.router)
 app.include_router(loans.router)
+app.include_router(temporary_files.router)
 
 
 @app.get('/')

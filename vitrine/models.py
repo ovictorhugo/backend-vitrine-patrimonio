@@ -1503,3 +1503,17 @@ class Loan(AuditMixin):
         init=False,
         foreign_keys=[returned_by_id]
     )
+
+
+@table_registry.mapped_as_dataclass
+class TemporaryFileReference(AuditMixin):
+    __tablename__ = 'temporary_files'
+
+    id: Mapped[UUID] = mapped_column(
+        init=False, primary_key=True, default=uuid4
+    )
+    folder_type: Mapped[str] = mapped_column(nullable=False)
+    file_name: Mapped[str] = mapped_column(nullable=False)
+    token: Mapped[UUID] = mapped_column(
+        init=False, insert_default=uuid4, index=True, nullable=False
+    )
