@@ -19,8 +19,8 @@ from pyhanko_certvalidator import ValidationContext
 from vitrine.core.settings import Settings
 
 
-KEY_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
-CERT_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
+KEY_PATH = "https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
+CERT_PATH = "https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
 
 IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
 ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
