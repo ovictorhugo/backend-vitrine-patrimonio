@@ -968,7 +968,7 @@ async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog)
             
             pdf_uuid = uuid.uuid4()
             pdf_filename = f"catalog_{str(pdf_uuid)[-6:]}.pdf"
-            pdf_filepath = os.path.join(TEMP_DIR, pdf_filename)
+            pdf_filepath = os.path.join('vitrine/storage/temp', pdf_filename)
             
             with open(pdf_filepath, "wb") as f:
                 f.write(pdf_bytes_io.getvalue())

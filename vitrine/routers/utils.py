@@ -25,8 +25,8 @@ ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
 EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
 SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
-#KEY_PATH = "certs/local_key.pem"
-#CERT_PATH = "certs/local_cert.pem"
+#KEY_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.key"
+#CERT_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.crt"
 
 CONSERVATION_MAP = {
       "UNUSED": [
@@ -68,6 +68,7 @@ async def seal_pdf_digitally(pdf_bytes: bytes) -> bytes:
         signer = signers.SimpleSigner.load(
             key_file=str(full_key_path),
             cert_file=str(full_cert_path),
+            key_passphrase=b"SENHA"
         )
 
         pdf_buffer_input = BytesIO(pdf_bytes)
