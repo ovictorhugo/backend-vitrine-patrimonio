@@ -16,17 +16,19 @@ from pyhanko.sign.validation import (
 from pyhanko.sign.general import load_cert_from_pemder
 from pyhanko_certvalidator import ValidationContext
 
+from vitrine.core.settings import Settings
 
-KEY_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
-CERT_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
+
+#KEY_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
+#CERT_PATH = "/https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
 
 IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
 ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
 EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
 SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
 
-#KEY_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.key"
-#CERT_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.crt"
+KEY_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.key"
+CERT_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.crt"
 
 CONSERVATION_MAP = {
       "UNUSED": [
@@ -58,17 +60,21 @@ async def seal_pdf_digitally(pdf_bytes: bytes) -> bytes:
     base_folder = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent).resolve()
     full_key_path = base_folder / KEY_PATH
     full_cert_path = base_folder / CERT_PATH
+
+    SETTINGS = Settings()
+
     
     if not full_key_path.exists() or not full_cert_path.exists():
         print(f"⚠️ AVISO: Certificados não encontrados. PDF sem assinatura.")
         return pdf_bytes
 
     try:
-        # 2. Carregar o Assinador
+        
+        password = SETTINGS.CERT_KEY_VITRINE
         signer = signers.SimpleSigner.load(
             key_file=str(full_key_path),
             cert_file=str(full_cert_path),
-            key_passphrase=b"SENHA"
+            key_passphrase=password.encode('utf-8')
         )
 
         pdf_buffer_input = BytesIO(pdf_bytes)
@@ -119,6 +125,7 @@ async def verify_pdf_signature(pdf_bytes: bytes) -> dict:
     Verifica se o PDF possui uma assinatura válida feita com o certificado do servidor.
     """
     base_folder = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent).resolve()
+    print(base_folder)
     full_cert_path = base_folder / CERT_PATH
 
     if not full_cert_path.exists():
@@ -1915,7 +1922,7 @@ def render_multiple_items(item) -> str:
         "Quebrado",
         "É um bem que não tem mais condições de uso, porque perdeu suas características essenciais ou porque o reparo custaria mais de 50% do valor de mercado."
       ],
-}
+    }
 
     # Nome do material
     material_name = item.asset.material.material_name
