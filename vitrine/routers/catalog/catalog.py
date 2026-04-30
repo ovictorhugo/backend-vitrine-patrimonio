@@ -1,5 +1,5 @@
 import gc
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from io import BytesIO
 from pathlib import Path
@@ -308,6 +308,8 @@ async def export_catalog_pdf_play(
         raise HTTPException(status_code=404, detail='Nenhum catálogo encontrado')
 
     background_tasks.add_task(generate_and_send_pdf_play, current_user, filters)
+    background_tasks.add_task(limpar_arquivos_antigos, session)
+
     return {'message': 'Processamento do PDF iniciado. Você receberá um e-mail em breve com o arquivo.'}
 
 @router.get('/pdf')
@@ -993,7 +995,7 @@ async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog)
                     msg['To'] = current_user.email
                     msg.set_content(
                         f"Prezado(a),\n\n"
-                        f"Seu relatório de itens do Sistema patrimônio foi gerado com sucesso.\n\n"
+                        f"Seu relatório de itens do Sistema patrimônio foi gerado com sucesso! Ele estará disponível por 7 dias.\n\n"
                         f"Para acessá-lo, basta acessar o seguinte link: http://sistemapatrimonio.eng.ufmg.br/download-pdf-by?token={file_token}\n\n"
                         f"Atenciosamente,\n"
                         f"Equipe Vitrine Patrimônio"
@@ -1017,3 +1019,19 @@ async def generate_and_send_pdf_play(current_user: User, filters: FilterCatalog)
                         pass
 
 
+async def limpar_arquivos_antigos(session: Session):
+    limite_data = datetime.now(timezone.utc) - timedelta(days=7)
+
+    query = select(TemporaryFileReference).where(
+        TemporaryFileReference.created_at < limite_data
+    )
+    result = await session.scalars(query)
+    antigos = result.unique().all()
+    
+    for doc in antigos:
+        file_path = TEMP_DIR / doc.file_name
+        if file_path.exists():
+            os.remove(file_path)
+            await session.delete(doc)
+
+    await session.commit()
