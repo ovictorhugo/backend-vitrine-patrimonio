@@ -129,6 +129,7 @@ async def verify_pdf_signature(pdf_bytes: bytes) -> dict:
     print(full_cert_path)
 
     if not full_cert_path.exists():
+        print(full_cert_path)
         return {
             "valid": False, 
             "message": "Certificado raiz para validação não encontrado no servidor."
