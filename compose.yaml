@@ -25,6 +25,7 @@ services:
       - ./.env
     volumes:
       - storage:/app/vitrine/storage
+      - /https-credentials:/https-credentials
       - .:/app
 
   vitrine_mailpit:

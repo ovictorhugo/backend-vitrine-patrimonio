@@ -19,13 +19,16 @@ from pyhanko_certvalidator import ValidationContext
 from vitrine.core.settings import Settings
 
 
-KEY_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.key"
-CERT_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.crt"
+KEY_PATH = "https-credentials/vitrinepatrimonio.eng.ufmg.br.key"
+CERT_PATH = "https-credentials/vitrinepatrimonio.eng.ufmg.br.crt"
 
 IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
 ASSETS_DIR = (Path(__file__).resolve().parent.parent / "assets" ).resolve()
 EE_LOGO_URI = (ASSETS_DIR / "ee_logo.png").resolve().as_uri()
 SP_LOGO_URI = (ASSETS_DIR / "sp_logo.png").resolve().as_uri()
+
+#KEY_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.key"
+#CERT_PATH = "certs/vitrinepatrimonio.eng.ufmg.br.crt"
 
 CONSERVATION_MAP = {
       "UNUSED": [
@@ -52,7 +55,7 @@ async def seal_pdf_digitally(pdf_bytes: bytes) -> bytes:
     Recebe o PDF em bytes e aplica a assinatura digital de forma ASSÍNCRONA.
     """
     
-    base_folder = (Path(__file__).resolve().parent.parent.parent).resolve()
+    base_folder = (Path(__file__).resolve().parent.parent.parent.parent).resolve()
     full_key_path = base_folder / KEY_PATH
     full_cert_path = base_folder / CERT_PATH
 
@@ -119,7 +122,7 @@ async def verify_pdf_signature(pdf_bytes: bytes) -> dict:
     """
     Verifica se o PDF possui uma assinatura válida feita com o certificado do servidor.
     """
-    base_folder = (Path(__file__).resolve().parent.parent.parent).resolve()
+    base_folder = (Path(__file__).resolve().parent.parent.parent.parent).resolve()
     full_cert_path = base_folder / CERT_PATH
 
     if not full_cert_path.exists():
