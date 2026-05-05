@@ -8,7 +8,8 @@ from uuid import UUID
 from typing import Annotated
 
 
-from vitrine.core.dependencies import Session, CurrentUser
+from vitrine.core.dependencies import Session, CurrentUser, Mail
+from vitrine.services import mail_service
 from vitrine.models import (
     TransferSigner,
     Catalog,
@@ -55,7 +56,8 @@ async def verify_uploaded_pdf(
 async def sign_pdf_with_token(
     token: UUID,
     session: Session,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    mail: Mail
 ):
     query = (
         select(TransferSigner)
@@ -113,6 +115,25 @@ async def sign_pdf_with_token(
                 f.write(final_pdf_bytes)
             
             print(f"PDF salvo em: {full_path}")
+            
+            for s in document.signers:
+                if s.user and s.user.email:
+                    await mail_service.send_custom_email(
+                        mail=mail,
+                        user=s.user, 
+                        subject='Conclusão de transferência de bens - Vitrine Patrimônio',
+                        content=(
+                            f"Prezado(a) {s.user.username or ''},\n\n"
+                            "Informamos que a transferência de bem foi concluída e o documento "
+                            "foi assinado por todas as partes envolvidas.\n\n"
+                            "Segue em anexo o Termo de Transferência com as assinaturas digitais.\n\n"
+                            "Atenciosamente,\n"
+                            "Equipe Vitrine Patrimônio"
+                        ),
+                        attachment_filename=f"Termo_de_Transferencia_{document.id}.pdf",
+                        attachment_bytes=final_pdf_bytes
+                    )
+
 
         except Exception as e:
             print(f"Erro ao salvar PDF final: {e}")
