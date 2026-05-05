@@ -931,3 +931,21 @@ class LoanableItemPublic(BaseModel):
 class LoanableItemList(BaseModel):
     """Lista para retornos paginados ou agrupados"""
     loanable_items: List[LoanableItemPublic]
+
+class SimpleLoanableItemPublic(BaseModel):
+    id: UUID = None
+    catalog_id: UUID
+    legal_guardian_id: UUID
+    owner_notes: Optional[str] = None
+    in_maintenance: Optional[bool] = None
+    is_visible: Optional[bool] = True
+    last_check: Optional[datetime] = None
+    
+    catalog: Optional["SimpleCatalogPublic"] = None
+    legal_guardian: Optional["SimpleUserPublic"] = None
+    loans: List[LoanSchema] = []
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class SimpleLoanableItemList(BaseModel):
+    loanable_items: List[SimpleLoanableItemPublic]

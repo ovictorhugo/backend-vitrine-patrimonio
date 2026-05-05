@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import Text, cast, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from vitrine.core.database import get_session
 from vitrine.core.dependencies import Session
 from vitrine.models import (
     CatalogWorkFlow,
@@ -117,11 +119,16 @@ async def read_permissions(session: Session):
 
 
 @router.get('/{role_id}/permissions', response_model=List[PermissionPublic])
-async def read_permissions_by_role(session: Session, role_id: UUID):
+async def read_permissions_by_role(
+    role_id: UUID,
+    session: AsyncSession = Depends(get_session)
+):
     query = await session.scalars(
-        select(Permission).where(
+        select(Permission)
+        .join(Permission.roles)
+        .where(
             Permission.deleted_at.is_(None),
-            Permission.roles.any(Role.id == role_id),
+            Role.id == role_id
         )
     )
     return query.all()

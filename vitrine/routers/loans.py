@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy import select, or_, exists, desc
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload, noload, contains_eager
 from datetime import datetime
 from typing import Annotated
 from pathlib import Path
@@ -33,6 +33,7 @@ from vitrine.models import (Catalog,
 from vitrine.schemas import (
     LoanableItemPublic,
     LoanableItemList,
+    SimpleLoanableItemList,
     LoanSchema,
     CatalogSchema,
     FilterCatalog,
@@ -75,8 +76,6 @@ async def create_loanable_item(
     )
     session.add(db_catalog)
     await session.flush()
-
-    print("OK")
 
     workflow = CatalogWorkFlow(
         catalog_id=db_catalog.id,
@@ -238,9 +237,6 @@ async def list_loanable_items(
     result = await session.execute(stmt)
     items = result.unique().scalars().all()
 
-    # DICA DE OURO: Bloco de Debug
-    # Se ainda faltar algum campo, esse bloco vai "capturar" o erro e imprimir 
-    # no terminal exatamente qual campo do Pydantic está reclamando.
     try:
         # Força a validação manualmente antes de retornar
         LoanableItemList.model_validate({'loanable_items': items})
@@ -251,10 +247,88 @@ async def list_loanable_items(
 
     return {'loanable_items': items}
 
-@router.get('/cards', response_model=LoanableItemList)
-async def list_loanable_items(
+
+@router.get('/item/{id}', response_model=LoanableItemList)
+async def get_one_loanable_item(
+    session: Session,
+    id:UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(24, gt=0, le=100),
+):
+    stmt = (
+        select(LoanableItem)
+        .where(LoanableItem.id == id,
+               LoanableItem.deleted_at.is_(None))
+        .options(
+            # 1. Responsável pelo Item
+            selectinload(LoanableItem.legal_guardian),
+            selectinload(LoanableItem.loans).options(
+                selectinload(Loan.requester),
+                selectinload(Loan.temporary_guardian),
+                selectinload(Loan.confirmed_by),
+                selectinload(Loan.executed_by),
+                selectinload(Loan.returned_by)
+            ),
+
+            # 3. Catálogo e toda a sua árvore de dependências
+            selectinload(LoanableItem.catalog).options(
+                selectinload(Catalog.images),
+                selectinload(Catalog.files),
+                selectinload(Catalog.user), # Usuário que cadastrou
+                
+                # Asset -> Material e Responsável do Asset
+                selectinload(Catalog.asset).options(
+                    selectinload(Asset.material),
+                    selectinload(Asset.legal_guardian)
+                ),
+                
+                # Location -> Sector -> Agency -> Unit (Cascata completa baseada no seu DTO)
+                selectinload(Catalog.location).options(
+                    selectinload(Location.sector).options(
+                        selectinload(Sector.agency).options(
+                            selectinload(Agency.unit)
+                        )
+                    ),
+                    selectinload(Location.location_inventories).selectinload(
+                        LocationInventory.inventory
+                    )
+                ),
+                
+                # Workflow History e suas dependências internas
+                selectinload(Catalog.workflow_history).options(
+                    selectinload(CatalogWorkFlow.user).options(
+                        selectinload(User.system_identity).options(
+                            selectinload(SystemIdentity.legal_guardian)
+                        ),
+                        selectinload(User.user_role_associations).selectinload(
+                            UserRole.role
+                        ),
+                    ),
+                    selectinload(CatalogWorkFlow.transfer_requests),
+                ),
+            )
+        )
+        .order_by(LoanableItem.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
+    result = await session.execute(stmt)
+    items = result.unique().scalars().all()
+
+    try:
+        # Força a validação manualmente antes de retornar
+        LoanableItemList.model_validate({'loanable_items': items})
+    except Exception as e:
+        print("====== ERRO DE VALIDAÇÃO DO SCHEMA ======")
+        print(e)
+        raise e
+
+    return {'loanable_items': items}
+
+@router.get('/cards', response_model=SimpleLoanableItemList)
+async def list_loanable_items_cards(
     session: Session, 
-    filters: Annotated[FilterCatalog, Depends()],
     is_visible: Optional[bool] = Query(None, description="Filtrar itens visíveis (true/false)")
 ):
     query = select(LoanableItem).where(LoanableItem.deleted_at.is_(None))
@@ -263,88 +337,32 @@ async def list_loanable_items(
         query = query.where(LoanableItem.is_visible == is_visible)
 
     query = query.join(LoanableItem.catalog)
-    query = filter_service.apply_catalog_filters(query, filters)
 
-    asset_join_needed = any(
-        getattr(filters, field_name) is not None
-        for field_name in ASSET_JOIN_TRIGGER_FIELDS
-    )
-
-    if asset_join_needed:
-        query = query.join(Catalog.asset)
-        query = filter_service.apply_asset_filters(query, filters)
-
-    if filters.user_id:
-        query = query.where(Catalog.user_id == filters.user_id)
-
-    if filters.role_id:
-        role_subq = (
-            select(1)
-            .select_from(UserRole)
-            .join(Role, Role.id == UserRole.role_id)
-            .where(
-                UserRole.user_id == Catalog.user_id,
-                Role.id == filters.role_id,
-                UserRole.deleted_at.is_(None),
-                Role.deleted_at.is_(None)
-            )
-        )
-        query = query.where(exists(role_subq))
 
     query = query.options(
         selectinload(LoanableItem.legal_guardian),
-        selectinload(LoanableItem.loans).options(
-            selectinload(Loan.requester),
-            selectinload(Loan.temporary_guardian),
-            selectinload(Loan.confirmed_by),
-            selectinload(Loan.executed_by),
-            selectinload(Loan.returned_by)
-        ),
-
+        selectinload(LoanableItem.loans),
+        
         selectinload(LoanableItem.catalog).options(
             selectinload(Catalog.images),
-            selectinload(Catalog.files),
             selectinload(Catalog.user), 
             
-            selectinload(Catalog.asset).options(
-                selectinload(Asset.material),
-                selectinload(Asset.legal_guardian)
-            ),
-            
-            selectinload(Catalog.location).options(
-                selectinload(Location.sector).options(
-                    selectinload(Sector.agency).options(
-                        selectinload(Agency.unit)
-                    )
-                ),
-                selectinload(Location.location_inventories).selectinload(
-                    LocationInventory.inventory
-                )
-            ),
-            
-            selectinload(Catalog.workflow_history).options(
-                selectinload(CatalogWorkFlow.user).options(
-                    selectinload(User.system_identity).options(
-                        selectinload(SystemIdentity.legal_guardian)
-                    ),
-                    selectinload(User.user_role_associations).selectinload(
-                        UserRole.role
-                    ),
-                ),
-                selectinload(CatalogWorkFlow.transfer_requests),
-            ),
+            noload(Catalog.location),
+            noload(Catalog.files),
+            noload(Catalog.workflow_history),
+            noload(Catalog.favorited_by),
+            noload(Catalog.collection_items),
         )
     )
 
     query = query.order_by(desc(LoanableItem.created_at))
-    query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.execute(query)
     items = result.unique().scalars().all()
 
     try:
         # Força a validação manualmente antes de retornar
-        LoanableItemList.model_validate({'loanable_items': items})
+        SimpleLoanableItemList.model_validate({'loanable_items': items})
     except Exception as e:
         print("====== ERRO DE VALIDAÇÃO DO SCHEMA ======")
         print(e)
@@ -529,6 +547,7 @@ async def export_all_catalog_pdf(
             'Content-Disposition': 'inline; filename="catalogo_geral.pdf"', 
         },
     )
+
 
 @router.get('/{catalog_id}', response_model=LoanableItemPublic)
 async def get_loanable_item_by_catalog(
