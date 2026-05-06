@@ -342,16 +342,18 @@ async def list_assets_in_inventory(
     inventory_id: UUID,
     session: Session,
     current_user: CurrentUser,
-    filters: FilterAsset,
+    filters: FilterAsset = Depends(),
 ):
     query = (
         select(InventoryAsset)
         .join(LocationInventory)
+        .join(Location) # <-- NOVO: Precisamos fazer o join com Location para acessar suas colunas
         .where(
             LocationInventory.inventory_id == inventory_id,
-            LocationInventory.user_id == current_user.id,
+            Location.user_id == current_user.id, # <-- ATUALIZADO: Usando o user_id da tabela Location
         )
     )
+    
     if filters.location_id:
         query = query.where(Asset.location_id == filters.location_id)
         filters.location_id = None
@@ -375,12 +377,15 @@ async def remove_asset_from_inventory(
     query = (
         select(InventoryAsset)
         .join(LocationInventory)
+        .join(Location) # <-- NOVO: Join com Location para acessar o dono da localização
         .where(
             InventoryAsset.id == inventory_asset_id,
-            LocationInventory.user_id == current_user.id,
+            Location.user_id == current_user.id, # <-- ATUALIZADO: Usando Location.user_id
             LocationInventory.inventory_id == inventory_id,
         )
     )
+    
+    # Executa a busca
     inventory_asset = await session.scalar(query)
 
     if not inventory_asset or inventory_asset.deleted_at:
@@ -389,9 +394,10 @@ async def remove_asset_from_inventory(
             detail='Inventory asset not found',
         )
 
-    inventory_asset.deleted_at = datetime.now()
+    # Soft delete (Recomendado usar timezone.utc para manter consistência no DB)
+    inventory_asset.deleted_at = datetime.now(timezone.utc)
     await session.commit()
-
+    
 
 @router.get('/{inventory_id}/locations', response_model=LocationList)
 async def list_inventory_locations_by_inventory(
