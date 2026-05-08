@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import Text, cast, func, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, noload
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -123,15 +123,26 @@ async def read_permissions_by_role(
     role_id: UUID,
     session: AsyncSession = Depends(get_session)
 ):
-    query = await session.scalars(
+    query = (
         select(Permission)
-        .join(Permission.roles)
+        # 1. Partimos da tabela RolePermission
+        .select_from(RolePermission)
+        # 2. Fazemos o join com Permission
+        .join(RolePermission.permission)
         .where(
-            Permission.deleted_at.is_(None),
-            Role.id == role_id
+            RolePermission.role_id == role_id,
+            RolePermission.deleted_at.is_(None),
+            Permission.deleted_at.is_(None)
+        )
+        .options(
+            # 3. Barramos as queries automáticas do lazy='selectin'
+            noload(Permission.roles),
+            noload(Permission.role_permissions)
         )
     )
-    return query.all()
+    
+    result = await session.scalars(query)
+    return result.all()
 
 
 @router.put('/{role_id}', response_model=RolePublic)
