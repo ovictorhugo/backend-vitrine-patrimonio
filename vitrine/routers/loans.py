@@ -329,39 +329,66 @@ async def get_one_loanable_item(
 @router.get('/cards', response_model=SimpleLoanableItemList)
 async def list_loanable_items_cards(
     session: Session, 
-    is_visible: Optional[bool] = Query(None, description="Filtrar itens visíveis (true/false)")
+    filters: Annotated[FilterCatalog, Depends()],
+    is_visible: Optional[bool] = Query(None)
 ):
     query = select(LoanableItem).where(LoanableItem.deleted_at.is_(None))
     
     if is_visible is not None:
         query = query.where(LoanableItem.is_visible == is_visible)
 
-    query = query.join(LoanableItem.catalog)
+    # Sempre fazemos o JOIN com Catalog, então a estratégia base para ele será sempre contains_eager
+    query = query.join(LoanableItem.catalog).where(Catalog.deleted_at.is_(None))
 
+    # 1. Aplica filtros diretos do Catálogo
+    query = filter_service.apply_catalog_filters(query, filters)
 
+    # Criamos a árvore de carregamento do Catalog a partir do contains_eager
+    catalog_loader = contains_eager(LoanableItem.catalog).options(
+        selectinload(Catalog.images),
+        selectinload(Catalog.user), 
+        noload(Catalog.location),
+        noload(Catalog.files),
+        noload(Catalog.workflow_history),
+        noload(Catalog.favorited_by),
+        noload(Catalog.collection_items),
+    )
+
+    # 2. Verifica se precisa fazer o JOIN com Asset
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
+    )
+
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
+        
+        # Como o JOIN de Asset foi feito, anexamos um contains_eager na árvore do catálogo
+        catalog_loader = catalog_loader.contains_eager(Catalog.asset).options(
+            selectinload(Asset.material)
+        )
+    else:
+        # Se não houve JOIN, ordenamos o SQLAlchemy a buscar o Asset separadamente (selectinload)
+        catalog_loader = catalog_loader.selectinload(Catalog.asset).options(
+            selectinload(Asset.material)
+        )
+
+    # 3. Consolida todas as opções na query principal
     query = query.options(
         selectinload(LoanableItem.legal_guardian),
         selectinload(LoanableItem.loans),
-        
-        selectinload(LoanableItem.catalog).options(
-            selectinload(Catalog.images),
-            selectinload(Catalog.user), 
-            
-            noload(Catalog.location),
-            noload(Catalog.files),
-            noload(Catalog.workflow_history),
-            noload(Catalog.favorited_by),
-            noload(Catalog.collection_items),
-        )
+        catalog_loader # <-- Injetamos a árvore inteira aqui, sem conflitos!
     )
 
+    # 4. Ordenação e Paginação
     query = query.order_by(desc(LoanableItem.created_at))
+    query = query.offset(filters.offset).limit(filters.limit)
 
     result = await session.execute(query)
     items = result.unique().scalars().all()
 
     try:
-        # Força a validação manualmente antes de retornar
         SimpleLoanableItemList.model_validate({'loanable_items': items})
     except Exception as e:
         print("====== ERRO DE VALIDAÇÃO DO SCHEMA ======")
@@ -370,6 +397,7 @@ async def list_loanable_items_cards(
 
     return {'loanable_items': items}
 
+    
 @router.get('/my', response_model=LoanableItemList)
 async def list_my_loanable_items(
     session: Session, # ou AsyncSession
@@ -406,7 +434,6 @@ async def list_my_loanable_items(
                 selectinload(Catalog.images),
                 selectinload(Catalog.files),
                 selectinload(Catalog.user),
-                
                 selectinload(Catalog.asset).options(
                     selectinload(Asset.material),
                     selectinload(Asset.legal_guardian)
