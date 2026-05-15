@@ -79,7 +79,7 @@ async def get_catalog_count_by_collection_status(
     params['workflow_status'] = workflow_status
 
     SQL = f"""
-        WITH wc_status AS (
+        WITH ws AS (
             SELECT DISTINCT ON (catalog_id)
                 catalog_workflow.workflow_status, catalog_id
             FROM catalog_workflow
@@ -96,11 +96,11 @@ async def get_catalog_count_by_collection_status(
                 ELSE UPPER(CAST(collection_items.status AS TEXT))
             END AS status
         FROM catalog
-            LEFT JOIN wc_status ON catalog.id = wc_status.catalog_id
-            LEFT JOIN collection_items ON wc_status.catalog_id = collection_items.catalog_id
+            LEFT JOIN ws ON catalog.id = ws.catalog_id
+            LEFT JOIN collection_items ON ws.catalog_id = collection_items.catalog_id
             {join_clauses}
         WHERE
-            wc_status.workflow_status = :workflow_status
+            ws.workflow_status = :workflow_status
             {filter_clauses}
         GROUP BY status;
     """

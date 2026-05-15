@@ -1418,17 +1418,15 @@ class LoanableItem(AuditMixin):
     
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), unique=True)
     legal_guardian_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
-
     
     owner_notes: Mapped[str | None] = mapped_column(nullable=True)
     last_check: Mapped[datetime] = mapped_column(nullable=True)
     in_maintenance: Mapped[bool] = mapped_column(default=False, nullable=True)
     is_visible: Mapped[bool] = mapped_column(
-    default=True, 
-    server_default='true', 
-    nullable=False
-)
-
+        default=True, 
+        server_default='true', 
+        nullable=False
+    )
     # Relacionamentos
     catalog: Mapped['Catalog'] = relationship(init=False, lazy='selectin')
     legal_guardian: Mapped['User'] = relationship(

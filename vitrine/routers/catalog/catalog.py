@@ -223,7 +223,7 @@ async def read_catalog_entries(
     query = query.options(
         # Garantir o que queremos (já é o padrão, mas fica explícito):
         selectinload(Catalog.images),
-        selectinload(Catalog.user),
+        selectinload(Catalog.user).options(noload('*')),
         
         # DESLIGAR o que o SQLAlchemy tentaria carregar sozinho em background:
         noload(Catalog.location),

@@ -260,8 +260,6 @@ async def get_one_loanable_item(
         .where(LoanableItem.id == id,
                LoanableItem.deleted_at.is_(None))
         .options(
-            # 1. Responsável pelo Item
-            selectinload(LoanableItem.legal_guardian),
             selectinload(LoanableItem.loans).options(
                 selectinload(Loan.requester),
                 selectinload(Loan.temporary_guardian),
@@ -269,43 +267,15 @@ async def get_one_loanable_item(
                 selectinload(Loan.executed_by),
                 selectinload(Loan.returned_by)
             ),
-
-            # 3. Catálogo e toda a sua árvore de dependências
             selectinload(LoanableItem.catalog).options(
-                selectinload(Catalog.images),
-                selectinload(Catalog.files),
-                selectinload(Catalog.user), # Usuário que cadastrou
-                
-                # Asset -> Material e Responsável do Asset
-                selectinload(Catalog.asset).options(
-                    selectinload(Asset.material),
-                    selectinload(Asset.legal_guardian)
-                ),
-                
-                # Location -> Sector -> Agency -> Unit (Cascata completa baseada no seu DTO)
-                selectinload(Catalog.location).options(
-                    selectinload(Location.sector).options(
-                        selectinload(Sector.agency).options(
-                            selectinload(Agency.unit)
-                        )
-                    ),
-                    selectinload(Location.location_inventories).selectinload(
-                        LocationInventory.inventory
-                    )
-                ),
-                
-                # Workflow History e suas dependências internas
                 selectinload(Catalog.workflow_history).options(
                     selectinload(CatalogWorkFlow.user).options(
                         selectinload(User.system_identity).options(
                             selectinload(SystemIdentity.legal_guardian)
-                        ),
-                        selectinload(User.user_role_associations).selectinload(
-                            UserRole.role
-                        ),
+                        )
                     ),
-                    selectinload(CatalogWorkFlow.transfer_requests),
-                ),
+                    selectinload(CatalogWorkFlow.transfer_requests)
+                )
             )
         )
         .order_by(LoanableItem.created_at.desc())
@@ -346,7 +316,7 @@ async def list_loanable_items_cards(
     # Criamos a árvore de carregamento do Catalog a partir do contains_eager
     catalog_loader = contains_eager(LoanableItem.catalog).options(
         selectinload(Catalog.images),
-        selectinload(Catalog.user), 
+        selectinload(Catalog.user).options(noload('*')), 
         noload(Catalog.location),
         noload(Catalog.files),
         noload(Catalog.workflow_history),

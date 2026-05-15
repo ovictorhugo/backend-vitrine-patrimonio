@@ -4,6 +4,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.orm import noload
+
 
 from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import Collection
@@ -59,6 +61,9 @@ async def read_collections(
     filters: Annotated[FilterCollection, Depends()],
 ):
     query = select(Collection).where(Collection.deleted_at.is_(None))
+
+    query = query.options(noload('*'))
+
     if filters.type:
         query = query.where(Collection.type == filters.type)
     query = query.offset(filters.offset).limit(filters.limit)
