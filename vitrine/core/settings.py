@@ -29,3 +29,4 @@ class Settings(BaseSettings):
     SMTP_TLS: bool = False
     SMTP_SSL: bool = False
     CERT_KEY_VITRINE: str = "123456789"
+    ssl_path: str = None

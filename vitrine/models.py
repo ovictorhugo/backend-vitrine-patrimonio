@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum as PythonEnum
 from typing import Any, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
+from uuid6 import uuid7
 
 from sqlalchemy import (
     CheckConstraint,
@@ -51,7 +52,7 @@ class AuditMixin:
             ),
             nullable=True,
             default=None,
-        )
+            index=True)
 
     @declared_attr
     def updated_by(cls) -> Mapped[Optional[UUID]]:
@@ -63,7 +64,7 @@ class AuditMixin:
             ),
             nullable=True,
             default=None,
-        )
+            index=True)
 
     @declared_attr
     def deleted_by(cls) -> Mapped[Optional[UUID]]:
@@ -75,7 +76,7 @@ class AuditMixin:
             ),
             nullable=True,
             default=None,
-        )
+            index=True)
 
     def set_creation_audit(self, user_id: UUID):
         self.created_at = func.now()
@@ -131,7 +132,7 @@ class User(AuditMixin):
     __tablename__ = 'users'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     username: Mapped[str]
@@ -250,7 +251,7 @@ class User(AuditMixin):
 class Unit(AuditMixin):
     __tablename__ = 'units'
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
     unit_name: Mapped[str] = mapped_column(nullable=False)
     unit_code: Mapped[str] = mapped_column(nullable=False)
@@ -260,7 +261,7 @@ class Unit(AuditMixin):
         init=False, back_populates='unit'
     )
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     user: Mapped['User'] = relationship(
         init=False, lazy='selectin', foreign_keys=[user_id]
     )
@@ -292,12 +293,12 @@ class Agency(AuditMixin):
     __tablename__ = 'agencys'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
     agency_name: Mapped[str] = mapped_column(nullable=False)
     agency_code: Mapped[str] = mapped_column(nullable=False)
 
-    unit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('units.id'))
+    unit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('units.id'), index=True)
     unit: Mapped['Unit'] = relationship(
         init=False, lazy='selectin', back_populates='agencies'
     )
@@ -306,7 +307,7 @@ class Agency(AuditMixin):
         init=False, back_populates='agency'
     )
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     user: Mapped['User'] = relationship(
         init=False, lazy='selectin', foreign_keys=[user_id]
     )
@@ -337,17 +338,17 @@ class Agency(AuditMixin):
 class Sector(AuditMixin):
     __tablename__ = 'sectors'
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
     sector_name: Mapped[str] = mapped_column(nullable=False)
     sector_code: Mapped[str] = mapped_column(nullable=False)
 
-    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('agencys.id'))
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('agencys.id'), index=True)
     agency: Mapped['Agency'] = relationship(
         init=False, lazy='selectin', back_populates='sectors'
     )
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     user: Mapped['User'] = relationship(
         init=False, lazy='selectin', foreign_keys=[user_id]
     )
@@ -381,24 +382,24 @@ class Sector(AuditMixin):
 class Location(AuditMixin):
     __tablename__ = 'locations'
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
     location_code: Mapped[str] = mapped_column(nullable=False)
     location_name: Mapped[str] = mapped_column(nullable=False)
 
     legal_guardian_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('legal_guardians.id'), nullable=False
-    )
+    , index=True)
     legal_guardian: Mapped['LegalGuardian'] = relationship(
         init=False, lazy='selectin', back_populates='locations'
     )
 
-    sector_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('sectors.id'))
+    sector_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('sectors.id'), index=True)
     sector: Mapped['Sector'] = relationship(
         init=False, lazy='selectin', back_populates='locations'
     )
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     user: Mapped['User'] = relationship(
         init=False, lazy='selectin', foreign_keys=[user_id]
     )
@@ -445,13 +446,13 @@ class Location(AuditMixin):
 class LegalGuardian(AuditMixin):
     __tablename__ = 'legal_guardians'
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
     legal_guardians_code: Mapped[str] = mapped_column(nullable=False)
 
     legal_guardians_name: Mapped[str] = mapped_column(nullable=False)
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     user: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
@@ -495,13 +496,13 @@ class LegalGuardian(AuditMixin):
 class Material(AuditMixin):
     __tablename__ = 'materials'
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
     material_code: Mapped[str] = mapped_column(nullable=False)
 
     material_name: Mapped[str] = mapped_column(nullable=False)
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     user: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
@@ -534,18 +535,18 @@ class Asset(AuditMixin):
     __tablename__ = 'assets'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     material_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('materials.id'), nullable=True
-    )
+    , index=True)
     legal_guardian_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('legal_guardians.id'), nullable=True
-    )
+    , index=True)
     location_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('locations.id'), nullable=True
-    )
+    , index=True)
     location: Mapped[Location] = relationship(init=False, lazy='selectin')
     material: Mapped[Material] = relationship(init=False, lazy='selectin')
     legal_guardian: Mapped[LegalGuardian] = relationship(
@@ -570,7 +571,7 @@ class Asset(AuditMixin):
     expense_element_code: Mapped[str | None] = mapped_column(nullable=True)
     subelement_code: Mapped[str | None] = mapped_column(nullable=True)
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     user: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
@@ -612,7 +613,7 @@ class Catalog(AuditMixin):
     __tablename__ = 'catalog'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     situation: Mapped[str | None] = mapped_column(nullable=False, index=True)
@@ -620,7 +621,7 @@ class Catalog(AuditMixin):
     description: Mapped[str | None] = mapped_column(nullable=True)
     current_workflow_status: Mapped[str | None] = mapped_column(index=True, nullable=True)
 
-    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'))
+    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
 
     asset: Mapped[Asset] = relationship(init=False, lazy='selectin')
@@ -632,7 +633,7 @@ class Catalog(AuditMixin):
 
     location_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('locations.id'), nullable=True
-    )
+    , index=True)
     location: Mapped[Location] = relationship(init=False, lazy='selectin')
     images: Mapped[list['CatalogImage']] = relationship(
         back_populates='catalog',
@@ -672,7 +673,7 @@ class CatalogImage:
     __tablename__ = 'catalog_images'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), index=True)
@@ -691,7 +692,7 @@ class CatalogFile:
     __tablename__ = 'catalog_files'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), index=True)
@@ -713,11 +714,11 @@ class CatalogWorkFlow:
     __tablename__ = 'catalog_workflow'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), index=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     user: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
@@ -745,7 +746,7 @@ class WorkflowTransfer(AuditMixin):
     __tablename__ = 'workflow_transfer'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     workflow_id: Mapped[uuid.UUID] = mapped_column(
@@ -787,7 +788,7 @@ class Inventory(AuditMixin):
     __tablename__ = 'inventory'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
     key: Mapped[str] = mapped_column(nullable=False)
 
@@ -798,7 +799,7 @@ class Inventory(AuditMixin):
         cascade='all, delete-orphan',
     )
 
-    created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     created_by: Mapped[User] = relationship(
         init=False,
         lazy='selectin',
@@ -825,15 +826,15 @@ class LocationInventory:
         ),
     )
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
-    inventory_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('inventory.id'))
+    inventory_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('inventory.id'), index=True)
     inventory: Mapped['Inventory'] = relationship(
         init=False,
         back_populates='inventoried_locations',
     )
 
-    location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('locations.id'))
+    location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('locations.id'), index=True)
 
     location: Mapped['Location'] = relationship(
         init=False, back_populates='location_inventories', lazy='selectin'
@@ -856,23 +857,23 @@ class InventoryAsset(AuditMixin):
     __tablename__ = 'inventory_assets'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     location_inventory_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('location_inventory.id')
-    )
+    , index=True)
     location_inventory: Mapped[LocationInventory] = relationship(
         init=False, back_populates='assets'
     )
 
-    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'))
+    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('assets.id'), index=True)
     asset: Mapped[Asset] = relationship(init=False, lazy='selectin')
 
     status: Mapped[str | None] = mapped_column(nullable=False, index=True)
     comment: Mapped[str | None] = mapped_column(nullable=True)
 
-    location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('locations.id'))
+    location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('locations.id'), index=True)
     location: Mapped['Location'] = relationship(
         init=False, lazy='selectin', back_populates='inventory_assets'
     )
@@ -896,14 +897,14 @@ class FavoriteCatalog:
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('users.id'), nullable=False
-    )
+    , index=True)
     catalog_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('catalog.id'), nullable=False
-    )
+    , index=True)
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
@@ -921,16 +922,16 @@ class SystemIdentity(AuditMixin):
     __tablename__ = 'system_identities'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey('users.id'), nullable=False
-    )
+    , index=True)
 
     legal_guardian_id: Mapped[UUID] = mapped_column(
         ForeignKey('legal_guardians.id'), nullable=False
-    )
+    , index=True)
 
     user: Mapped['User'] = relationship(
         back_populates='system_identity',
@@ -962,7 +963,7 @@ class Collection(AuditMixin):
     __tablename__ = 'collections'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
     name: Mapped[str] = mapped_column(nullable=False)
     description: Mapped[str | None] = mapped_column(nullable=True)
@@ -970,7 +971,7 @@ class Collection(AuditMixin):
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('users.id'), nullable=False
-    )
+    , index=True)
     user: Mapped['User'] = relationship(
         back_populates='collections',
         init=False,
@@ -1007,11 +1008,11 @@ class CollectionItem:
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
     collection_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('collections.id'), nullable=False
-    )
+    , index=True)
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('catalog.id'), nullable=False, index=True
@@ -1038,12 +1039,12 @@ class Notification(AuditMixin):
     __tablename__ = 'notifications'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     source_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey('users.id'), nullable=True
-    )
+    , index=True)
 
     type: Mapped[str] = mapped_column(nullable=False, index=True)
     detail: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -1068,7 +1069,7 @@ class UserNotification(AuditMixin):
     __tablename__ = 'user_notifications'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     notification_id: Mapped[uuid.UUID] = mapped_column(
@@ -1109,7 +1110,7 @@ class Permission(AuditMixin):
     __tablename__ = 'permissions'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     name: Mapped[str] = mapped_column(nullable=False)
@@ -1161,7 +1162,7 @@ class Role(AuditMixin):
     __tablename__ = 'roles'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
     name: Mapped[str] = mapped_column(nullable=False)
@@ -1238,7 +1239,7 @@ class UserRole(AuditMixin):
     __tablename__ = 'user_roles'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey('users.id'), nullable=False, index=True
@@ -1273,14 +1274,14 @@ class RolePermission(AuditMixin):
     __tablename__ = 'role_permissions'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
     role_id: Mapped[UUID] = mapped_column(
         ForeignKey('roles.id'), nullable=False
-    )
+    , index=True)
     permission_id: Mapped[UUID] = mapped_column(
         ForeignKey('permissions.id'), nullable=False
-    )
+    , index=True)
 
     role: Mapped['Role'] = relationship(
         back_populates='role_permissions', init=False, lazy='selectin'
@@ -1310,7 +1311,7 @@ class Feedback(AuditMixin):
     )
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
     name: Mapped[str]
     email: Mapped[str]
@@ -1319,7 +1320,7 @@ class Feedback(AuditMixin):
 
     user_id: Mapped[UUID | None] = mapped_column(
         ForeignKey('users.id'), nullable=True, init=False
-    )
+    , index=True)
     user: Mapped[Optional['User']] = relationship(
         init=False,
         lazy='selectin',
@@ -1332,7 +1333,7 @@ class SystemSetting(AuditMixin):
     __tablename__ = 'system_settings'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
     key: Mapped[str] = mapped_column(nullable=False, index=True)
     value: Mapped[Any] = mapped_column(JSONB, nullable=True)
@@ -1347,7 +1348,8 @@ class SystemSetting(AuditMixin):
         ),
     )
 
-from uuid import UUID, uuid4
+from uuid import UUID
+from uuid6 import uuid7
 from datetime import datetime
 from sqlalchemy import ForeignKey, Index, column, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -1357,12 +1359,12 @@ class TransferDocument(AuditMixin):
     __tablename__ = 'transfer_documents'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
     
-    catalog_id: Mapped[UUID] = mapped_column(ForeignKey("catalog.id"), nullable=False)
+    catalog_id: Mapped[UUID] = mapped_column(ForeignKey("catalog.id"), nullable=False, index=True)
     catalog: Mapped["Catalog"] = relationship(init=False)
-    location_id: Mapped[UUID] = mapped_column(ForeignKey("locations.id"), nullable=False)
+    location_id: Mapped[UUID] = mapped_column(ForeignKey("locations.id"), nullable=False, index=True)
     location: Mapped["Location"] = relationship(init=False)
     signers: Mapped[list["TransferSigner"]] = relationship(
         init=False, 
@@ -1380,15 +1382,15 @@ class TransferSigner(AuditMixin):
     __tablename__ = 'transfer_signers'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
 
-    transfer_document_id: Mapped[UUID] = mapped_column(ForeignKey("transfer_documents.id"), nullable=False)
+    transfer_document_id: Mapped[UUID] = mapped_column(ForeignKey("transfer_documents.id"), nullable=False, index=True)
     transfer_document: Mapped["TransferDocument"] = relationship(
         init=False,
         back_populates="signers"
     )
-    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     user: Mapped["User"] = relationship(
         init=False, 
         foreign_keys=[user_id]
@@ -1396,7 +1398,7 @@ class TransferSigner(AuditMixin):
     signedAt: Mapped[datetime | None] = mapped_column(nullable=True)
     isSigned: Mapped[bool] = mapped_column(default=False)
     
-    token: Mapped[UUID] = mapped_column(init=False, insert_default=uuid4, index=True, nullable=False)
+    token: Mapped[UUID] = mapped_column(init=False, insert_default=uuid7, index=True, nullable=False)
 
     __table_args__ = (
         Index(
@@ -1413,11 +1415,11 @@ class LoanableItem(AuditMixin):
     __tablename__ = 'loanable_items'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )
     
-    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), unique=True)
-    legal_guardian_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    catalog_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('catalog.id'), unique=True, index=True)
+    legal_guardian_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
     
     owner_notes: Mapped[str | None] = mapped_column(nullable=True)
     last_check: Mapped[datetime] = mapped_column(nullable=True)
@@ -1447,13 +1449,13 @@ class Loan(AuditMixin):
     __tablename__ = 'loans'
 
     id: Mapped[uuid.UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid.uuid4
+        init=False, primary_key=True, default=uuid7
     )   
     
-    loanable_item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('loanable_items.id'))
+    loanable_item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('loanable_items.id'), index=True)
     
-    requester_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))  
-    temporary_guardian_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'))
+    requester_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)  
+    temporary_guardian_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id'), index=True)
 
     
     start_at: Mapped[datetime] = mapped_column(nullable=False)
@@ -1470,9 +1472,9 @@ class Loan(AuditMixin):
     is_returned: Mapped[bool] = mapped_column(default=False)
     is_maintenance: Mapped[bool] = mapped_column(default=False)
     
-    confirmed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'), default=None)
-    executed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'), default=None)
-    returned_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'), default=None)
+    confirmed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'), default=None, index=True)
+    executed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'), default=None, index=True)
+    returned_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id'), default=None, index=True)
     
     loanable_item: Mapped['LoanableItem'] = relationship(
         back_populates='loans', 
@@ -1508,10 +1510,10 @@ class TemporaryFileReference(AuditMixin):
     __tablename__ = 'temporary_files'
 
     id: Mapped[UUID] = mapped_column(
-        init=False, primary_key=True, default=uuid4
+        init=False, primary_key=True, default=uuid7
     )
     folder_type: Mapped[str] = mapped_column(nullable=False)
     file_name: Mapped[str] = mapped_column(nullable=False)
     token: Mapped[UUID] = mapped_column(
-        init=False, insert_default=uuid4, index=True, nullable=False
+        init=False, insert_default=uuid7, index=True, nullable=False
     )

@@ -25,7 +25,7 @@ services:
       - ./.env
     volumes:
       - storage:/app/vitrine/storage
-      - /home/servico/https-credentials:/https-credentials
+      - ${SSL_PATH:-/home/servico/https-credentials}:/https-credentials
       - .:/app
 
   vitrine_mailpit:

@@ -1,6 +1,6 @@
 [project]
 name = "vitrine"
-version = "0.1.0"
+version = "1.0.0"
 description = ""
 authors = [
     {name = "gmcosta",email = "geu_costa@outlook.com"}
@@ -95,6 +95,7 @@ weasyprint = "^66.0"
 pyhanko = {extras = ["crypto"], version = "^0.32.0"}
 pikepdf = "^10.5.1"
 playwright = "^1.58.0"
+uuid6 = "^2025.0.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
