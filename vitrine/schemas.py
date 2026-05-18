@@ -584,6 +584,8 @@ class CollectionItemPublic(BaseModel):
     id: UUID
     status: bool
     comment: Optional[str]
+    is_locked: Optional[bool] = Field(default=None)
+    is_approved: Optional[bool] = Field(default=None)
     catalog: CatalogPublic
     model_config = ConfigDict(from_attributes=True)
 
@@ -596,28 +598,41 @@ class CollectionItemSchema(BaseModel):
     catalog_id: UUID
     status: bool
     comment: Optional[str] = Field(default=None)
+    is_locked: Optional[bool] = Field(default=None)
+    is_approved: Optional[bool] = Field(default=None)
 
 
 class CollectionItemUpdate(BaseModel):
     status: bool
     comment: Optional[str] = Field(default=None)
+    is_locked: Optional[bool] = Field(default=None)
+    is_approved: Optional[bool] = Field(default=None)
 
 
 class CollectionSchema(BaseModel):
     name: str
     description: Optional[str] = Field(default=None)
     type: Optional[str] = Field(default=None)
+    document_path: Optional[str] = Field(default=None)
+    sei_process: Optional[str] = Field(default=None)
+    parecer: Optional[str] = Field(default=None)
 
 
 class CollectionUpdateSchema(BaseModel):
     name: Optional[str] = Field(default=None)
     description: Optional[str] = Field(default=None)
+    document_path: Optional[str] = Field(default=None)
+    sei_process: Optional[str] = Field(default=None)
+    parecer: Optional[str] = Field(default=None)
 
 
 class CollectionPublic(BaseModel):
     id: UUID
     name: str
     description: Optional[str]
+    document_path: Optional[str] = Field(default=None)
+    sei_process: Optional[str] = Field(default=None)
+    parecer: Optional[str] = Field(default=None)
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

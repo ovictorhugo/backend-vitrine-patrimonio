@@ -44,6 +44,9 @@ async def create_collection(
         name=collection.name,
         description=collection.description,
         type=collection.type,
+        document_path=collection.document_path,
+        sei_process=collection.sei_process,
+        parecer=collection.parecer,
         user_id=current_user.id,
     )
 

@@ -106,6 +106,8 @@ async def add_item_to_collection(
         catalog_id=item.catalog_id,
         status=item.status,
         comment=item.comment,
+        is_locked=item.is_locked,
+        is_approved=item.is_approved,
     )
     session.add(db_item)
     await session.commit()
@@ -153,6 +155,8 @@ async def update_collection_item(
 
     db_item.status = item_update.status
     db_item.comment = item_update.comment
+    db_item.is_locked = item_update.is_locked
+    db_item.is_approved = item_update.is_approved
 
     await session.commit()
     await session.refresh(db_item)
