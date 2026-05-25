@@ -2,13 +2,13 @@ from http import HTTPStatus
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy import func, select
 from sqlalchemy.orm import noload
 
 
 from vitrine.core.dependencies import CurrentUser, Session
-from vitrine.models import Collection
+from vitrine.models import Collection, CollectionItem
 from vitrine.schemas import (
     CollectionList,
     CollectionPublic,
@@ -94,6 +94,39 @@ async def read_my_collections(
     return {'collections': collections}
 
 
+@router.get(
+    '/stats/{collection_id}',
+    status_code=HTTPStatus.OK,
+)
+async def get_collection_summary(
+    collection_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+):
+    # 1. Valida se a coleção existe
+    db_collection = await session.get(Collection, collection_id)
+    if not db_collection or db_collection.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+        )
+
+    # 2. Monta a query otimizada para buscar as duas contagens juntas
+    query = select(
+        func.count(CollectionItem.id).label('total'),
+        func.count(CollectionItem.id).filter(CollectionItem.is_approved == True).label('approved')
+    ).where(CollectionItem.collection_id == collection_id)
+
+    # 3. Executa a query
+    result = await session.execute(query)
+    
+    # O result.first() retorna a primeira (e única) linha com os nossos counts
+    row = result.first()
+
+    return {
+        "total": row.total or 0,
+        "approved": row.approved or 0
+    }
+
 @router.get('/{collection_id}', response_model=CollectionPublic)
 async def read_collection(
     collection_id: UUID, session: Session, current_user: CurrentUser
@@ -149,3 +182,31 @@ async def delete_collection(
     db_collection.deleted_at = func.now()
     await session.commit()
     return {'message': 'Collection deactivated successfully.'}
+
+
+@router.post('/add-sei/{collection_id}', response_model=Message)
+async def add_sei_process_to_collection(
+    collection_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+    sei_process: str | None = Body(default=None,embed=True)
+):
+    db_collection = await session.get(Collection, collection_id)
+    
+    if not db_collection or db_collection.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+        )
+
+    if db_collection.sei_process and db_collection.sei_process.strip() and sei_process is not None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail='Essa coleção já possui um Processo SEI vinculado.'
+        )
+    
+    if sei_process is not None and not sei_process.strip():
+        sei_process = None
+
+    db_collection.sei_process = sei_process
+    await session.commit()
+    
+    return {'message': 'Processo SEI adicionado com sucesso.'}

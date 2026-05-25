@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -40,13 +40,55 @@ _NON_JOIN_FIELDS = {'limit', 'offset'}
 ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
 
 router = APIRouter(
-    prefix='/collections/{collection_id}/items',
+    prefix='/collection_items',
     tags=['coleções - manipulação dos items'],
 )
 
+@router.post(
+    '/add_new/{collection_id}',
+    status_code=HTTPStatus.OK,
+)
+async def add_collection_items(
+    collection_id: UUID,
+    session: Session,
+    catalog_ids: list[UUID] = Body(embed=True)
+):
+    db_collection = await session.get(Collection, collection_id)
+    if not db_collection or db_collection.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+        )
+
+    success_count = 0
+    fail_count = 0
+
+    for cid in catalog_ids:
+        try:
+            async with session.begin_nested():
+                new_item = CollectionItem(
+                    collection_id=collection_id,
+                    catalog_id=cid,
+                    comment="",
+                    status=False,
+                    is_locked=False,
+                    is_approved=False
+                )
+                session.add(new_item)
+            success_count += 1
+        except Exception:
+            fail_count += 1
+
+    await session.commit()
+
+    if success_count == 0 and len(catalog_ids) > 0:
+        return {"message": "Nenhum item foi adicionado."}
+    if fail_count > 0:
+        return {"message": "Alguns itens não foram adicionados com sucesso."}
+
+    return {"message": "Itens adicionados com sucesso."}
 
 @router.post(
-    '/',
+    '/{collection_id}',
     status_code=HTTPStatus.CREATED,
     response_model=CollectionItemPublic,
 )
@@ -118,7 +160,7 @@ async def add_item_to_collection(
 
 
 @router.put(
-    '/{item_id}',
+    '/{collection_id}/{item_id}',
     status_code=HTTPStatus.OK,
     response_model=CollectionItemPublic,
 )
@@ -190,7 +232,7 @@ async def update_collection_item(
 
 
 @router.get(
-    '/',
+    '/{collection_id}',
     status_code=HTTPStatus.OK,
     response_model=CollectionItemsList,
 )
@@ -249,7 +291,76 @@ async def list_collection_items(
 
 
 @router.delete(
-    '/{item_id}',
+    '/remove_by_filters/{collection_id}',
+    status_code=HTTPStatus.OK,
+)
+async def remove_items_by_filters(
+    collection_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+    filters: Annotated[FilterCatalog, Depends()],
+):
+    # 1. Valida se a coleção existe
+    db_collection = await session.get(Collection, collection_id)
+    if not db_collection or db_collection.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+        )
+
+    # 2. Monta a Query buscando os itens DENTRO da coleção atual
+    query = (
+        select(CollectionItem)
+        .join(CollectionItem.catalog)
+        .where(CollectionItem.collection_id == collection_id)
+    )
+
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
+    )
+
+    # Aplica os mesmos filtros que você já usa
+    query = filter_service.apply_catalog_filters(query, filters)
+
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
+
+    # 3. Executa a busca
+    result = await session.execute(query)
+    collection_items = result.scalars().all()
+
+    if not collection_items:
+        return {"message": "Nenhum item encontrado na coleção para os filtros informados."}
+
+    # 4. Lógica de remoção individual com tolerância a falhas
+    success_count = 0
+    fail_count = 0
+
+    for item in collection_items:
+        try:
+            # O begin_nested protege a transação. Se a deleção de um item 
+            # falhar (ex: por alguma trava de chave estrangeira), os outros 
+            # ainda serão deletados normalmente.
+            async with session.begin_nested():
+                await session.delete(item)
+            success_count += 1
+        except Exception:
+            fail_count += 1
+
+    await session.commit()
+
+    # 5. Validação das mensagens de retorno
+    if success_count == 0:
+        return {"message": "Nenhum item foi removido."}
+    
+    if fail_count > 0:
+        return {"message": "Alguns itens não foram removidos com sucesso."}
+
+    return {"message": "Itens removidos com sucesso."}
+
+@router.delete(
+    '/{collection_id}/{item_id}',
     status_code=HTTPStatus.OK,
     response_model=Message,
 )
@@ -387,3 +498,85 @@ async def list_collection_items(
             'Content-Disposition': 'inline; filename="catalogo.pdf"',
         },
     )
+
+
+@router.post(
+    '/add_by_filters/{collection_id}',
+    status_code=HTTPStatus.OK,
+)
+async def add_items_by_filters(
+    collection_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+    filters: Annotated[FilterCatalog, Depends()],
+):
+    # 1. Valida se a coleção existe
+    db_collection = await session.get(Collection, collection_id)
+    if not db_collection or db_collection.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+        )
+
+    # 2. Monta a Query buscando no Catálogo principal
+    query = select(Catalog).where(Catalog.deleted_at.is_(None))
+
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
+    )
+
+    query = filter_service.apply_catalog_filters(query, filters)
+
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
+
+    # Nota: Se o seu front-end envia limit e offset no params e você 
+    # quiser adicionar APENAS a página atual, descomente as linhas abaixo. 
+    # Caso a intenção do botão seja "Adicionar TODOS que combinam com o filtro",
+    # deixe sem o limit/offset.
+    # if filters.offset is not None:
+    #     query = query.offset(filters.offset)
+    # if filters.limit is not None:
+    #     query = query.limit(filters.limit)
+
+    # 3. Executa a busca
+    result = await session.execute(query)
+    catalogs = result.scalars().all()
+
+    if not catalogs:
+        return {"message": "Nenhum item encontrado para os filtros informados."}
+
+    # 4. Lógica de inserção individual com tolerância a falhas
+    success_count = 0
+    fail_count = 0
+
+    for catalog in catalogs:
+        try:
+            # O begin_nested cria um "Savepoint". Se o item já existir na coleção
+            # e disparar um erro de UniqueConstraint no banco, ele reverte apenas
+            # este item e continua o loop normalmente.
+            async with session.begin_nested():
+                new_item = CollectionItem(
+                    collection_id=collection_id,
+                    catalog_id=catalog.id,
+                    comment="",
+                    status=False,
+                    is_locked=False,
+                    is_approved=False
+                )
+                session.add(new_item)
+            success_count += 1
+        except Exception:
+            fail_count += 1
+
+    await session.commit()
+
+    # 5. Validação das mensagens de retorno
+    if success_count == 0:
+        return {"message": "Nenhum item foi adicionado."}
+    
+    if fail_count > 0:
+        return {"message": "Alguns itens não foram adicionados com sucesso."}
+
+    return {"message": "Itens adicionados com sucesso."}
