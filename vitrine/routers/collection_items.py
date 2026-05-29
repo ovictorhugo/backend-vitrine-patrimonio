@@ -1,13 +1,14 @@
 from http import HTTPStatus
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, List
 from uuid import UUID
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, delete, desc
+from sqlalchemy.orm import selectinload, noload
 from weasyprint import HTML
 
 from vitrine.core.dependencies import CurrentUser, Session
@@ -59,10 +60,28 @@ async def add_collection_items(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
 
+    if db_collection.sei_process is not None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser adicionados em coleções com Processo SEI vinculado.'
+        )
+
     success_count = 0
     fail_count = 0
 
+    if catalog_ids:
+        approved_query = select(CollectionItem.catalog_id).where(
+            CollectionItem.catalog_id.in_(catalog_ids),
+            CollectionItem.is_approved == True
+        )
+        approved_result = await session.execute(approved_query)
+        approved_catalog_ids = set(approved_result.scalars().all())
+    else:
+        approved_catalog_ids = set()
+
     for cid in catalog_ids:
+        if cid in approved_catalog_ids:
+            fail_count += 1
+            continue
         try:
             async with session.begin_nested():
                 new_item = CollectionItem(
@@ -70,7 +89,6 @@ async def add_collection_items(
                     catalog_id=cid,
                     comment="",
                     status=False,
-                    is_locked=False,
                     is_approved=False
                 )
                 session.add(new_item)
@@ -102,6 +120,11 @@ async def add_item_to_collection(
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+        )
+
+    if db_collection.sei_process is not None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser adicionados em coleções com Processo SEI vinculado.'
         )
 
     query = (
@@ -148,7 +171,6 @@ async def add_item_to_collection(
         catalog_id=item.catalog_id,
         status=item.status,
         comment=item.comment,
-        is_locked=item.is_locked,
         is_approved=item.is_approved,
     )
     session.add(db_item)
@@ -197,7 +219,6 @@ async def update_collection_item(
 
     db_item.status = item_update.status
     db_item.comment = item_update.comment
-    db_item.is_locked = item_update.is_locked
     db_item.is_approved = item_update.is_approved
 
     await session.commit()
@@ -307,6 +328,11 @@ async def remove_items_by_filters(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
 
+    if db_collection.sei_process is not None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser removidos de coleções com Processo SEI vinculado.'
+        )
+
     # 2. Monta a Query buscando os itens DENTRO da coleção atual
     query = (
         select(CollectionItem)
@@ -374,6 +400,11 @@ async def remove_item_from_collection(
     if not db_collection:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail='Action not allowed.'
+        )
+
+    if db_collection.sei_process is not None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser removidos de coleções com Processo SEI vinculado.'
         )
 
     db_item = await session.get(CollectionItem, item_id)
@@ -453,7 +484,7 @@ async def list_collection_items(
     )
 
     ASSETS_DIR = (
-        Path(__file__).resolve().parent.parent.parent / 'assets'
+        Path(__file__).resolve().parent.parent / 'assets'
     ).resolve()
     lexend_regular = (ASSETS_DIR / 'Lexend-Regular.ttf').resolve().as_uri()
 
@@ -507,7 +538,6 @@ async def list_collection_items(
 async def add_items_by_filters(
     collection_id: UUID,
     session: Session,
-    current_user: CurrentUser,
     filters: Annotated[FilterCatalog, Depends()],
 ):
     # 1. Valida se a coleção existe
@@ -516,6 +546,13 @@ async def add_items_by_filters(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
+
+    if db_collection.sei_process is not None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser adicionados em coleções com Processo SEI vinculado.'
+        )
+
+    
 
     # 2. Monta a Query buscando no Catálogo principal
     query = select(Catalog).where(Catalog.deleted_at.is_(None))
@@ -531,15 +568,6 @@ async def add_items_by_filters(
         query = query.join(Catalog.asset)
         query = filter_service.apply_asset_filters(query, filters)
 
-    # Nota: Se o seu front-end envia limit e offset no params e você 
-    # quiser adicionar APENAS a página atual, descomente as linhas abaixo. 
-    # Caso a intenção do botão seja "Adicionar TODOS que combinam com o filtro",
-    # deixe sem o limit/offset.
-    # if filters.offset is not None:
-    #     query = query.offset(filters.offset)
-    # if filters.limit is not None:
-    #     query = query.limit(filters.limit)
-
     # 3. Executa a busca
     result = await session.execute(query)
     catalogs = result.scalars().all()
@@ -547,11 +575,22 @@ async def add_items_by_filters(
     if not catalogs:
         return {"message": "Nenhum item encontrado para os filtros informados."}
 
+    catalog_ids_to_add = [c.id for c in catalogs]
+    approved_query = select(CollectionItem.catalog_id).where(
+        CollectionItem.catalog_id.in_(catalog_ids_to_add),
+        CollectionItem.is_approved == True
+    )
+    approved_result = await session.execute(approved_query)
+    approved_catalog_ids = set(approved_result.scalars().all())
+
     # 4. Lógica de inserção individual com tolerância a falhas
     success_count = 0
     fail_count = 0
 
     for catalog in catalogs:
+        if catalog.id in approved_catalog_ids:
+            fail_count += 1
+            continue
         try:
             # O begin_nested cria um "Savepoint". Se o item já existir na coleção
             # e disparar um erro de UniqueConstraint no banco, ele reverte apenas
@@ -562,7 +601,6 @@ async def add_items_by_filters(
                     catalog_id=catalog.id,
                     comment="",
                     status=False,
-                    is_locked=False,
                     is_approved=False
                 )
                 session.add(new_item)
@@ -580,3 +618,164 @@ async def add_items_by_filters(
         return {"message": "Alguns itens não foram adicionados com sucesso."}
 
     return {"message": "Itens adicionados com sucesso."}
+
+
+@router.post(
+    '/approved/{collection_id}',
+    status_code=HTTPStatus.OK,
+)
+async def approve_collection_items(
+    collection_id: UUID,
+    session: Session,
+    catalog_ids: list[UUID] = Body(embed=True)
+):
+    # 1. Valida a coleção
+    db_collection = await session.get(Collection, collection_id)
+    if not db_collection or db_collection.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+        )
+
+    success_count = 0
+    fail_count = 0
+
+    if not catalog_ids:
+        return {"message": "Nenhum item válido ou destrancado foi encontrado para aprovação."}
+
+    query = (
+        select(CollectionItem, Catalog)
+        .join(Catalog, CollectionItem.catalog_id == Catalog.id)
+        .where(
+            CollectionItem.collection_id == collection_id,
+            CollectionItem.catalog_id.in_(catalog_ids)
+        )
+        .options(noload('*'))
+    )
+    result = await session.execute(query)
+    rows = result.all()
+    
+    row_map = {item.catalog_id: (item, catalog) for item, catalog in rows}
+
+    for catalog_id in catalog_ids:
+        try:
+            async with session.begin_nested():
+                if catalog_id in row_map:
+                    item, catalog = row_map[catalog_id]
+
+                    # Aplica as regras de negócio
+                    if not getattr(item, "is_approved", False):
+                        item.is_approved = True
+                        
+                        # Atualiza o status do workflow no catálogo principal
+                        catalog.current_workflow_status = "EM_REMOCAO"
+                        
+                        # Remove os demais registros deste item
+                        delete_query = delete(CollectionItem).where(
+                            CollectionItem.catalog_id == catalog_id,
+                            CollectionItem.id != item.id
+                        )
+                        await session.execute(delete_query)
+
+                        success_count += 1
+                    
+        except Exception as e:
+            print(f"Erro ao processar o catalog_id {catalog_id}: {e}")
+            fail_count += 1
+
+    # Efetiva todas as alterações (CollectionItem e Catalog)
+    await session.commit()
+
+    # Validação do retorno
+    if success_count == 0 and fail_count == 0:
+        return {"message": "Nenhum item válido ou destrancado foi encontrado para aprovação."}
+    
+    if fail_count > 0:
+        return {"message": f"Operação parcial: {success_count} aprovados, {fail_count} falharam."}
+
+    return {"message": "Itens aprovados e atualizados com sucesso."}
+
+@router.post(
+    '/refused/{collection_id}',
+    status_code=HTTPStatus.OK,
+)
+async def refuse_collection_items(
+    collection_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+    catalog_ids: list[UUID] = Body(embed=True)
+):
+    from datetime import datetime
+    
+    # 1. Valida a coleção
+    db_collection = await session.get(Collection, collection_id)
+    if not db_collection or db_collection.deleted_at:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+        )
+
+    success_count = 0
+    fail_count = 0
+
+    if not catalog_ids:
+        return {"message": "Nenhum item válido foi encontrado para recusa."}
+
+    today_str = datetime.now().strftime("%d/%m/%Y")
+    comment_text = f"PRA recusou a remoção deste item em {today_str}"
+
+    query = (
+        select(CollectionItem, Catalog)
+        .join(Catalog, CollectionItem.catalog_id == Catalog.id)
+        .where(
+            CollectionItem.collection_id == collection_id,
+            CollectionItem.catalog_id.in_(catalog_ids)
+        )
+        .options(noload('*'))
+    )
+    result = await session.execute(query)
+    rows = result.all()
+    
+    row_map = {item.catalog_id: (item, catalog) for item, catalog in rows}
+
+    for catalog_id in catalog_ids:
+        try:
+            async with session.begin_nested():
+                if catalog_id in row_map:
+                    item, catalog = row_map[catalog_id]
+                else:
+                    catalog = await session.get(Catalog, catalog_id, options=[noload('*')])
+                    item = None
+
+                if not catalog:
+                    continue
+
+                if item:
+                    # Remover item da coleção
+                    await session.delete(item)
+
+                # Alterar status
+                catalog.current_workflow_status = "REJEITADOS_COMISSAO"
+
+                # Adicionar workflow
+                new_workflow_entry = CatalogWorkFlow(
+                    catalog_id=catalog.id,
+                    user_id=current_user.id,
+                    workflow_status="REJEITADOS_COMISSAO",
+                    detail={"justificativa": comment_text, "observation": {"text": comment_text}},
+                )
+                session.add(new_workflow_entry)
+
+                success_count += 1
+                    
+        except Exception as e:
+            print(f"Erro ao processar o catalog_id {catalog_id}: {e}")
+            fail_count += 1
+
+    await session.commit()
+
+    if success_count == 0 and fail_count == 0:
+        return {"message": "Nenhum item válido foi encontrado para recusa."}
+    
+    if fail_count > 0:
+        return {"message": f"Operação parcial: {success_count} recusados, {fail_count} falharam."}
+
+    return {"message": "Itens recusados, removidos da coleção e atualizados com sucesso."}

@@ -584,7 +584,7 @@ class CollectionItemPublic(BaseModel):
     id: UUID
     status: bool
     comment: Optional[str]
-    is_locked: Optional[bool] = Field(default=None)
+
     is_approved: Optional[bool] = Field(default=None)
     catalog: CatalogPublic
     model_config = ConfigDict(from_attributes=True)
@@ -598,14 +598,14 @@ class CollectionItemSchema(BaseModel):
     catalog_id: UUID
     status: bool
     comment: Optional[str] = Field(default=None)
-    is_locked: Optional[bool] = Field(default=None)
+
     is_approved: Optional[bool] = Field(default=None)
 
 
 class CollectionItemUpdate(BaseModel):
     status: bool
     comment: Optional[str] = Field(default=None)
-    is_locked: Optional[bool] = Field(default=None)
+
     is_approved: Optional[bool] = Field(default=None)
 
 
@@ -632,7 +632,7 @@ class CollectionPublic(BaseModel):
     description: Optional[str]
     document_path: Optional[str] = Field(default=None)
     sei_process: Optional[str] = Field(default=None)
-    parecer: Optional[str] = Field(default=None)
+    parecer_pdf: Optional[str] = Field(default=None)
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

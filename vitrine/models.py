@@ -970,7 +970,7 @@ class Collection(AuditMixin):
     type: Mapped[str | None] = mapped_column(nullable=True)
     document_path: Mapped[str | None] = mapped_column(nullable=True)
     sei_process: Mapped[str | None] = mapped_column(nullable=True)
-    parecer: Mapped[str | None] = mapped_column(nullable=True)
+    parecer_pdf: Mapped[str | None] = mapped_column(nullable=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('users.id'), nullable=False
@@ -1023,7 +1023,6 @@ class CollectionItem:
 
     status: Mapped[bool] = mapped_column(nullable=False)
     comment: Mapped[str | None] = mapped_column(nullable=True)
-    is_locked: Mapped[bool | None] = mapped_column(nullable=True)
     is_approved: Mapped[bool | None] = mapped_column(nullable=True)
 
     collection: Mapped['Collection'] = relationship(

@@ -498,7 +498,7 @@ async def export_all_catalog_pdf(
     items_html = ''.join(render_all_loanable_items(items))
 
     ASSETS_DIR = (
-        Path(__file__).resolve().parent.parent.parent / 'assets'
+        Path(__file__).resolve().parent.parent / 'assets'
     ).resolve()
     lexend_regular = (ASSETS_DIR / 'Lexend-Variable.ttf').resolve().as_uri()
 
