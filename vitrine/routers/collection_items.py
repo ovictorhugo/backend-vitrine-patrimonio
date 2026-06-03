@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated, List
 from uuid import UUID
 from pydantic import BaseModel
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import StreamingResponse
@@ -62,7 +63,7 @@ async def add_collection_items(
 
     if db_collection.sei_process is not None:
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser adicionados em coleções com Processo SEI vinculado.'
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser adicionados em coleções com processo vinculado.'
         )
 
     success_count = 0
@@ -79,7 +80,7 @@ async def add_collection_items(
         approved_catalog_ids = set()
 
     for cid in catalog_ids:
-        if cid in approved_catalog_ids:
+        if cid in approved_catalog_ids and db_collection.type != "REMOCAO_DISPONIVEIS":
             fail_count += 1
             continue
         try:
@@ -627,6 +628,7 @@ async def add_items_by_filters(
 async def approve_collection_items(
     collection_id: UUID,
     session: Session,
+    current_user: CurrentUser,
     catalog_ids: list[UUID] = Body(embed=True)
 ):
     # 1. Valida a coleção
@@ -668,6 +670,18 @@ async def approve_collection_items(
                         
                         # Atualiza o status do workflow no catálogo principal
                         catalog.current_workflow_status = "EM_REMOCAO"
+
+                        
+                        today_str = datetime.now().strftime("%d/%m/%Y")
+                        comment_text = f"Item foi aprovado para remoção por {current_user.username} por meio da coleção:{db_collection.name} em {today_str}"
+                        # Adicionar workflow
+                        new_workflow_entry = CatalogWorkFlow(
+                            catalog_id=catalog.id,
+                            user_id=current_user.id,
+                            workflow_status="EM_REMOCAO",
+                            detail={"justificativa": comment_text, "observation": {"text": comment_text}},
+                        )
+                        session.add(new_workflow_entry)
                         
                         # Remove os demais registros deste item
                         delete_query = delete(CollectionItem).where(
@@ -704,7 +718,6 @@ async def refuse_collection_items(
     current_user: CurrentUser,
     catalog_ids: list[UUID] = Body(embed=True)
 ):
-    from datetime import datetime
     
     # 1. Valida a coleção
     db_collection = await session.get(Collection, collection_id)
@@ -720,7 +733,7 @@ async def refuse_collection_items(
         return {"message": "Nenhum item válido foi encontrado para recusa."}
 
     today_str = datetime.now().strftime("%d/%m/%Y")
-    comment_text = f"PRA recusou a remoção deste item em {today_str}"
+    comment_text = f"PRA recusou a remoção deste item por meio da coleção:{db_collection.name} por {current_user.username} em {today_str}"
 
     query = (
         select(CollectionItem, Catalog)
@@ -753,13 +766,13 @@ async def refuse_collection_items(
                     await session.delete(item)
 
                 # Alterar status
-                catalog.current_workflow_status = "REJEITADOS_COMISSAO"
+                catalog.current_workflow_status = "REJEITADOS_REMOCAO"
 
                 # Adicionar workflow
                 new_workflow_entry = CatalogWorkFlow(
                     catalog_id=catalog.id,
                     user_id=current_user.id,
-                    workflow_status="REJEITADOS_COMISSAO",
+                    workflow_status="REJEITADOS_REMOCAO",
                     detail={"justificativa": comment_text, "observation": {"text": comment_text}},
                 )
                 session.add(new_workflow_entry)

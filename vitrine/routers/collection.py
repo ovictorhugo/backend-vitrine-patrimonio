@@ -221,6 +221,12 @@ async def delete_collection(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
 
+    if db_collection.parecer_pdf:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Não é possível excluir uma coleção que possua documentação.',
+        )
+
     db_collection.deleted_at = func.now()
     await session.commit()
     return {'message': 'Collection deactivated successfully.'}
@@ -269,7 +275,7 @@ async def enviar_parecer_pdf(
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="O arquivo deve ser um PDF.")
 
-    STORAGE_ROOT = Path("vitrine/storage/pdfs_remocao/parecer")
+    STORAGE_ROOT = Path("vitrine/storage/pdfs_remocao/documentacao")
     STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
 
     filename = f"{collection_id}_{file.filename}"
@@ -318,7 +324,7 @@ async def baixar_parecer_pdf(
             status_code=HTTPStatus.NOT_FOUND, detail='Parecer PDF not found.'
         )
 
-    STORAGE_ROOT = Path("vitrine/storage/pdfs_remocao/parecer")
+    STORAGE_ROOT = Path("vitrine/storage/pdfs_remocao/documentacao")
     file_path = STORAGE_ROOT / db_collection.parecer_pdf
 
     if not file_path.exists():
@@ -383,7 +389,7 @@ async def admin_collection_action(
         
     elif action == 4:
         if db_collection.parecer_pdf:
-            STORAGE_ROOT = Path("vitrine/storage/pdfs_remocao/parecer")
+            STORAGE_ROOT = Path("vitrine/storage/pdfs_remocao/documentacao")
             file_path = STORAGE_ROOT / db_collection.parecer_pdf
             if file_path.exists():
                 file_path.unlink()
