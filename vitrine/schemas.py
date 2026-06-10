@@ -410,6 +410,7 @@ class FilterAsset(BaseModel):
     atm_number: Optional[str] = Field(default=None)
     csv_code: Optional[str] = Field(default=None)
     asset_status: Optional[str] = Field(default=None)
+    exclude_asset_status: Optional[str] = Field(default=None)
     agency_id: Optional[UUID] = Field(default=None)
     unit_id: Optional[UUID] = Field(default=None)
     sector_id: Optional[UUID] = Field(default=None)
@@ -632,7 +633,6 @@ class CollectionPublic(BaseModel):
     description: Optional[str]
     document_path: Optional[str] = Field(default=None)
     sei_process: Optional[str] = Field(default=None)
-    parecer_pdf: Optional[str] = Field(default=None)
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -786,7 +786,8 @@ class CatalogStatisticsFilters(BaseModel):
     location_id: Optional[UUID] = Field(default=None)
     legal_guardian_id: Optional[UUID] = Field(default=None)
     is_official: bool | None = Field(default=None)
-    asset_status: Optional[UUID] = Field(default=None)
+    asset_status: Optional[str] = Field(default=None)
+    exclude_asset_status: Optional[str] = Field(default=None)
     csv_code: Optional[str] = Field(default=None)
     role_id: Optional[str] = Field(default=None)
     user_id: Optional[str] = Field(default=None)    

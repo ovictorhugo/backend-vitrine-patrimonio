@@ -105,6 +105,12 @@ def build_catalog_filters(filters):
         filter_clauses.append('assets.asset_status = :asset_status')
         params['asset_status'] = filters.asset_status
 
+    if getattr(filters, "exclude_asset_status", None):
+        ensure_assets_join()
+        filter_clauses.append('assets.asset_status != :exclude_asset_status')
+        params['exclude_asset_status'] = filters.exclude_asset_status
+
+
     if filters.legal_guardian_id:
         ensure_assets_join()
         filter_clauses.append('assets.legal_guardian_id = :legal_guardian_id')
@@ -237,6 +243,8 @@ def apply_asset_filters(query: Select, filters: FilterCatalog) -> Select:
         query = query.where(Asset.is_official == filters.is_official)
     if filters.asset_status:
         query = query.where(Asset.asset_status == filters.asset_status)
+    if getattr(filters, "exclude_asset_status", None):
+        query = query.where(Asset.asset_status != filters.exclude_asset_status)
     if filters.csv_code:
         query = query.where(Asset.csv_code == filters.csv_code)
 

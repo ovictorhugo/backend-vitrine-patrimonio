@@ -23,6 +23,7 @@ import math
 import uuid
 import tempfile
 import os
+from datetime import datetime
 from email.message import EmailMessage
 from fastapi.concurrency import run_in_threadpool
 from playwright.async_api import async_playwright
@@ -40,6 +41,8 @@ from vitrine.schemas import (
     FilterCollection,
     Message,
 )
+
+from vitrine.models import Catalog, CatalogWorkFlow
 
 router = APIRouter(prefix='/collections', tags=['coleções - geral'])
 
@@ -67,10 +70,9 @@ async def create_collection(
         name=collection.name,
         description=collection.description,
         type=collection.type,
-        document_path=collection.document_path,
+        document_path=collection.document_path or "",
         sei_process=collection.sei_process,
         user_id=current_user.id,
-        parecer_pdf=""
     )
 
     session.add(db_collection)
@@ -221,7 +223,7 @@ async def delete_collection(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
 
-    if db_collection.parecer_pdf:
+    if db_collection.document_path:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail='Não é possível excluir uma coleção que possua documentação.',
@@ -260,7 +262,7 @@ async def add_sei_process_to_collection(
     return {'message': 'Processo SEI adicionado com sucesso.'}
 
 @router.post('/enviar-parecer/{collection_id}', response_model=Message)
-async def enviar_parecer_pdf(
+async def enviar_documento(
     collection_id: UUID,
     session: Session,
     current_user: CurrentUser,
@@ -285,10 +287,13 @@ async def enviar_parecer_pdf(
     with open(full_path, "wb") as f:
         f.write(content)
 
-    db_collection.parecer_pdf = filename
+    db_collection.document_path = filename
+    today_str = datetime.now().strftime("%d/%m/%Y")
 
     if db_collection.type == "REMOCAO_DISPONIVEIS":
-        from vitrine.models import Catalog, CatalogWorkFlow
+
+        comment_text = f"O item chegou ao fim do fluxo de desfazimento em {today_str}. A remoção deste item foi realizada por meio da coleção:{db_collection.name} por {current_user.username}."
+
         
         query = select(Catalog).join(CollectionItem, CollectionItem.catalog_id == Catalog.id).where(CollectionItem.collection_id == collection_id)
         catalogs = (await session.scalars(query)).all()
@@ -298,7 +303,7 @@ async def enviar_parecer_pdf(
                 catalog_id=catalog.id,
                 user_id=current_user.id,
                 workflow_status="REMOVIDO_DESFAZIMENTO",
-                detail={"justificativa": "O item chegou ao fim do fluxo de desfazimento.", "observation": {"text": "O item chegou ao fim do fluxo de desfazimento."}},
+                detail={"justificativa": comment_text, "observation": {"text": comment_text}},
             )
             session.add(new_workflow_entry)
 
@@ -308,7 +313,7 @@ async def enviar_parecer_pdf(
 
 
 @router.get('/baixar-parecer/{collection_id}')
-async def baixar_parecer_pdf(
+async def baixar_documento(
     collection_id: UUID,
     session: Session,
     current_user: CurrentUser,
@@ -319,13 +324,13 @@ async def baixar_parecer_pdf(
             status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
         )
 
-    if not db_collection.parecer_pdf:
+    if not db_collection.document_path:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='Parecer PDF not found.'
         )
 
     STORAGE_ROOT = Path("vitrine/storage/pdfs_remocao/documentacao")
-    file_path = STORAGE_ROOT / db_collection.parecer_pdf
+    file_path = STORAGE_ROOT / db_collection.document_path
 
     if not file_path.exists():
         raise HTTPException(
@@ -335,7 +340,7 @@ async def baixar_parecer_pdf(
     return FileResponse(
         path=file_path,
         media_type='application/pdf',
-        headers={'Content-Disposition': f'attachment; filename="{db_collection.parecer_pdf}"'}
+        headers={'Content-Disposition': f'attachment; filename="{db_collection.document_path}"'}
     )
 
 @router.post('/admin/action/{collection_id}', response_model=Message)
@@ -388,13 +393,13 @@ async def admin_collection_action(
         return {"message": f"{count} itens aprovados foram alterados e catálogo atualizado."}
         
     elif action == 4:
-        if db_collection.parecer_pdf:
+        if db_collection.document_path:
             STORAGE_ROOT = Path("vitrine/storage/pdfs_remocao/documentacao")
-            file_path = STORAGE_ROOT / db_collection.parecer_pdf
+            file_path = STORAGE_ROOT / db_collection.document_path
             if file_path.exists():
                 file_path.unlink()
             
-            db_collection.parecer_pdf = None
+            db_collection.document_path = None
             await session.commit()
             return {"message": "Arquivo de parecer removido com sucesso."}
         else:
