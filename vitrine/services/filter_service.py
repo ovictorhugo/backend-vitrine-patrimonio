@@ -164,6 +164,14 @@ def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
     if filters.workflow_status:
         query = query.where(Catalog.current_workflow_status == filters.workflow_status)
 
+
+    if filters.not_in_collection:
+        query = query.where(
+            ~Catalog.collection_items.any(
+                CollectionItem.collection_id == filters.not_in_collection
+            )
+        )
+
     # O reviewer_id ainda reside no detalhe do workflow_history.
     # Como é um filtro específico, usamos uma subquery lateral apenas se necessário.
     if filters.reviewer_id:

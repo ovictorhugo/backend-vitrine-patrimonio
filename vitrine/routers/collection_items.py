@@ -58,7 +58,7 @@ async def add_collection_items(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     if db_collection.sei_process is not None:
@@ -120,12 +120,12 @@ async def add_item_to_collection(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     if db_collection.sei_process is not None:
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser adicionados em coleções com Processo SEI vinculado.'
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser adicionados em coleções com processo vinculado.'
         )
 
     query = (
@@ -154,7 +154,7 @@ async def add_item_to_collection(
     if not db_catalog:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
-            detail=f'Catalog item with ID "{item.catalog_id}" not found.',
+            detail=f'Item com ID "{item.catalog_id}" não encontrado.',
         )
 
     query_existing = select(CollectionItem).where(
@@ -164,7 +164,7 @@ async def add_item_to_collection(
     if await session.scalar(query_existing):
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='This item is already in the collection.',
+            detail='Este item já está na coleção.',
         )
 
     db_item = CollectionItem(
@@ -197,14 +197,14 @@ async def update_collection_item(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     db_item = await session.get(CollectionItem, item_id)
     if not db_item or db_item.collection_id != collection_id:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
-            detail='Item not found in this collection.',
+            detail='Item não encontrado nesta coleção.',
         )
 
     existing_item_query = select(CollectionItem).where(
@@ -215,7 +215,7 @@ async def update_collection_item(
     if await session.scalar(existing_item_query):
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='Another item with this catalog ID already exists in the collection.',
+            detail='Outro item com mesmo ID já existe nesta coleção.',
         )
 
     db_item.status = item_update.status
@@ -266,7 +266,7 @@ async def list_collection_items(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     query = (
@@ -326,12 +326,12 @@ async def remove_items_by_filters(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     if db_collection.sei_process is not None:
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser removidos de coleções com Processo SEI vinculado.'
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser removidos de coleções com processo vinculado.'
         )
 
     # 2. Monta a Query buscando os itens DENTRO da coleção atual
@@ -386,38 +386,6 @@ async def remove_items_by_filters(
 
     return {"message": "Itens removidos com sucesso."}
 
-@router.delete(
-    '/{collection_id}/{item_id}',
-    status_code=HTTPStatus.OK,
-    response_model=Message,
-)
-async def remove_item_from_collection(
-    collection_id: UUID,
-    item_id: UUID,
-    session: Session,
-    current_user: CurrentUser,
-):
-    db_collection = await session.get(Collection, collection_id)
-    if not db_collection:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN, detail='Action not allowed.'
-        )
-
-    if db_collection.sei_process is not None:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser removidos de coleções com Processo SEI vinculado.'
-        )
-
-    db_item = await session.get(CollectionItem, item_id)
-    if not db_item or db_item.collection_id != collection_id:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail='Item not found in this collection.',
-        )
-
-    await session.delete(db_item)
-    await session.commit()
-    return {'message': 'Item removed from the collection successfully.'}
 
 
 @router.get(
@@ -432,7 +400,7 @@ async def list_collection_items(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     query = (
@@ -545,15 +513,13 @@ async def add_items_by_filters(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     if db_collection.sei_process is not None:
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser adicionados em coleções com Processo SEI vinculado.'
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser adicionados em coleções com processo vinculado.'
         )
-
-    
 
     # 2. Monta a Query buscando no Catálogo principal
     query = select(Catalog).where(Catalog.deleted_at.is_(None))
@@ -635,7 +601,7 @@ async def approve_collection_items(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     success_count = 0
@@ -723,7 +689,7 @@ async def refuse_collection_items(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     success_count = 0
@@ -792,3 +758,37 @@ async def refuse_collection_items(
         return {"message": f"Operação parcial: {success_count} recusados, {fail_count} falharam."}
 
     return {"message": "Itens recusados, removidos da coleção e atualizados com sucesso."}
+
+    
+@router.delete(
+    '/{collection_id}/{item_id}',
+    status_code=HTTPStatus.OK,
+    response_model=Message,
+)
+async def remove_item_from_collection(
+    collection_id: UUID,
+    item_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+):
+    db_collection = await session.get(Collection, collection_id)
+    if not db_collection:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail='Coleção já foi removida.'
+        )
+
+    if db_collection.sei_process is not None or db_collection.document_path is not None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail='Itens não podem ser removidos de coleções com processo ou documentação vinculadas.'
+        )
+
+    db_item = await session.get(CollectionItem, item_id)
+    if not db_item or db_item.collection_id != collection_id:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail='Item não encontrado nesta coleção.',
+        )
+
+    await session.delete(db_item)
+    await session.commit()
+    return {'message': 'Item removido com sucesso.'}

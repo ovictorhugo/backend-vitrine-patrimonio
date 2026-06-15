@@ -524,6 +524,8 @@ class FilterCatalog(FilterAsset):
     workflow_status: Optional[str] = Field(default=None)
     user_id: Optional[UUID] = Field(default=None)
     role_id: Optional[UUID] = Field(default=None)
+    
+    not_in_collection: Optional[UUID] = Field(default=None)
 
 
 class FilterSearchCatalog(FilterPage):

@@ -63,7 +63,7 @@ async def create_collection(
     if await session.scalar(query):
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='You already have a collection with this name.',
+            detail='Já existe uma coleção com este nome para este usuário.',
         )
 
     db_collection = Collection(
@@ -151,7 +151,7 @@ async def get_collection_summary(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     # 2. Monta a query otimizada para buscar as duas contagens juntas
@@ -184,10 +184,28 @@ async def read_collection(
 
     if not db_collection:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     return db_collection
+
+@router.get('/full_catalog/{collection_id}')
+async def read_collection(
+    collection_id: UUID, session: Session, current_user: CurrentUser
+):
+    query = select(CollectionItem).where(   
+        CollectionItem.collection_id == collection_id,
+        CollectionItem.deleted_at.is_(None),
+    )
+
+    db_items = await session.scalar(query)
+
+    if not db_items:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
+        )
+
+    return db_items
 
 
 @router.put('/{collection_id}', response_model=CollectionPublic)
@@ -201,15 +219,21 @@ async def update_collection(
 
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     update_data = collection_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_collection, key, value)
 
-    await session.commit()
-    await session.refresh(db_collection)
+    try:
+        await session.commit()
+        await session.refresh(db_collection)
+    except:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail='Já existe uma coleção com este mesmo nome. Tente outro nome'
+        )
+    
     return db_collection
 
 
@@ -220,7 +244,7 @@ async def delete_collection(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     if db_collection.document_path:
@@ -245,12 +269,12 @@ async def add_sei_process_to_collection(
     
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     if db_collection.sei_process and db_collection.sei_process.strip() and sei_process is not None:
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail='Essa coleção já possui um Processo SEI vinculado.'
+            status_code=HTTPStatus.BAD_REQUEST, detail='Essa coleção já possui um processo vinculado.'
         )
     
     if sei_process is not None and not sei_process.strip():
@@ -271,11 +295,11 @@ async def enviar_documento(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="O arquivo deve ser um PDF.")
+        raise HTTPException(status_code=400, detail="O arquivo enviado deve ser um PDF.")
 
     STORAGE_ROOT = Path("vitrine/storage/pdfs_remocao/documentacao")
     STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
@@ -321,7 +345,7 @@ async def baixar_documento(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada'
         )
 
     if not db_collection.document_path:
@@ -359,7 +383,7 @@ async def admin_collection_action(
     db_collection = await session.get(Collection, collection_id)
     if not db_collection or db_collection.deleted_at:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada'
         )
 
     if action == 1:
@@ -406,7 +430,7 @@ async def admin_collection_action(
             return {"message": "Nenhum arquivo de parecer encontrado."}
     
     else:
-        raise HTTPException(status_code=400, detail="Ação inválida.")
+        raise HTTPException(status_code=400, detail="Ação de administrador inválida.")
 
 
 @router.get('/remocao_pdf/{collection_id}', response_model=Message)
@@ -425,7 +449,7 @@ async def export_collection_pdf_play(
 
     if not db_collection:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     count_query = (
@@ -436,7 +460,7 @@ async def export_collection_pdf_play(
     total_items = await session.scalar(count_query) or 0
 
     if total_items == 0:
-        raise HTTPException(status_code=404, detail='Nenhum item na coleção')
+        raise HTTPException(status_code=404, detail='Nenhum item na coleção.')
 
     background_tasks.add_task(generate_and_send_collection_pdf_play, current_user, collection_id, total_items)
     background_tasks.add_task(limpar_arquivos_antigos, session)
@@ -691,7 +715,7 @@ async def export_collection_removiveis_pdf_play(
 
     if not db_collection:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Collection not found.'
+            status_code=HTTPStatus.NOT_FOUND, detail='Coleção não encontrada.'
         )
 
     count_query = (
@@ -702,7 +726,7 @@ async def export_collection_removiveis_pdf_play(
     total_items = await session.scalar(count_query) or 0
 
     if total_items == 0:
-        raise HTTPException(status_code=404, detail='Nenhum item na coleção')
+        raise HTTPException(status_code=404, detail='Nenhum item na coleção.')
 
     background_tasks.add_task(generate_and_send_collection_removiveis_pdf_play, current_user, collection_id, total_items)
     background_tasks.add_task(limpar_arquivos_antigos, session)
