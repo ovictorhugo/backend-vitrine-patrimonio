@@ -992,6 +992,7 @@ class Collection(AuditMixin):
             'ix_uq_collections_user_id_name_active',
             'user_id',
             'name',
+            'type',
             unique=True,
             postgresql_where=(column('deleted_at').is_(None)),
         ),

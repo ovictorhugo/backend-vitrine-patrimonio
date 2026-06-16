@@ -1,13 +1,11 @@
 from http import HTTPStatus
 from typing import Annotated
 from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File
 from fastapi.responses import FileResponse
 from pathlib import Path
 from sqlalchemy import func, select, desc
 from sqlalchemy.orm import noload, selectinload
-
 
 from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import (
@@ -16,6 +14,7 @@ from vitrine.models import (
     Catalog, 
     CatalogWorkFlow, 
     User, 
+    UserRole,
     SystemIdentity, 
     TemporaryFileReference
 )
@@ -58,6 +57,7 @@ async def create_collection(
     query = select(Collection).where(
         Collection.name == collection.name,
         Collection.user_id == current_user.id,
+        Collection.type == collection.type,
         Collection.deleted_at.is_(None),
     )
     if await session.scalar(query):
@@ -90,8 +90,7 @@ async def read_collections(
     filters: Annotated[FilterCollection, Depends()],
     admin: bool = False,
 ):
-    from vitrine.models import UserRole
-    from uuid import UUID
+
 
     query = select(Collection).where(Collection.deleted_at.is_(None))
 
@@ -157,7 +156,7 @@ async def get_collection_summary(
     # 2. Monta a query otimizada para buscar as duas contagens juntas
     query = select(
         func.count(CollectionItem.id).label('total'),
-        func.count(CollectionItem.id).filter(CollectionItem.is_approved == True).label('approved')
+        func.count(CollectionItem.id).filter(CollectionItem.is_approved == True ).label('approved')
     ).where(CollectionItem.collection_id == collection_id)
 
     # 3. Executa a query
@@ -318,7 +317,6 @@ async def enviar_documento(
 
         comment_text = f"O item chegou ao fim do fluxo de desfazimento em {today_str}. A remoção deste item foi realizada por meio da coleção:{db_collection.name} por {current_user.username}."
 
-        
         query = select(Catalog).join(CollectionItem, CollectionItem.catalog_id == Catalog.id).where(CollectionItem.collection_id == collection_id)
         catalogs = (await session.scalars(query)).all()
         for catalog in catalogs:

@@ -74,48 +74,27 @@ async def get_remocao_statistics(
 ):
 
     SQL = """
-        WITH ws AS (
-            -- 1. Pega o status mais recente de cada item do catálogo
-            SELECT DISTINCT ON (catalog_workflow.catalog_id)
-                catalog_workflow.workflow_status, catalog_workflow.catalog_id
-            FROM catalog_workflow
-            INNER JOIN catalog
-                ON catalog.id = catalog_workflow.catalog_id
-                AND catalog.deleted_at IS NULL
-            ORDER BY catalog_workflow.catalog_id, catalog_workflow.created_at DESC
-        ),
-        desf_items AS (
-            -- 2. Filtra apenas os itens que estão atualmente em DESFAZIMENTO
-            SELECT catalog_id
-            FROM ws
-            WHERE workflow_status = 'DESFAZIMENTO'
-        )
-        
-        -- LINHA 1: Total de desfazimento (contagem simples do CTE acima)
         SELECT 'TOTAL_DESFAZIMENTO' AS status, COUNT(*) AS count
-        FROM desf_items
+            FROM catalog
+            WHERE current_workflow_status = 'DESFAZIMENTO'
+            AND deleted_at IS NULL
 
-        UNION ALL
+            UNION ALL
 
-        -- LINHA 2: Aprovados na coleção de Remoção
-        SELECT 'APROVADOS' AS status, COUNT(DISTINCT d.catalog_id) AS count
-        FROM desf_items d
-        INNER JOIN collection_items ci ON d.catalog_id = ci.catalog_id
-        INNER JOIN collections c ON ci.collection_id = c.id
-        WHERE c.type = 'REMOCAO' 
-          AND ci.is_approved = true
-          AND c.deleted_at IS NULL
+        SELECT 'APROVADOS' AS status, COUNT(*) AS count
+            FROM catalog
+            WHERE current_workflow_status = 'EM_REMOCAO'
+            AND deleted_at IS NULL
 
-        UNION ALL
+            UNION ALL
 
-        -- LINHA 3: Em análise na coleção de Remoção
-        SELECT 'EM_ANALISE' AS status, COUNT(DISTINCT d.catalog_id) AS count
-        FROM desf_items d
-        INNER JOIN collection_items ci ON d.catalog_id = ci.catalog_id
-        INNER JOIN collections c ON ci.collection_id = c.id
-        WHERE c.type = 'REMOCAO' 
-          AND ci.is_approved = false
-          AND c.deleted_at IS NULL;
+        SELECT 'EM_ANALISE' AS status, COUNT(DISTINCT ci.catalog_id) AS count
+            FROM collection_items ci
+            INNER JOIN collections c ON ci.collection_id = c.id
+            WHERE c.type = 'REMOCAO' 
+            AND c.sei_process IS NOT NULL
+            AND ci.is_approved = false
+            AND c.deleted_at IS NULL;
     """
 
     result = await session.execute(text(SQL))
