@@ -387,15 +387,31 @@ async def admin_collection_action(
         )
 
     if action == 1:
-        query = select(CollectionItem).where(CollectionItem.collection_id == collection_id)
+        query = (
+            select(CollectionItem)
+            .options(selectinload(CollectionItem.catalog))
+            .where(CollectionItem.collection_id == collection_id)
+        )
         items = (await session.scalars(query)).all()
         count = 0
         for item in items:
-            if getattr(item, "is_approved", False) is not True:
+            if db_collection.type == 'REMOCAO_DISPONIVEIS':
+                if item.catalog:
+                    item.catalog.current_workflow_status = "EM_REMOCAO"
                 await session.delete(item)
                 count += 1
+            elif db_collection.type == 'REMOCAO':
+                if item.is_approved is None:
+                    if item.catalog:
+                        item.catalog.current_workflow_status = "DESFAZIMENTO"
+                    await session.delete(item)
+                    count += 1
+            else:
+                if getattr(item, "is_approved", False) is not True:
+                    await session.delete(item)
+                    count += 1
         await session.commit()
-        return {"message": f"{count} itens não aprovados foram removidos."}
+        return {"message": f"{count} itens processados e removidos."}
 
     elif action == 2:
         query = (
