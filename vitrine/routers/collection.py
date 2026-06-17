@@ -70,7 +70,7 @@ async def create_collection(
         name=collection.name,
         description=collection.description,
         type=collection.type,
-        document_path=collection.document_path or "",
+        document_path=collection.document_path or None,
         sei_process=collection.sei_process,
         user_id=current_user.id,
     )
@@ -156,6 +156,7 @@ async def get_collection_summary(
     # 2. Monta a query otimizada para buscar as duas contagens juntas
     query = select(
         func.count(CollectionItem.id).label('total'),
+        func.count(CollectionItem.id).filter(CollectionItem.is_approved == False ).label('refused'),
         func.count(CollectionItem.id).filter(CollectionItem.is_approved == True ).label('approved')
     ).where(CollectionItem.collection_id == collection_id)
 
@@ -167,7 +168,8 @@ async def get_collection_summary(
 
     return {
         "total": row.total or 0,
-        "approved": row.approved or 0
+        "approved": row.approved or 0,
+        "refused": row.refused or 0
     }
 
 @router.get('/{collection_id}', response_model=CollectionPublic)
@@ -282,7 +284,7 @@ async def add_sei_process_to_collection(
     db_collection.sei_process = sei_process
     await session.commit()
     
-    return {'message': 'Processo SEI adicionado com sucesso.'}
+    return {'message': 'Processo adicionado com sucesso.'}
 
 @router.post('/enviar-parecer/{collection_id}', response_model=Message)
 async def enviar_documento(
@@ -401,7 +403,7 @@ async def admin_collection_action(
             .options(selectinload(CollectionItem.catalog))
             .where(
                 CollectionItem.collection_id == collection_id,
-                CollectionItem.is_approved == True
+                CollectionItem.is_approved != None
             )
         )
         items = (await session.scalars(query)).all()
@@ -412,7 +414,7 @@ async def admin_collection_action(
                 item.catalog.current_workflow_status = "DESFAZIMENTO"
             count += 1
         await session.commit()
-        return {"message": f"{count} itens aprovados foram alterados e catálogo atualizado."}
+        return {"message": f"{count} itens foram alterados e catálogo atualizado."}
         
     elif action == 4:
         if db_collection.document_path:

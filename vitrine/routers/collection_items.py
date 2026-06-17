@@ -729,7 +729,7 @@ async def refuse_collection_items(
 
                 if item:
                     # Remover item da coleção
-                    await session.delete(item)
+                    item.is_approved = False
 
                 # Alterar status
                 catalog.current_workflow_status = "REJEITADOS_REMOCAO"
