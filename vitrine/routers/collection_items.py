@@ -90,7 +90,7 @@ async def add_collection_items(
                     catalog_id=cid,
                     comment="",
                     status=False,
-                    is_approved=False
+                    is_approved=None
                 )
                 session.add(new_item)
             success_count += 1
