@@ -835,43 +835,40 @@ def render_transfer_item(item,signers,location) -> str:
 
 def get_workflow_info_from_history(item) -> Tuple[Optional[str], Optional[str]]:
     """
-    Retorna (workflow_commission_username, workflow_description) a partir de item.workflow_history.
+    Retorna (username, undo_justification) a partir de item.workflow_history.
 
-    - commission_username: user.username do primeiro workflow_history com status "REVIEW_REQUESTED_COMISSION"
-    - undo_justification: detail.justificativa do primeiro workflow_history com status "DESFAZIMENTO"
+    Busca no primeiro evento de history com status "DESFAZIMENTO":
+    - username: extraído do relacionamento 'user' (user.username).
+    - undo_justification: extraído de 'justificativa' dentro de 'detail'.
     """
     history = getattr(item, "workflow_history", []) or []
 
-    first_commission = next(
-        (h for h in history if getattr(h, "workflow_status", None) == "REVIEW_REQUESTED_COMISSION"),
-        None,
-    )
-
+    # Busca exclusivamente o primeiro evento de desfazimento
     first_undo = next(
         (h for h in history if getattr(h, "workflow_status", None) == "DESFAZIMENTO"),
         None,
     )
 
-    # --- Username do parecerista (commission) ---
-    commission_username: Optional[str] = None
-    if first_commission is not None:
-        user = getattr(first_commission, "user", None)
-        if user is not None:
-            commission_username = getattr(user, "username", None)
-
-    # --- Justificativa (DESFAZIMENTO) ---
+    username: Optional[str] = None
     undo_justification: Optional[str] = None
+
     if first_undo is not None:
+        # --- 1. Username do usuário associado ao workflow ---
+        user_obj = getattr(first_undo, "user", None)
+        if user_obj is not None:
+            username = getattr(user_obj, "username", None)
+
+        # --- 2. Justificativa (DESFAZIMENTO) ---
         detail = getattr(first_undo, "detail", None)
         if detail is not None:
-            # pode ser dict (JSON) ou objeto
             if isinstance(detail, dict):
                 undo_justification = detail.get("justificativa")
             else:
                 undo_justification = getattr(detail, "justificativa", None)
-                
-    return commission_username, undo_justification
 
+    return username, undo_justification
+
+    
 def render_loanable_item(item) -> str:
     """
     Gera um HTML estilizado para um item de empréstumo.
