@@ -76,10 +76,26 @@ async def add_collection_items(
         )
         approved_result = await session.execute(approved_query)
         approved_catalog_ids = set(approved_result.scalars().all())
+
+        same_type_query = (
+            select(CollectionItem.catalog_id)
+            .join(Collection, Collection.id == CollectionItem.collection_id)
+            .where(
+                CollectionItem.catalog_id.in_(catalog_ids),
+                Collection.type == db_collection.type,
+                Collection.deleted_at.is_(None)
+            )
+        )
+        same_type_result = await session.execute(same_type_query)
+        same_type_catalog_ids = set(same_type_result.scalars().all())
     else:
         approved_catalog_ids = set()
+        same_type_catalog_ids = set()
 
     for cid in catalog_ids:
+        if cid in same_type_catalog_ids:
+            fail_count += 1
+            continue
         if cid in approved_catalog_ids and db_collection.type != "REMOCAO_DISPONIVEIS":
             fail_count += 1
             continue
@@ -550,11 +566,26 @@ async def add_items_by_filters(
     approved_result = await session.execute(approved_query)
     approved_catalog_ids = set(approved_result.scalars().all())
 
+    same_type_query = (
+        select(CollectionItem.catalog_id)
+        .join(Collection, Collection.id == CollectionItem.collection_id)
+        .where(
+            CollectionItem.catalog_id.in_(catalog_ids_to_add),
+            Collection.type == db_collection.type,
+            Collection.deleted_at.is_(None)
+        )
+    )
+    same_type_result = await session.execute(same_type_query)
+    same_type_catalog_ids = set(same_type_result.scalars().all())
+
     # 4. Lógica de inserção individual com tolerância a falhas
     success_count = 0
     fail_count = 0
 
     for catalog in catalogs:
+        if catalog.id in same_type_catalog_ids:
+            fail_count += 1
+            continue
         if catalog.id in approved_catalog_ids:
             fail_count += 1
             continue
@@ -568,7 +599,7 @@ async def add_items_by_filters(
                     catalog_id=catalog.id,
                     comment="",
                     status=False,
-                    is_approved=False
+                    is_approved=None
                 )
                 session.add(new_item)
             success_count += 1
@@ -729,7 +760,7 @@ async def refuse_collection_items(
 
                 if item:
                     # Remover item da coleção
-                    item.is_approved = False
+                    item.is_approved = None
 
                 # Alterar status
                 catalog.current_workflow_status = "REJEITADOS_REMOCAO"

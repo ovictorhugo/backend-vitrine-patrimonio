@@ -582,6 +582,22 @@ class FavoriteSchema(BaseModel):
 class FavoriteList(BaseModel):
     favorites: List[CatalogPublic]
 
+class SimpleUserPublic(BaseModel):
+    id: UUID
+    username: str
+    email: EmailStr
+    provider: Optional[str] = Field(default=None)
+    linkedin: Optional[str] = Field(default=None)
+    lattes_id: Optional[str] = Field(default=None)
+    orcid: Optional[str] = Field(default=None)
+    ramal: Optional[str] = Field(default=None)
+    photo_url: Optional[str] = Field(default=None)
+    background_url: Optional[str] = Field(default=None)
+    matricula: Optional[str] = Field(default=None)
+    verify: Optional[bool] = Field(default=None)
+    institution_id: Optional[UUID] = Field(default=None)
+
+    model_config = ConfigDict(from_attributes=True)
 
 class CollectionItemPublic(BaseModel):
     id: UUID
@@ -636,6 +652,7 @@ class CollectionPublic(BaseModel):
     document_path: Optional[str] = Field(default=None)
     sei_process: Optional[str] = Field(default=None)
     created_at: datetime
+    user: SimpleUserPublic
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -821,22 +838,6 @@ class CatalogSimple(BaseModel):
     asset: AssetPublic
     model_config = ConfigDict(from_attributes=True)
 
-class SimpleUserPublic(BaseModel):
-    id: UUID
-    username: str
-    email: EmailStr
-    provider: Optional[str] = Field(default=None)
-    linkedin: Optional[str] = Field(default=None)
-    lattes_id: Optional[str] = Field(default=None)
-    orcid: Optional[str] = Field(default=None)
-    ramal: Optional[str] = Field(default=None)
-    photo_url: Optional[str] = Field(default=None)
-    background_url: Optional[str] = Field(default=None)
-    matricula: Optional[str] = Field(default=None)
-    verify: Optional[bool] = Field(default=None)
-    institution_id: Optional[UUID] = Field(default=None)
-
-    model_config = ConfigDict(from_attributes=True)
 
 class SimpleAssetPublic(AssetSchema):
     id: UUID

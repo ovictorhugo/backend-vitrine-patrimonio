@@ -30,7 +30,7 @@ from fastapi import BackgroundTasks
 from vitrine.core.database import async_session
 from vitrine.core.mail import get_smtp
 from vitrine.core.settings import Settings
-from vitrine.routers.utils import render_multiple_items
+from vitrine.routers.utils import render_multiple_items, render_multiple_items_simplified
 from vitrine.routers.catalog.catalog import merge_pdfs_sync, limpar_arquivos_antigos
 from vitrine.schemas import (
     CollectionList,
@@ -86,30 +86,28 @@ async def create_collection(
 @router.get('/', response_model=CollectionList)
 async def read_collections(
     session: Session,
-    current_user: CurrentUser,
     filters: Annotated[FilterCollection, Depends()],
-    admin: bool = False,
+    #admin: bool = False,
 ):
-
-
     query = select(Collection).where(Collection.deleted_at.is_(None))
 
-    if admin:
-        role_id_uuid = UUID('5e07c6df-cb65-46fc-bdb4-1e55483e4848')
-        role_query = select(UserRole).where(
-            UserRole.user_id == current_user.id,
-            UserRole.role_id == role_id_uuid
-        )
-        is_admin = await session.scalar(role_query)
-        if not is_admin:
-            query = query.where(Collection.user_id == current_user.id)
-    else:
-        query = query.where(Collection.user_id == current_user.id)
+    # if admin:
+    #     role_id_uuid = UUID('5e07c6df-cb65-46fc-bdb4-1e55483e4848')
+    #     role_query = select(UserRole).where(
+    #         UserRole.user_id == current_user.id,
+    #         UserRole.role_id == role_id_uuid
+    #     )
+    #     is_admin = await session.scalar(role_query)
+    #     if not is_admin:
+    #         query = query.where(Collection.user_id == current_user.id)
+    # else:
+    #     query = query.where(Collection.user_id == current_user.id)
 
-    query = query.options(noload('*'))
+    query = query.options(selectinload(Collection.user))
 
-    if filters.type:
-        query = query.where(Collection.type == filters.type)
+    # if filters.type:
+    
+    query = query.where(Collection.type == filters.type)
 
     query = query.order_by(desc(Collection.created_at))
     query = query.offset(filters.offset).limit(filters.limit)
@@ -978,8 +976,8 @@ async def generate_and_send_collection_removiveis_pdf_play(current_user_obj: Use
                         absolute_idx = offset + i
                         current_page_number = (absolute_idx // 2) + 2
 
-                        item1_html = render_multiple_items(item1)                    
-                        item2_html = render_multiple_items(item2) if item2 else ""
+                        item1_html = render_multiple_items_simplified(item1)                    
+                        item2_html = render_multiple_items_simplified(item2) if item2 else ""
                         
                         page_html = f"""
                         <div class="folha-a4">

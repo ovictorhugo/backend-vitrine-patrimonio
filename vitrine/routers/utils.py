@@ -2365,3 +2365,318 @@ def render_multiple_items(item) -> str:
     </div>
     """
     return html    
+
+
+def render_multiple_items_simplified(item) -> str:
+
+    # Nome do material
+    material_name = item.asset.material.material_name
+    material_name = html_lib.escape(material_name)
+
+    # Descrição do bem
+    asset_description = item.asset.asset_description
+    asset_description = html_lib.escape(asset_description)
+
+    # Código + dígito verificador
+    code_concat = ""
+    try:
+        asset_code = item.asset.asset_code or ""
+        asset_check_digit = item.asset.asset_check_digit or ""
+        code_concat = asset_code + "-" + asset_check_digit
+    except AttributeError:
+        code_concat = getattr(item, "asset_code_with_digit", "") or ""
+    asset_code_with_digit = html_lib.escape(code_concat or "Sem código")
+
+    # ATM
+    atm_number = None
+    try:
+        atm_number = item.asset.atm_number
+    except AttributeError:
+        atm_number = getattr(item, "atm_number", None)
+    atm_number_esc = html_lib.escape(atm_number) if atm_number else ""
+
+    # Responsável / curador
+    legal_guardian_name = item.asset.legal_guardian.legal_guardians_name
+    legal_guardian_name_esc = html_lib.escape(legal_guardian_name) if legal_guardian_name else ""
+
+    # Justificativa de catálogo
+    catalog_description = getattr(item, "catalog_description", None)
+    if catalog_description is None:
+        catalog_description = getattr(item, "description", None)
+    catalog_description_esc = html_lib.escape(catalog_description) if catalog_description else ""
+
+    # ATM (Simples, mantido quase igual, apenas garantindo block model)
+    if atm_number_esc:
+        atm_html = f"""
+        <p
+            style="
+            margin: 0;
+            font-weight: 600;
+            font-size: 10px;
+            " > ATM: {atm_number_esc}
+        </p>
+        """
+    else:
+        atm_html = ""
+
+    # Responsável + plaqueta (Refatorado de Flex para Inline-Block)
+    if legal_guardian_name_esc:
+        legal_guardian_html = f"""
+            <div
+              style="
+                font-size: 0;
+                margin:4px 0;
+              "
+            >
+              <div
+                style="
+                  display: inline-block;
+                  vertical-align: middle;
+                  background: #e5e7eb;
+                  border-radius: 3px;
+                  padding: 2px;
+                  margin-right: 5px;
+                "
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                  <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M7 10a4 4 0 1 1 10 0 4 4 0 1 1-10 0" />
+                  <path d="M4 21v-2a4 4 0 0 1 3-3.87" />
+                </svg>
+              </div>
+              
+              <div style="display: inline-block; vertical-align: middle; font-size: 12px; color: #000;">
+                  <span>{legal_guardian_name_esc}</span>
+              </div>
+            </div>
+        """
+    else:
+        legal_guardian_html = ""
+
+
+    # ---------- IMAGENS (Refatorado para Inline-Block ao invés de Grid/Flex) ----------
+
+    IMAGES_DIR = (Path(__file__).resolve().parent.parent / "storage" / "uploads").resolve()
+    images = getattr(item, "images", []) or []
+    image_cells = []
+    
+    # Processamento das células de imagem com Thumbnails dinâmicos nativos
+    def get_thumbnail_base64(filepath):
+        try:
+            from PIL import Image
+            import io
+            import base64
+            with Image.open(filepath) as img:
+                # O processamento com thumbnail() da Pillow é instantâneo e não sobrecarrega loop
+                img.thumbnail((300, 300)) 
+                # Lida com canais Alpha do png convertendo pra RGB
+                if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+                
+                buffer = io.BytesIO()
+                img.save(buffer, format="JPEG", quality=60)
+                img_str = base64.b64encode(buffer.getvalue()).decode()
+                return f"data:image/jpeg;base64,{img_str}"
+        except Exception:
+            return None
+
+    # Processamento das células de imagem
+    for img in images[:4]:
+        file_path = getattr(img, "file_path", None)
+        if file_path:
+            filename = os.path.basename(file_path)
+            full_path = (IMAGES_DIR / filename).resolve()
+            
+            if full_path.is_file():
+                # Troca arquivo imenso local por Thumb miniaturizada para o HTML
+                thumb_uri = get_thumbnail_base64(full_path)
+                
+                if thumb_uri:
+                    src_esc = thumb_uri
+                    
+                    cell = f"""
+                    <div
+                      style="
+                        display: inline-block;
+                        vertical-align: top;
+                        width: 24%;
+                        box-sizing: border-box;
+                        border: 1px solid #e5e7eb;
+                        border-radius: 6px;
+                        background-color: #f3f4f6;
+                        height: 140px;
+                        overflow: hidden; 
+                        position: relative;
+                      "
+                    >
+                      <img
+                        src="{src_esc}"
+                        style="
+                          display: block;
+                          width: 100%;
+                          height: 100%;
+                          object-fit: cover;
+                          object-position: center;
+                        "
+                      />
+                    </div>
+                    """
+                else:
+                    # Imagem existe, mas corrompida / não abre
+                    cell = """
+                    <div
+                      style="
+                        display: inline-block;
+                        width: 24%;
+                        border: 1px solid #e5e7eb;
+                        border-radius: 6px;
+                        background-color: #f3f4f6;
+                        height: 140px;
+                        text-align: center;
+                        line-height: 140px;
+                      "
+                    >
+                      <span style="font-size: 10px; color: #9ca3af; display: inline-block; vertical-align: middle;">
+                        [Erro Imagem]
+                      </span>
+                    </div>
+                    """
+            else:
+                # Caminho não existe (Mantido layout centralizado simples)
+                cell = """
+                <div
+                  style="
+                    display: inline-block;
+                    vertical-align: top;
+                    width: 24%;
+                    box-sizing: border-box;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    background-color: #f3f4f6;
+                    height: 140px;
+                    text-align: center;
+                    line-height: 140px;
+                    overflow: hidden;
+                  "
+                >
+                  <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
+                    Sem imagem
+                  </span>
+                </div>
+                """
+        else:
+            # Não tem file_path
+            cell = """
+            <div
+              style="
+                display: inline-block;
+                vertical-align: top;
+                width: 24%;
+                box-sizing: border-box;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                background-color: #f3f4f6;
+                height: 140px;
+                text-align: center;
+                line-height: 140px;
+                overflow: hidden;
+              "
+            >
+              <span style="font-size: 10px; color: #9ca3af; line-height: normal; display: inline-block; vertical-align: middle;">
+                sem imagem
+              </span>
+            </div>
+            """
+
+        image_cells.append(cell)
+
+    # Container das imagens (remove whitespace para inline-blocks funcionarem bem)
+    images_html = f"""
+        <div style="width: 100%; text-align: center;">
+            {"".join(image_cells)}
+        </div>
+    """ if len(image_cells) else """
+        <div style="padding: 10px; text-align: center; background: #f9fafb; border-radius: 6px;">
+          <span style="font-size: 10px; color: #9ca3af;">sem imagens</span>
+        </div>
+    """
+
+    # ---------- HTML FINAL (ESTRUTURA EM TABELAS) ----------
+
+    html = f"""
+    <div
+        style="
+            position: relative;       
+            width: 100%;
+            box-sizing: border-box;
+            background-color: #f9fafb;
+            overflow: hidden;
+            padding: 0 24px 12px 24px;
+        "
+    >
+        <div style="
+            display: table;
+            width: 100%;
+            margin-bottom: 10px;
+        ">
+                <div
+                    style="
+                    display: table-cell;
+                    vertical-align: top;
+                    width:fit;
+                    background-color: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    padding: 10px;
+                    "
+                >
+
+                <p
+                style="
+                font-size: 18px;
+                font-weight: 600;
+                margin:0;
+                "> {asset_code_with_digit}  {material_name}</p>
+                
+                {atm_html}
+
+                <p
+                    style="
+                    margin:0;
+                    font-size: 11px;
+                    margin-bottom: 12px;
+                    color: #6b7280;
+                    "
+                > {asset_description} </p>
+
+                <div style="font-size: 10px; color: #4b5563; margin-bottom:8px;">
+                    {legal_guardian_html}
+                </div>
+
+            <p
+              style="
+                margin: 8px 0 2px 0;
+                font-weight: 600;
+                font-size: 12px;
+              "
+            >
+              Justificativa
+            </p>
+            <div
+              style="
+                font-size: 10px;
+                color: #6b7280;
+                line-height: 1.4;
+              "
+            >
+             <span style="word-wrap: break-word; overflow-wrap: break-word;">
+                {catalog_description_esc}
+             </span>
+            </div>
+
+
+            </div>
+        </div>
+        {images_html}
+    </div>
+    """
+    return html    
