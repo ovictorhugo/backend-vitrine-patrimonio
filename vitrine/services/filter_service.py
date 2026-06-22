@@ -166,9 +166,16 @@ def apply_catalog_filters(query: Select, filters: FilterCatalog) -> Select:
 
 
     if filters.not_in_collection:
+        subq_type = (
+            select(Collection.type)
+            .where(Collection.id == filters.not_in_collection)
+            .scalar_subquery()
+        )
+
         query = query.where(
             ~Catalog.collection_items.any(
-                CollectionItem.collection_id == filters.not_in_collection
+                (CollectionItem.collection_id == filters.not_in_collection) |
+                CollectionItem.collection.has(Collection.type == subq_type)
             )
         )
 
