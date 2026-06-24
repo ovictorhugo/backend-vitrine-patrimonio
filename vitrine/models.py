@@ -977,6 +977,7 @@ class Collection(AuditMixin):
     user: Mapped['User'] = relationship(
         back_populates='collections',
         init=False,
+        lazy='selectin',
         foreign_keys=[user_id],
     )
 

@@ -648,7 +648,7 @@ class CollectionUpdateSchema(BaseModel):
 class CollectionPublic(BaseModel):
     id: UUID
     name: str
-    description: Optional[str]
+    description: Optional[str] = Field(default=None)
     document_path: Optional[str] = Field(default=None)
     sei_process: Optional[str] = Field(default=None)
     created_at: datetime

@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File
 from fastapi.responses import FileResponse
 from pathlib import Path
-from sqlalchemy import func, select, desc
-from sqlalchemy.orm import noload, selectinload
+from sqlalchemy import func, select, desc, exists
+from sqlalchemy.orm import noload, selectinload, joinedload, contains_eager, noload
 
 from vitrine.core.dependencies import CurrentUser, Session
 from vitrine.models import (
@@ -15,8 +15,11 @@ from vitrine.models import (
     CatalogWorkFlow, 
     User, 
     UserRole,
+    Role,
     SystemIdentity, 
-    TemporaryFileReference
+    TemporaryFileReference,
+    Location,
+    LocationInventory
 )
 import math
 import uuid
@@ -39,9 +42,18 @@ from vitrine.schemas import (
     CollectionUpdateSchema,
     FilterCollection,
     Message,
+    SimpleCatalogList,
+    FilterCatalog,
+    FilterAsset,
+    CollectionItemsList
 )
 
 from vitrine.models import Catalog, CatalogWorkFlow
+from vitrine.services import filter_service
+
+_ASSET_FIELDS = set(FilterAsset.model_fields.keys())
+_NON_JOIN_FIELDS = {'limit', 'offset'}
+ASSET_JOIN_TRIGGER_FIELDS = _ASSET_FIELDS - _NON_JOIN_FIELDS
 
 router = APIRouter(prefix='/collections', tags=['coleções - geral'])
 
@@ -71,7 +83,7 @@ async def create_collection(
         description=collection.description,
         type=collection.type,
         document_path=collection.document_path or None,
-        sei_process=collection.sei_process,
+        sei_process=collection.sei_process or None,
         user_id=current_user.id,
     )
 
@@ -79,6 +91,7 @@ async def create_collection(
     await session.commit()
     await session.refresh(db_collection)
 
+    db_collection.user = current_user
     db_collection.items = []
     return db_collection
 
@@ -135,6 +148,92 @@ async def read_my_collections(
     return {'collections': collections}
 
 
+@router.get('/cards/{collection_id}', response_model=CollectionItemsList)
+async def read_catalog_entries(
+    collection_id: UUID,
+    session: Session, 
+    filters: Annotated[FilterCatalog, Depends()],
+    is_approved: str | None = None
+):
+    query = (
+        select(CollectionItem)
+        .join(CollectionItem.catalog)
+        .where(
+            Catalog.deleted_at.is_(None),
+            CollectionItem.collection_id == collection_id
+        )
+        .options(
+            selectinload(CollectionItem.catalog).options(
+                selectinload(Catalog.images),
+                selectinload(Catalog.workflow_history).options(
+                    selectinload(CatalogWorkFlow.user).options(
+                        selectinload(User.system_identity).options(
+                            selectinload(SystemIdentity.legal_guardian)
+                        ),
+                        selectinload(User.user_role_associations).selectinload(
+                            UserRole.role
+                        ),
+                    ),
+                    selectinload(CatalogWorkFlow.transfer_requests),
+                ),
+                selectinload(Catalog.location)
+                .selectinload(Location.location_inventories)
+                .selectinload(LocationInventory.inventory),
+            )
+        )
+    )
+
+    if is_approved is not None:
+        status_lower = is_approved.lower()
+        if status_lower == 'true':
+            query = query.where(CollectionItem.is_approved == True)
+        elif status_lower == 'false':
+            query = query.where(CollectionItem.is_approved == False)
+        elif status_lower == 'none':
+            query = query.where(CollectionItem.is_approved.is_(None))
+
+    asset_join_needed = any(
+        getattr(filters, field_name) is not None
+        for field_name in ASSET_JOIN_TRIGGER_FIELDS
+    )
+
+    # 1. Aplica filtros de catálogo
+    query = filter_service.apply_catalog_filters(query, filters)
+
+    # 2. Aplica filtros e carregamento do Asset
+    if asset_join_needed:
+        query = query.join(Catalog.asset)
+        query = filter_service.apply_asset_filters(query, filters)
+
+    # 4. Filtros de Usuário e Role
+    if filters.user_id:
+        query = query.where(Catalog.user_id == filters.user_id)
+
+    if filters.role_id:
+        role_subq = (
+            select(1)
+            .select_from(UserRole)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                UserRole.user_id == Catalog.user_id,
+                Role.id == filters.role_id,
+                UserRole.deleted_at.is_(None),
+                Role.deleted_at.is_(None)
+            )
+        )
+        query = query.where(exists(role_subq))
+
+    # 5. Ordenação e Paginação
+    query = query.order_by(desc(Catalog.created_at))
+    query = query.offset(filters.offset).limit(filters.limit)
+
+    result = await session.scalars(query)
+    entries = result.unique().all()
+
+    return {'collection_items': entries}
+
+
+
 @router.get(
     '/stats/{collection_id}',
     status_code=HTTPStatus.OK,
@@ -153,7 +252,7 @@ async def get_collection_summary(
 
     # 2. Monta a query otimizada para buscar as duas contagens juntas
     query = select(
-        func.count(CollectionItem.id).label('total'),
+        func.count(CollectionItem.id).filter(CollectionItem.is_approved == None ).label('total'),
         func.count(CollectionItem.id).filter(CollectionItem.is_approved == False ).label('refused'),
         func.count(CollectionItem.id).filter(CollectionItem.is_approved == True ).label('approved')
     ).where(CollectionItem.collection_id == collection_id)
@@ -172,11 +271,15 @@ async def get_collection_summary(
 
 @router.get('/{collection_id}', response_model=CollectionPublic)
 async def read_collection(
-    collection_id: UUID, session: Session, current_user: CurrentUser
+    collection_id: UUID, session: Session
 ):
-    query = select(Collection).where(   
-        Collection.id == collection_id,
-        Collection.deleted_at.is_(None),
+    query = (
+        select(Collection)
+        .options(selectinload(Collection.user))
+        .where(   
+            Collection.id == collection_id,
+            Collection.deleted_at.is_(None),
+        )
     )
 
     db_collection = await session.scalar(query)

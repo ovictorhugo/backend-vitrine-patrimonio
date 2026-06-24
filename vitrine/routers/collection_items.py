@@ -670,7 +670,7 @@ async def approve_collection_items(
 
                         
                         today_str = datetime.now().strftime("%d/%m/%Y")
-                        comment_text = f"Item foi aprovado para remoção por {current_user.username} por meio da coleção:{db_collection.name} em {today_str}"
+                        comment_text = f"Item foi aprovado para remoção por {current_user.username} por meio da coleção: {db_collection.name} em {today_str}"
                         # Adicionar workflow
                         new_workflow_entry = CatalogWorkFlow(
                             catalog_id=catalog.id,
@@ -730,7 +730,7 @@ async def refuse_collection_items(
         return {"message": "Nenhum item válido foi encontrado para recusa."}
 
     today_str = datetime.now().strftime("%d/%m/%Y")
-    comment_text = f"PRA recusou a remoção deste item por meio da coleção:{db_collection.name} por {current_user.username} em {today_str}"
+    comment_text = f"PRA recusou a remoção deste item por meio da coleção: {db_collection.name} por {current_user.username} em {today_str}"
 
     query = (
         select(CollectionItem, Catalog)
@@ -760,10 +760,10 @@ async def refuse_collection_items(
 
                 if item:
                     # Remover item da coleção
-                    item.is_approved = None
+                    item.is_approved = False
 
                 # Alterar status
-                catalog.current_workflow_status = "REJEITADOS_REMOCAO"
+                catalog.current_workflow_status = "REJEITADOS_COMISSAO"
 
                 # Adicionar workflow
                 new_workflow_entry = CatalogWorkFlow(
